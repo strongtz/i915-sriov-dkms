@@ -1,6 +1,6 @@
 # Maintainer: Xilin Wu <strongtz@yeah.net>
 
-_pkgbase=i915-sriov
+_pkgbase=i915-sriov-dkms
 pkgname=i915-sriov-dkms-git
 pkgver=5.15.49
 pkgrel=1
@@ -9,23 +9,26 @@ arch=('x86_64')
 url="https://github.com/strongtz/i915-sriov-dkms"
 license=('GPL2')
 depends=('dkms')
+makedepends=('git')
 conflicts=("${_pkgbase}")
 install=${pkgname}.install
 source=("git+https://github.com/strongtz/i915-sriov-dkms.git")
 md5sums=('SKIP')
 
 package() {
-  # Install
-  make DESTDIR="${pkgdir}" install
-
+  cd "$srcdir/$_pkgbase"
   # Copy dkms.conf
   install -Dm644 dkms.conf "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
+
+  echo "* Copying module into /usr/src..."
+  install -dm755 "${pkgdir}/usr/src/${_pkgbase}-${pkgver}"
+  cp -r ${srcdir}/$_pkgbase/* "${pkgdir}/usr/src/${_pkgbase}-${pkgver}"
 
   # Set name and version
   sed -e "s/@_PKGBASE@/${_pkgbase}/" \
       -e "s/@PKGVER@/${pkgver}/" \
       -i "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
 
-  # Copy sources (including Makefile)
-  cp -r ${_pkgbase}/* "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/
+  echo "* Blacklisting xpad module..."
+  install -D -m 644 modprobe.conf "${pkgdir}/etc/modprobe.d/i915-blacklist.conf"
 }
