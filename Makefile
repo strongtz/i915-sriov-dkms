@@ -11,6 +11,14 @@ DRMD        := drivers/gpu/drm/
 # i915 module - copied from drivers/gpu/drm/i915/Makefile
 #
 
+# Configuration
+EXTRA_CFLAGS += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
+				-DCONFIG_MMU_NOTIFIER -DCONFIG_DRM_I915_COMPRESS_ERROR \
+				-DCONFIG_COMPAT -DCONFIG_PERF_EVENTS -DCONFIG_PCI_IOV \
+				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
+				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP
+
+
 # core driver code
 i915-y += i915_driver.o \
 	  i915_drm_client.o \

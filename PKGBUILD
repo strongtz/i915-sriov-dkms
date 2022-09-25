@@ -29,6 +29,6 @@ package() {
       -e "s/@PKGVER@/${pkgver}/" \
       -i "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
 
-  echo "* Blacklisting xpad module..."
+  echo "* Blacklisting i915 module...(is this required?)"
   install -D -m 644 modprobe.conf "${pkgdir}/etc/modprobe.d/i915-blacklist.conf"
 }
