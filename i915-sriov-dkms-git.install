@@ -1,0 +1,7 @@
+post_install() {
+  echo 'The i915 kernel module will be available on reboot.'
+}
+
+post_remove() {
+  echo 'The i915 kernel module will be removed on reboot.'
+}
