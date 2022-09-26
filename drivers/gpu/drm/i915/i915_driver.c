@@ -843,7 +843,7 @@ static void i915_virtualization_probe(struct drm_i915_private *i915)
 	else
 		i915->__mode = i915_sriov_probe(i915);
 
-	dev_info(i915->drm.dev, "This fucking function returns: %d\n", i915->__mode);
+	dev_info(i915->drm.dev, "i915_sriov_probe returns: %d\n", i915->__mode);
 
 	GEM_BUG_ON(!i915->__mode);
 
