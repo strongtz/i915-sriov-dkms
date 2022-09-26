@@ -154,10 +154,10 @@ enum i915_iov_mode i915_sriov_probe(struct drm_i915_private *i915)
 	// 	dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_NONE\n");
 	// 	return I915_IOV_MODE_NONE;
 
-	dev_info(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
-	if (gen12_pci_capability_is_vf(pdev))
-		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
-		return I915_IOV_MODE_SRIOV_VF;
+	// dev_info(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
+	// if (gen12_pci_capability_is_vf(pdev))
+	// 	dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
+	// 	return I915_IOV_MODE_SRIOV_VF;
 
 #ifdef CONFIG_PCI_IOV
 	dev_info(dev, "i915_sriov_probe: dev_is_pf in\n");
