@@ -149,24 +149,24 @@ enum i915_iov_mode i915_sriov_probe(struct drm_i915_private *i915)
 	struct device *dev = i915->drm.dev;
 	struct pci_dev *pdev = to_pci_dev(dev);
 
-	dev_err(dev, "i915_sriov_probe: entry\n");
-	if (!HAS_SRIOV(i915))
-		dev_err(dev, "i915_sriov_probe: I915_IOV_MODE_NONE\n");
-		return I915_IOV_MODE_NONE;
+	dev_info(dev, "i915_sriov_probe: entry\n");
+	// if (!HAS_SRIOV(i915))
+	// 	dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_NONE\n");
+	// 	return I915_IOV_MODE_NONE;
 
-	dev_err(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
+	dev_info(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
 	if (gen12_pci_capability_is_vf(pdev))
-		dev_err(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
+		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
 		return I915_IOV_MODE_SRIOV_VF;
 
 #ifdef CONFIG_PCI_IOV
-	dev_err(dev, "i915_sriov_probe: dev_is_pf in\n");
+	dev_info(dev, "i915_sriov_probe: dev_is_pf in\n");
 	if (dev_is_pf(dev) && pf_verify_readiness(i915))
-		dev_err(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_PF\n");
+		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_PF\n");
 		return I915_IOV_MODE_SRIOV_PF;
 #endif
 
-	dev_err(dev, "i915_sriov_probe: SR-IOV identify failed\n");
+	dev_info(dev, "i915_sriov_probe: SR-IOV identify failed\n");
 	return I915_IOV_MODE_NONE;
 }
 
