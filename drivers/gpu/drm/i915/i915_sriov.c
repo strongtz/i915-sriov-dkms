@@ -150,14 +150,25 @@ enum i915_iov_mode i915_sriov_probe(struct drm_i915_private *i915)
 	struct pci_dev *pdev = to_pci_dev(dev);
 
 	dev_info(dev, "i915_sriov_probe: entry\n");
-	// if (!HAS_SRIOV(i915))
-	// 	dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_NONE\n");
-	// 	return I915_IOV_MODE_NONE;
+	if (!HAS_SRIOV(i915)) {
+		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_NONE\n");
+		return I915_IOV_MODE_NONE;
+	}
 
-	// dev_info(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
-	// if (gen12_pci_capability_is_vf(pdev))
-	// 	dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
-	// 	return I915_IOV_MODE_SRIOV_VF;
+	dev_info(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
+	if (gen12_pci_capability_is_vf(pdev)) {
+		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
+		return I915_IOV_MODE_SRIOV_VF;
+	}
+
+// WARNING: There are serious problems here. We're now forcing SR-IOV
+//			PF mode probing, otherwise it will recognize the bare-metal
+//			host as VF (I have no idea why). However, the kernel will 
+//			complain when you modify sriov_numvfs, since the i915 driver
+//			couldn't recognize VF anymore, and treat VFs as PFs instead.
+
+	dev_info(dev, "WARNING: code here in i915_sriov.c is heavily modified\n");
+	dev_info(dev, "WARNING: please read the comments in the src code\n");
 
 #ifdef CONFIG_PCI_IOV
 	dev_info(dev, "i915_sriov_probe: dev_is_pf in\n");
