@@ -9,7 +9,7 @@ This package is **highly experimental**, you should only use it when you know wh
 ## My testing cmdline
 
 ```
-intel_iommu=on i915.enable_guc=5 vfio-pci.enable_sriov=1
+intel_iommu=on i915.enable_guc=7
 ```
 
 ## Creating virtual functions
