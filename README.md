@@ -6,6 +6,8 @@ Originally from [linux-intel-lts](https://github.com/intel/linux-intel-lts/tree/
 
 This package is **highly experimental**, you should only use it when you know what you are doing.
 
+For Arch Linux users, it is available in AUR. [i915-sriov-dkms-git](https://aur.archlinux.org/packages/i915-sriov-dkms-git)
+
 ## My testing cmdline
 
 ```
