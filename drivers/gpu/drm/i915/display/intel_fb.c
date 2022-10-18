@@ -5,6 +5,7 @@
 
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_modeset_helper.h>
+#include <drm/drm_blend.h>
 
 #include "i915_drv.h"
 #include "intel_display.h"
