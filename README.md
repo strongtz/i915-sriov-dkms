@@ -8,6 +8,8 @@ This package is **highly experimental**, you should only use it when you know wh
 
 For Arch Linux users, it is available in AUR. [i915-sriov-dkms-git](https://aur.archlinux.org/packages/i915-sriov-dkms-git)
 
+Latest tested kernel version on Arch Linux: `6.0.9-arch1-1`
+
 ## My testing cmdline
 
 ```
