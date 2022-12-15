@@ -82,18 +82,7 @@ static bool intel_dp_read_lttpr_common_caps(struct intel_dp *intel_dp,
 					    const u8 dpcd[DP_RECEIVER_CAP_SIZE])
 {
 	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
-	struct drm_i915_private *i915 = to_i915(encoder->base.dev);
 	int ret;
-
-	if (intel_dp_is_edp(intel_dp))
-		return false;
-
-	/*
-	 * Detecting LTTPRs must be avoided on platforms with an AUX timeout
-	 * period < 3.2ms. (see DP Standard v2.0, 2.11.2, 3.6.6.1).
-	 */
-	if (DISPLAY_VER(i915) < 10 || IS_GEMINILAKE(i915))
-		return false;
 
 	ret = drm_dp_read_lttpr_common_caps(&intel_dp->aux, dpcd,
 					    intel_dp->lttpr_common_caps);
@@ -197,13 +186,25 @@ static int intel_dp_init_lttpr(struct intel_dp *intel_dp, const u8 dpcd[DP_RECEI
  */
 int intel_dp_init_lttpr_and_dprx_caps(struct intel_dp *intel_dp)
 {
-	u8 dpcd[DP_RECEIVER_CAP_SIZE];
-	int lttpr_count;
+	struct drm_i915_private *i915 = dp_to_i915(intel_dp);
+	int lttpr_count = 0;
 
-	if (drm_dp_read_dpcd_caps(&intel_dp->aux, dpcd))
-		return -EIO;
+	/*
+	 * Detecting LTTPRs must be avoided on platforms with an AUX timeout
+	 * period < 3.2ms. (see DP Standard v2.0, 2.11.2, 3.6.6.1).
+	 */
+	if (!intel_dp_is_edp(intel_dp) &&
+	    (DISPLAY_VER(i915) >= 10 && !IS_GEMINILAKE(i915))) {
+		u8 dpcd[DP_RECEIVER_CAP_SIZE];
 
-	lttpr_count = intel_dp_init_lttpr(intel_dp, dpcd);
+		if (drm_dp_dpcd_probe(&intel_dp->aux, DP_LT_TUNABLE_PHY_REPEATER_FIELD_DATA_STRUCTURE_REV))
+			return -EIO;
+
+		if (drm_dp_read_dpcd_caps(&intel_dp->aux, dpcd))
+			return -EIO;
+
+		lttpr_count = intel_dp_init_lttpr(intel_dp, dpcd);
+	}
 
 	/*
 	 * The DPTX shall read the DPRX caps after LTTPR detection, so re-read
@@ -669,6 +670,28 @@ intel_dp_prepare_link_train(struct intel_dp *intel_dp,
 
 	intel_dp_compute_rate(intel_dp, crtc_state->port_clock,
 			      &link_bw, &rate_select);
+
+	/*
+	 * WaEdpLinkRateDataReload
+	 *
+	 * Parade PS8461E MUX (used on varius TGL+ laptops) needs
+	 * to snoop the link rates reported by the sink when we
+	 * use LINK_RATE_SET in order to operate in jitter cleaning
+	 * mode (as opposed to redriver mode). Unfortunately it
+	 * loses track of the snooped link rates when powered down,
+	 * so we need to make it re-snoop often. Without this high
+	 * link rates are not stable.
+	 */
+	if (!link_bw) {
+		struct intel_connector *connector = intel_dp->attached_connector;
+		__le16 sink_rates[DP_MAX_SUPPORTED_RATES];
+
+		drm_dbg_kms(&i915->drm, "[CONNECTOR:%d:%s] Reloading eDP link rates\n",
+			    connector->base.base.id, connector->base.name);
+
+		drm_dp_dpcd_read(&intel_dp->aux, DP_SUPPORTED_LINK_RATES,
+				 sink_rates, sizeof(sink_rates));
+	}
 
 	if (link_bw)
 		drm_dbg_kms(&i915->drm,

@@ -330,9 +330,6 @@ static int igt_vf_iov_own_ggtt(struct intel_iov *iov, bool sanitycheck)
 	GEM_BUG_ON(!IS_ALIGNED(ggtt_block.start, I915_GTT_PAGE_SIZE_4K));
 	GEM_BUG_ON(!IS_ALIGNED(ggtt_block.size, I915_GTT_PAGE_SIZE_4K));
 
-	IOV_DEBUG(iov, "Subtest %s, gsm: %#llx base: %#llx size: %#llx\n",
-		  __func__, ptr_to_u64(gsm), ggtt_block.start, ggtt_block.size);
-
 	for_each_pte_test(tc, pte_testcases) {
 		IOV_DEBUG(iov, "Run '%ps' check\n", tc->test);
 		if (!run_test_on_ggtt_block(iov, gsm, &ggtt_block, tc, 0, sanitycheck))
@@ -379,9 +376,6 @@ static int igt_vf_iov_own_ggtt_via_pf(struct intel_iov *iov)
 	if (err < 0)
 		goto out;
 
-	IOV_DEBUG(iov, "Subtest %s, gsm: %#llx base: %#llx size: %#llx\n",
-		  __func__, ptr_to_u64(gsm), ggtt_block.start, ggtt_block.size);
-
 	for_each_pte_test(tc, pte_testcases) {
 		IOV_DEBUG(iov, "Run '%ps' check \n", tc->test);
 		if (!run_test_on_ggtt_block(iov, gsm, &ggtt_block, tc, 0, false))
@@ -421,10 +415,6 @@ _test_other_ggtt_region(struct intel_iov *iov, gen8_pte_t __iomem *gsm,
 	int failed = 0;
 	struct pte_testcase *tc;
 
-	IOV_DEBUG(iov, "Subtest %s, gsm: %#llx base: %#llx size: %#llx\n",
-		  __func__, ptr_to_u64(gsm), ggtt_region->start,
-		  ggtt_region->size);
-
 	for_each_pte_test(tc, pte_testcases) {
 		IOV_DEBUG(iov, "Run '%ps' check\n", tc->test);
 		if (!run_test_on_ggtt_block(iov, gsm, ggtt_region, tc, 0, false))
@@ -446,10 +436,6 @@ _test_other_ggtt_region_via_pf(struct intel_iov *iov, gen8_pte_t __iomem *gsm,
 	};
 	int failed = 0;
 	struct pte_testcase *tc;
-
-	IOV_DEBUG(iov, "Subtest %s, gsm: %#llx base: %#llx size: %#llx\n",
-		  __func__, ptr_to_u64(gsm), ggtt_region->start,
-		  ggtt_region->size);
 
 	for_each_pte_test(tc, pte_testcases) {
 		IOV_DEBUG(iov, "Run '%ps' check\n", tc->test);

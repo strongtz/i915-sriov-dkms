@@ -43,6 +43,8 @@ config DRM_I915_DEBUG
 	select DRM_I915_DEBUG_WAKEREF
 	select DRM_I915_SW_FENCE_DEBUG_OBJECTS
 	select DRM_I915_SELFTEST
+	select INTEL_MEI_GSC
+	select INTEL_MEI_PXP
 	default n
 	help
 	  Choose this option to turn on extra driver debugging that may affect
