@@ -467,7 +467,7 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 		if (err)
 			return err;
 
-		err = aops->write_begin(obj->base.filp, mapping, offset, len, 0,
+		err = aops->write_begin(obj->base.filp, mapping, offset, len,
 					&page, &data);
 		if (err < 0)
 			return err;
@@ -642,7 +642,7 @@ i915_gem_object_create_shmem_from_data(struct drm_i915_private *dev_priv,
 		struct page *page;
 		void *pgdata, *vaddr;
 
-		err = aops->write_begin(file, file->f_mapping, offset, len, 0,
+		err = aops->write_begin(file, file->f_mapping, offset, len,
 					&page, &pgdata);
 		if (err < 0)
 			goto fail;

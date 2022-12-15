@@ -139,10 +139,10 @@ static u64 random_offset(u64 start, u64 end, u64 len, u64 align)
 		if (sizeof(unsigned long) == sizeof(u64)) {
 			addr = get_random_long();
 		} else {
-			addr = get_random_int();
+			addr = get_random_u32();
 			if (range > U32_MAX) {
 				addr <<= 32;
-				addr |= get_random_int();
+				addr |= get_random_u32();
 			}
 		}
 		div64_u64_rem(addr, range, &addr);

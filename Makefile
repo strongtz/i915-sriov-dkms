@@ -39,6 +39,8 @@ i915-y += i915_driver.o \
 	  i915_utils.o \
 	  intel_device_info.o \
 	  intel_dram.o \
+	  intel_gvt.o \
+	  intel_gvt_mmio_table.o \
 	  intel_memory_region.o \
 	  intel_pch.o \
 	  intel_pcode.o \
@@ -91,12 +93,14 @@ gt-y += \
 	gt/intel_execlists_submission.o \
 	gt/intel_ggtt.o \
 	gt/intel_ggtt_fencing.o \
+	gt/intel_ggtt_gmch.o \
 	gt/intel_gt.o \
 	gt/intel_gt_buffer_pool.o \
 	gt/intel_gt_clock_utils.o \
 	gt/intel_gt_debugfs.o \
 	gt/intel_gt_engines_debugfs.o \
 	gt/intel_gt_irq.o \
+	gt/intel_gt_mcr.o \
 	gt/intel_gt_pm.o \
 	gt/intel_gt_pm_debugfs.o \
 	gt/intel_gt_pm_irq.o \
@@ -232,9 +236,11 @@ i915-y += \
 	display/intel_combo_phy.o \
 	display/intel_connector.o \
 	display/intel_crtc.o \
+	display/intel_crtc_state_dump.o \
 	display/intel_cursor.o \
 	display/intel_display.o \
 	display/intel_display_power.o \
+	display/intel_display_power_map.o \
 	display/intel_display_power_well.o \
 	display/intel_dmc.o \
 	display/intel_dpio_phy.o \
@@ -301,6 +307,8 @@ i915-y += \
 	display/intel_hdmi.o \
 	display/intel_lspcon.o \
 	display/intel_lvds.o \
+	display/intel_modeset_setup.o \
+	display/intel_modeset_verify.o \
 	display/intel_panel.o \
 	display/intel_pps.o \
 	display/intel_qp_tables.o \
