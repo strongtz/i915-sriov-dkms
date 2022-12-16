@@ -39,8 +39,6 @@ i915-y += i915_driver.o \
 	  i915_utils.o \
 	  intel_device_info.o \
 	  intel_dram.o \
-	  intel_gvt.o \
-	  intel_gvt_mmio_table.o \
 	  intel_memory_region.o \
 	  intel_pch.o \
 	  intel_pcode.o \
@@ -351,7 +349,12 @@ i915-$(CONFIG_DRM_I915_SELFTEST) += \
 # virtual gpu code
 i915-y += i915_vgpu.o
 
+i915-$(CONFIG_DRM_I915_GVT) += \
+       intel_gvt.o \
+       intel_gvt_mmio_table.o
+
 obj-$(CONFIG_DRM_I915)           += i915.o
+obj-$(CONFIG_DRM_I915_GVT_KVMGT) += kvmgt.o
 
 CFLAGS_i915_trace_points.o := -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915
 
