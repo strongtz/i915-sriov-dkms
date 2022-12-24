@@ -84,6 +84,13 @@ struct intel_engine_coredump {
 	u32 fault_reg;
 	u64 faddr;
 	u32 rc_psmi; /* sleep state */
+	u32 nopid;
+	u32 excc;
+	u32 cmd_cctl;
+	u32 cscmdop;
+	u32 ctx_sr_ctl;
+	u32 dma_faddr_hi;
+	u32 dma_faddr_lo;
 	struct intel_instdone instdone;
 
 	/* GuC matched capture-lists info */
@@ -116,6 +123,15 @@ struct intel_engine_coredump {
 	} vm_info;
 
 	struct intel_engine_coredump *next;
+};
+
+struct intel_ctb_coredump {
+	u32 raw_head, head;
+	u32 raw_tail, tail;
+	u32 raw_status;
+	u32 desc_offset;
+	u32 cmds_offset;
+	u32 size;
 };
 
 struct intel_gt_coredump {
@@ -158,9 +174,14 @@ struct intel_gt_coredump {
 	struct intel_uc_coredump {
 		struct intel_uc_fw guc_fw;
 		struct intel_uc_fw huc_fw;
-		struct i915_vma_coredump *guc_log;
-		u32 timestamp;
-		bool is_guc_capture;
+		struct guc_info {
+			struct intel_ctb_coredump ctb[2];
+			struct i915_vma_coredump *vma_ctb;
+			struct i915_vma_coredump *vma_log;
+			u32 timestamp;
+			u16 last_fence;
+			bool is_guc_capture;
+		} guc;
 	} *uc;
 
 	struct intel_gt_coredump *next;

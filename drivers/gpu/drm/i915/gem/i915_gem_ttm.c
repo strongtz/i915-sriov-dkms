@@ -266,24 +266,6 @@ static const struct i915_refct_sgt_ops tt_rsgt_ops = {
 	.release = i915_ttm_tt_release
 };
 
-static inline bool
-i915_gem_object_needs_ccs_pages(struct drm_i915_gem_object *obj)
-{
-	bool lmem_placement = false;
-	int i;
-
-	for (i = 0; i < obj->mm.n_placements; i++) {
-		/* Compression is not allowed for the objects with smem placement */
-		if (obj->mm.placements[i]->type == INTEL_MEMORY_SYSTEM)
-			return false;
-		if (!lmem_placement &&
-		    obj->mm.placements[i]->type == INTEL_MEMORY_LOCAL)
-			lmem_placement = true;
-	}
-
-	return lmem_placement;
-}
-
 static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *bo,
 					 uint32_t page_flags)
 {
@@ -315,7 +297,7 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *bo,
 		i915_tt->is_shmem = true;
 	}
 
-	if (HAS_FLAT_CCS(i915) && i915_gem_object_needs_ccs_pages(obj))
+	if (i915_gem_object_needs_ccs_pages(obj))
 		ccs_pages = DIV_ROUND_UP(DIV_ROUND_UP(bo->base.size,
 						      NUM_BYTES_PER_CCS_BYTE),
 					 PAGE_SIZE);
@@ -379,7 +361,6 @@ static bool i915_ttm_eviction_valuable(struct ttm_buffer_object *bo,
 				       const struct ttm_place *place)
 {
 	struct drm_i915_gem_object *obj = i915_ttm_to_gem(bo);
-	struct ttm_resource *res = bo->resource;
 
 	if (!obj)
 		return false;
@@ -396,45 +377,7 @@ static bool i915_ttm_eviction_valuable(struct ttm_buffer_object *bo,
 	if (!i915_gem_object_evictable(obj))
 		return false;
 
-	switch (res->mem_type) {
-	case I915_PL_LMEM0: {
-		struct ttm_resource_manager *man =
-			ttm_manager_type(bo->bdev, res->mem_type);
-		struct i915_ttm_buddy_resource *bman_res =
-			to_ttm_buddy_resource(res);
-		struct drm_buddy *mm = bman_res->mm;
-		struct drm_buddy_block *block;
-
-		if (!place->fpfn && !place->lpfn)
-			return true;
-
-		GEM_BUG_ON(!place->lpfn);
-
-		/*
-		 * If we just want something mappable then we can quickly check
-		 * if the current victim resource is using any of the CPU
-		 * visible portion.
-		 */
-		if (!place->fpfn &&
-		    place->lpfn == i915_ttm_buddy_man_visible_size(man))
-			return bman_res->used_visible_size > 0;
-
-		/* Real range allocation */
-		list_for_each_entry(block, &bman_res->blocks, link) {
-			unsigned long fpfn =
-				drm_buddy_block_offset(block) >> PAGE_SHIFT;
-			unsigned long lpfn = fpfn +
-				(drm_buddy_block_size(mm, block) >> PAGE_SHIFT);
-
-			if (place->fpfn < lpfn && place->lpfn > fpfn)
-				return true;
-		}
-		return false;
-	} default:
-		break;
-	}
-
-	return true;
+	return ttm_bo_eviction_valuable(bo, place);
 }
 
 static void i915_ttm_evict_flags(struct ttm_buffer_object *bo,
@@ -620,9 +563,14 @@ i915_ttm_resource_get_st(struct drm_i915_gem_object *obj,
 			 struct ttm_resource *res)
 {
 	struct ttm_buffer_object *bo = i915_gem_to_ttm(obj);
+	u32 page_alignment;
 
 	if (!i915_ttm_gtt_binds_lmem(res))
 		return i915_ttm_tt_get_st(bo->ttm);
+
+	page_alignment = bo->page_alignment << PAGE_SHIFT;
+	if (!page_alignment)
+		page_alignment = obj->mm.region->min_page_size;
 
 	/*
 	 * If CPU mapping differs, we need to add the ttm_tt pages to
@@ -634,7 +582,8 @@ i915_ttm_resource_get_st(struct drm_i915_gem_object *obj,
 			struct i915_refct_sgt *rsgt;
 
 			rsgt = intel_region_ttm_resource_to_rsgt(obj->mm.region,
-								 res);
+								 res,
+								 page_alignment);
 			if (IS_ERR(rsgt))
 				return rsgt;
 
@@ -643,7 +592,8 @@ i915_ttm_resource_get_st(struct drm_i915_gem_object *obj,
 		return i915_refct_sgt_get(obj->ttm.cached_io_rsgt);
 	}
 
-	return intel_region_ttm_resource_to_rsgt(obj->mm.region, res);
+	return intel_region_ttm_resource_to_rsgt(obj->mm.region, res,
+						 page_alignment);
 }
 
 static int i915_ttm_truncate(struct drm_i915_gem_object *obj)
@@ -675,7 +625,15 @@ static void i915_ttm_swap_notify(struct ttm_buffer_object *bo)
 		i915_ttm_purge(obj);
 }
 
-static bool i915_ttm_resource_mappable(struct ttm_resource *res)
+/**
+ * i915_ttm_resource_mappable - Return true if the ttm resource is CPU
+ * accessible.
+ * @res: The TTM resource to check.
+ *
+ * This is interesting on small-BAR systems where we may encounter lmem objects
+ * that can't be accessed via the CPU.
+ */
+bool i915_ttm_resource_mappable(struct ttm_resource *res)
 {
 	struct i915_ttm_buddy_resource *bman_res = to_ttm_buddy_resource(res);
 
@@ -687,6 +645,22 @@ static bool i915_ttm_resource_mappable(struct ttm_resource *res)
 
 static int i915_ttm_io_mem_reserve(struct ttm_device *bdev, struct ttm_resource *mem)
 {
+	struct drm_i915_gem_object *obj = i915_ttm_to_gem(mem->bo);
+	bool unknown_state;
+
+	if (!obj)
+		return -EINVAL;
+
+	if (!kref_get_unless_zero(&obj->base.refcount))
+		return -EINVAL;
+
+	assert_object_held(obj);
+
+	unknown_state = i915_gem_object_has_unknown_state(obj);
+	i915_gem_object_put(obj);
+	if (unknown_state)
+		return -EINVAL;
+
 	if (!i915_ttm_cpu_maps_iomem(mem))
 		return 0;
 
@@ -1229,9 +1203,8 @@ int __i915_gem_ttm_object_init(struct intel_memory_region *mem,
 	 * Similarly, in delayed_destroy, we can't call ttm_bo_put()
 	 * until successful initialization.
 	 */
-	ret = ttm_bo_init_reserved(&i915->bdev, i915_gem_to_ttm(obj), size,
-				   bo_type, &i915_sys_placement,
-				   page_size >> PAGE_SHIFT,
+	ret = ttm_bo_init_reserved(&i915->bdev, i915_gem_to_ttm(obj), bo_type,
+				   &i915_sys_placement, page_size >> PAGE_SHIFT,
 				   &ctx, NULL, NULL, i915_ttm_bo_destroy);
 	if (ret)
 		return i915_ttm_err_to_gem(ret);

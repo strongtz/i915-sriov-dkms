@@ -6,6 +6,9 @@
 
 #include <drm/drm_cache.h>
 
+#include "gt/intel_gt.h"
+#include "gt/intel_gt_pm.h"
+
 #include "i915_drv.h"
 #include "i915_gem_object.h"
 #include "i915_scatterlist.h"
@@ -188,6 +191,18 @@ static void unmap_object(struct drm_i915_gem_object *obj, void *ptr)
 		vunmap(ptr);
 }
 
+static void flush_tlb_invalidate(struct drm_i915_gem_object *obj)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct intel_gt *gt = to_gt(i915);
+
+	if (!obj->mm.tlb)
+		return;
+
+	intel_gt_invalidate_tlb(gt, obj->mm.tlb);
+	obj->mm.tlb = 0;
+}
+
 struct sg_table *
 __i915_gem_object_unset_pages(struct drm_i915_gem_object *obj)
 {
@@ -212,6 +227,8 @@ __i915_gem_object_unset_pages(struct drm_i915_gem_object *obj)
 
 	__i915_gem_object_reset_page_iter(obj);
 	obj->mm.page_sizes.phys = obj->mm.page_sizes.sg = 0;
+
+	flush_tlb_invalidate(obj);
 
 	return pages;
 }

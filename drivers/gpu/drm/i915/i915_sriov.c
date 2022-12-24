@@ -96,32 +96,21 @@ static bool pf_verify_readiness(struct drm_i915_private *i915)
 	int totalvfs = pci_sriov_get_totalvfs(pdev);
 	int newlimit = min_t(u16, wanted_max_vfs(i915), totalvfs);
 
-	dev_info(i915->drm.dev, "pf_verify_readiness: entry\n");
-
 	GEM_BUG_ON(!dev_is_pf(dev));
 	GEM_WARN_ON(totalvfs > U16_MAX);
 
-	if (!newlimit) {
-		dev_info(i915->drm.dev, "all VFs disabled\n");
+	if (!newlimit)
 		return pf_continue_as_native(i915, "all VFs disabled");
-	}
 
-	if (!wants_pf(i915)) {
-		dev_info(i915->drm.dev, "GuC virtualization disabled\n");
+	if (!wants_pf(i915))
 		return pf_continue_as_native(i915, "GuC virtualization disabled");
-	}
 
-	if (!intel_uc_wants_guc_submission(&to_gt(i915)->uc)) {
-		dev_info(i915->drm.dev, "GuC submission disabled\n");
+	if (!intel_uc_wants_guc_submission(&to_gt(i915)->uc))
 		return pf_continue_as_native(i915, "GuC submission disabled");
-	}
 
-	if (!pf_has_valid_vf_bars(i915)) {
-		dev_info(i915->drm.dev, "VFs BAR not ready\n");
+	if (!pf_has_valid_vf_bars(i915))
 		return pf_continue_as_native(i915, "VFs BAR not ready");
-	}
 
-	dev_info(i915->drm.dev, "pf_verify_readiness: pf_reduce_totalvfs\n");
 	pf_reduce_totalvfs(i915, newlimit);
 
 	i915->sriov.pf.device_vfs = totalvfs;
@@ -153,27 +142,17 @@ enum i915_iov_mode i915_sriov_probe(struct drm_i915_private *i915)
 	struct device *dev = i915->drm.dev;
 	struct pci_dev *pdev = to_pci_dev(dev);
 
-	dev_info(dev, "i915_sriov_probe: entry\n");
-	if (!HAS_SRIOV(i915)) {
-		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_NONE\n");
+	if (!HAS_SRIOV(i915))
 		return I915_IOV_MODE_NONE;
-	}
 
-	dev_info(dev, "i915_sriov_probe: gen12_pci_capability_is_vf in\n");
-	if (gen12_pci_capability_is_vf(pdev)) {
-		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_VF\n");
+	if (gen12_pci_capability_is_vf(pdev))
 		return I915_IOV_MODE_SRIOV_VF;
-	}
 
 #ifdef CONFIG_PCI_IOV
-	dev_info(dev, "i915_sriov_probe: dev_is_pf in\n");
-	if (dev_is_pf(dev) && pf_verify_readiness(i915)) {
-		dev_info(dev, "i915_sriov_probe: I915_IOV_MODE_SRIOV_PF\n");
+	if (dev_is_pf(dev) && pf_verify_readiness(i915))
 		return I915_IOV_MODE_SRIOV_PF;
-	}
 #endif
 
-	dev_info(dev, "i915_sriov_probe: SR-IOV probe failed\n");
 	return I915_IOV_MODE_NONE;
 }
 

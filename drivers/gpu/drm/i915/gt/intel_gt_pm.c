@@ -275,7 +275,8 @@ int intel_gt_resume(struct intel_gt *gt)
 		}
 	}
 
-	intel_rc6_enable(&gt->rc6);
+	if (gt->i915->params.enable_rc6)
+		intel_rc6_enable(&gt->rc6);
 
 	intel_uc_resume(&gt->uc);
 
