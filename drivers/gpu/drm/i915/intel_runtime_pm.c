@@ -71,7 +71,9 @@ track_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm)
 static void untrack_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm,
 					     intel_wakeref_t wakeref)
 {
+#if IS_ENABLED(CONFIG_DRM_I915_TRACK_WAKEREF)
 	intel_wakeref_tracker_remove(&rpm->debug, wakeref);
+#endif
 }
 
 static void untrack_all_intel_runtime_pm_wakerefs(struct intel_runtime_pm *rpm)
