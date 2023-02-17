@@ -80,10 +80,7 @@ void intel_uc_fw_change_status(struct intel_uc_fw *uc_fw,
 	fw_def(ALDERLAKE_S,  0, guc_mmp(tgl,  70, 1, 1)) \
 	fw_def(ALDERLAKE_S,  0, guc_mmp(tgl,  69, 0, 3)) \
 	fw_def(DG1,          0, guc_maj(dg1,  70, 5)) \
-	fw_def(DG1,          0, guc_mmp(dg1,  70, 1, 1)) \
-	fw_def(ROCKETLAKE,   0, guc_maj(tgl,  70, 5)) \
 	fw_def(ROCKETLAKE,   0, guc_mmp(tgl,  70, 1, 1)) \
-	fw_def(TIGERLAKE,    0, guc_maj(tgl,  70, 5)) \
 	fw_def(TIGERLAKE,    0, guc_mmp(tgl,  70, 1, 1)) \
 	fw_def(JASPERLAKE,   0, guc_mmp(ehl,  70, 1, 1)) \
 	fw_def(ELKHARTLAKE,  0, guc_mmp(ehl,  70, 1, 1)) \
@@ -103,10 +100,7 @@ void intel_uc_fw_change_status(struct intel_uc_fw *uc_fw,
 	fw_def(ALDERLAKE_S,  0, huc_raw(tgl)) \
 	fw_def(ALDERLAKE_S,  0, huc_mmp(tgl,  7, 9, 3)) \
 	fw_def(DG1,          0, huc_raw(dg1)) \
-	fw_def(DG1,          0, huc_mmp(dg1,  7, 9, 3)) \
-	fw_def(ROCKETLAKE,   0, huc_raw(tgl)) \
 	fw_def(ROCKETLAKE,   0, huc_mmp(tgl,  7, 9, 3)) \
-	fw_def(TIGERLAKE,    0, huc_raw(tgl)) \
 	fw_def(TIGERLAKE,    0, huc_mmp(tgl,  7, 9, 3)) \
 	fw_def(JASPERLAKE,   0, huc_mmp(ehl,  9, 0, 0)) \
 	fw_def(ELKHARTLAKE,  0, huc_mmp(ehl,  9, 0, 0)) \
@@ -250,6 +244,7 @@ __uc_fw_auto_select(struct drm_i915_private *i915, struct intel_uc_fw *uc_fw)
 	u32 fw_count;
 	u8 rev = INTEL_REVID(i915);
 	int i;
+	bool found;
 
 	/*
 	 * The only difference between the ADL GuC FWs is the HWConfig support.
@@ -264,6 +259,7 @@ __uc_fw_auto_select(struct drm_i915_private *i915, struct intel_uc_fw *uc_fw)
 	fw_blobs = blobs_all[uc_fw->type].blobs;
 	fw_count = blobs_all[uc_fw->type].count;
 
+	found = false;
 	for (i = 0; i < fw_count && p <= fw_blobs[i].p; i++) {
 		const struct uc_fw_blob *blob = &fw_blobs[i].blob;
 
@@ -285,7 +281,13 @@ __uc_fw_auto_select(struct drm_i915_private *i915, struct intel_uc_fw *uc_fw)
 		uc_fw->file_wanted.major_ver = blob->major;
 		uc_fw->file_wanted.minor_ver = blob->minor;
 		uc_fw->loaded_via_gsc = blob->loaded_via_gsc;
+		found = true;
 		break;
+	}
+
+	if (!found && uc_fw->file_selected.path) {
+		/* Failed to find a match for the last attempt?! */
+		uc_fw->file_selected.path = NULL;
 	}
 
 	/* make sure the list is ordered as expected */
@@ -341,7 +343,7 @@ __uc_fw_auto_select(struct drm_i915_private *i915, struct intel_uc_fw *uc_fw)
 				continue;
 
 bad:
-			drm_err(&i915->drm, "\x1B[35;1mInvalid FW blob order: %s r%u %s%d.%d.%d comes before %s r%u %s%d.%d.%d\n",
+			drm_err(&i915->drm, "Invalid FW blob order: %s r%u %s%d.%d.%d comes before %s r%u %s%d.%d.%d\n",
 				intel_platform_name(fw_blobs[i - 1].p), fw_blobs[i - 1].rev,
 				fw_blobs[i - 1].blob.legacy ? "L" : "v",
 				fw_blobs[i - 1].blob.major,
@@ -590,10 +592,14 @@ int intel_uc_fw_fetch(struct intel_uc_fw *uc_fw)
 
 	err = firmware_request_nowarn(&fw, uc_fw->file_selected.path, dev);
 	memcpy(&file_ideal, &uc_fw->file_wanted, sizeof(file_ideal));
-	if (!err || intel_uc_fw_is_overridden(uc_fw))
-		goto done;
+
+	/* Any error is terminal if overriding. Don't bother searching for older versions */
+	if (err && intel_uc_fw_is_overridden(uc_fw))
+		goto fail;
 
 	while (err == -ENOENT) {
+		old_ver = true;
+
 		__uc_fw_auto_select(i915, uc_fw);
 		if (!uc_fw->file_selected.path) {
 			/*
@@ -613,8 +619,6 @@ int intel_uc_fw_fetch(struct intel_uc_fw *uc_fw)
 	if (err)
 		goto fail;
 
-	old_ver = true;
-done:
 	if (uc_fw->loaded_via_gsc)
 		err = check_gsc_manifest(fw, uc_fw);
 	else

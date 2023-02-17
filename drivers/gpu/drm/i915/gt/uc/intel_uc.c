@@ -257,9 +257,9 @@ static int guc_enable_communication(struct intel_guc *guc)
 	intel_guc_enable_interrupts(guc);
 
 	/* check for CT messages received before we enabled interrupts */
-	spin_lock_irq(&gt->irq_lock);
+	spin_lock_irq(gt->irq_lock);
 	intel_guc_ct_event_handler(&guc->ct);
-	spin_unlock_irq(&gt->irq_lock);
+	spin_unlock_irq(gt->irq_lock);
 
 	drm_dbg(&i915->drm, "GuC communication enabled\n");
 
@@ -561,7 +561,6 @@ err_out:
 #if IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR) && IS_ENABLED(CONFIG_DRM_I915_DEBUG_GEM)
 	if (!i915_error_injected()) {
 		drm_info(&i915->drm, "Dumping on GuC load failure...\n");
-		intel_klog_error_capture(uc_to_gt(uc), (intel_engine_mask_t) ~0U);
 	}
 #endif
 

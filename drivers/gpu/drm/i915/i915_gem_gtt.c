@@ -137,7 +137,7 @@ static u64 random_offset(u64 start, u64 end, u64 len, u64 align)
 	range = round_down(end - len, align) - round_up(start, align);
 	if (range) {
 		if (sizeof(unsigned long) == sizeof(u64)) {
-			addr = get_random_long();
+			addr = get_random_u64();
 		} else {
 			addr = get_random_u32();
 			if (range > U32_MAX) {
