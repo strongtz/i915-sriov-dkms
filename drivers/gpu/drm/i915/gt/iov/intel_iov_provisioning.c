@@ -849,14 +849,14 @@ static int pf_alloc_vf_ctxs_range(struct intel_iov *iov, unsigned int id, u16 nu
 	u16 max_size = U16_MAX;
 	u16 index = U16_MAX;
 	u16 last_equal = 0;
-	unsigned int rs, re;
+	unsigned int rs = 0, re;
 
 	if (unlikely(!ctxs_bitmap))
 		return -ENOMEM;
 
 	GEM_BUG_ON(!intel_iov_is_pf(iov));
 
-	for_each_clear_bitrange(rs, re, ctxs_bitmap, ctxs_bitmap_total_bits()) {
+	for_each_clear_bitrange_from(rs, re, ctxs_bitmap, ctxs_bitmap_total_bits()) {
 		u16 size_bits = re - rs;
 
 		/*
@@ -1011,13 +1011,13 @@ u16 intel_iov_provisioning_get_ctxs(struct intel_iov *iov, unsigned int id)
 static u16 pf_get_ctxs_free(struct intel_iov *iov)
 {
 	unsigned long *ctxs_bitmap = pf_get_ctxs_bitmap(iov);
-	unsigned int rs, re;
+	unsigned int rs = 0, re;
 	u16 sum = 0;
 
 	if (unlikely(!ctxs_bitmap))
 		return 0;
 
-	for_each_clear_bitrange(rs, re, ctxs_bitmap, ctxs_bitmap_total_bits()) {
+	for_each_clear_bitrange_from(rs, re, ctxs_bitmap, ctxs_bitmap_total_bits()) {
 		IOV_DEBUG(iov, "ctxs hole %u-%u (%u)\n", decode_vf_ctxs_start(rs),
 			  decode_vf_ctxs_start(re) - 1, decode_vf_ctxs_count(re - rs));
 		sum += re - rs;
@@ -1049,13 +1049,13 @@ u16 intel_iov_provisioning_query_free_ctxs(struct intel_iov *iov)
 static u16 pf_get_ctxs_max_quota(struct intel_iov *iov)
 {
 	unsigned long *ctxs_bitmap = pf_get_ctxs_bitmap(iov);
-	unsigned int rs, re;
+	unsigned int rs = 0, re;
 	u16 max = 0;
 
 	if (unlikely(!ctxs_bitmap))
 		return 0;
 
-	for_each_clear_bitrange(rs, re, ctxs_bitmap, ctxs_bitmap_total_bits()) {
+	for_each_clear_bitrange_from(rs, re, ctxs_bitmap, ctxs_bitmap_total_bits()) {
 		IOV_DEBUG(iov, "ctxs hole %u-%u (%u)\n", decode_vf_ctxs_start(rs),
 			  decode_vf_ctxs_start(re) - 1, decode_vf_ctxs_count(re - rs));
 		max = max_t(u16, max, re - rs);
@@ -1286,13 +1286,13 @@ u16 intel_iov_provisioning_query_free_dbs(struct intel_iov *iov)
 static u16 pf_get_max_dbs(struct intel_iov *iov)
 {
 	unsigned long *dbs_bitmap = pf_get_dbs_bitmap(iov);
-	unsigned int rs, re;
+	unsigned int rs = 0, re;
 	u16 limit = 0;
 
 	if (unlikely(!dbs_bitmap))
 		return 0;
 
-	for_each_clear_bitrange(rs, re, dbs_bitmap, GUC_NUM_DOORBELLS) {
+	for_each_clear_bitrange_from(rs, re, dbs_bitmap, GUC_NUM_DOORBELLS) {
 		IOV_DEBUG(iov, "dbs hole %u-%u (%u)\n", rs, re, re - rs);
 		limit = max_t(u16, limit, re - rs);
 	}

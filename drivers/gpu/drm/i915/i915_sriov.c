@@ -7,6 +7,7 @@
 #include "i915_sriov_sysfs.h"
 #include "i915_drv.h"
 #include "intel_pci_config.h"
+#include "i915_pci.h"
 
 #include "gt/intel_gt.h"
 #include "gt/intel_gt_pm.h"
@@ -76,8 +77,8 @@ static bool pf_has_valid_vf_bars(struct drm_i915_private *i915)
 {
 	struct pci_dev *pdev = to_pci_dev(i915->drm.dev);
 
-	return __pci_resource_valid(pdev, GEN12_VF_GTTMMADR_BAR) &&
-	       __pci_resource_valid(pdev, GEN12_VF_LMEM_BAR);
+	return i915_pci_resource_valid(pdev, GEN12_VF_GTTMMADR_BAR) &&
+	       i915_pci_resource_valid(pdev, GEN12_VF_LMEM_BAR);
 }
 
 static bool pf_continue_as_native(struct drm_i915_private *i915, const char *why)
@@ -180,8 +181,8 @@ static void vf_tweak_device_info(struct drm_i915_private *i915)
 	/* Force PCH_NOOP. We have no access to display */
 	i915->pch_type = PCH_NOP;
 	memset(&info->display, 0, sizeof(info->display));
-	info->display.pipe_mask = 0;
-	info->memory_regions &= ~(REGION_STOLEN_SMEM |
+	RUNTIME_INFO(i915)->pipe_mask = 0;
+	RUNTIME_INFO(i915)->memory_regions &= ~(REGION_STOLEN_SMEM |
 				  REGION_STOLEN_LMEM);
 }
 

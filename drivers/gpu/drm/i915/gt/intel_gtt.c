@@ -269,11 +269,7 @@ void i915_address_space_init(struct i915_address_space *vm, int subclass)
 	memset64(vm->min_alignment, I915_GTT_MIN_ALIGNMENT,
 		 ARRAY_SIZE(vm->min_alignment));
 
-	if (HAS_64K_PAGES(vm->i915) && NEEDS_COMPACT_PT(vm->i915) &&
-	    subclass == VM_CLASS_PPGTT) {
-		vm->min_alignment[INTEL_MEMORY_LOCAL] = I915_GTT_PAGE_SIZE_2M;
-		vm->min_alignment[INTEL_MEMORY_STOLEN_LOCAL] = I915_GTT_PAGE_SIZE_2M;
-	} else if (HAS_64K_PAGES(vm->i915)) {
+	if (HAS_64K_PAGES(vm->i915)) {
 		vm->min_alignment[INTEL_MEMORY_LOCAL] = I915_GTT_PAGE_SIZE_64K;
 		vm->min_alignment[INTEL_MEMORY_STOLEN_LOCAL] = I915_GTT_PAGE_SIZE_64K;
 	}
@@ -343,7 +339,8 @@ int setup_scratch_page(struct i915_address_space *vm)
 	 */
 	size = I915_GTT_PAGE_SIZE_4K;
 	if (i915_vm_is_4lvl(vm) &&
-	    HAS_PAGE_SIZES(vm->i915, I915_GTT_PAGE_SIZE_64K))
+	    HAS_PAGE_SIZES(vm->i915, I915_GTT_PAGE_SIZE_64K) &&
+	    !HAS_64K_PAGES(vm->i915))
 		size = I915_GTT_PAGE_SIZE_64K;
 
 	do {
@@ -385,18 +382,6 @@ skip:
 		if (size == I915_GTT_PAGE_SIZE_4K)
 			return -ENOMEM;
 
-		/*
-		 * If we need 64K minimum GTT pages for device local-memory,
-		 * like on XEHPSDV, then we need to fail the allocation here,
-		 * otherwise we can't safely support the insertion of
-		 * local-memory pages for this vm, since the HW expects the
-		 * correct physical alignment and size when the page-table is
-		 * operating in 64K GTT mode, which includes any scratch PTEs,
-		 * since userspace can still touch them.
-		 */
-		if (HAS_64K_PAGES(vm->i915))
-			return -ENOMEM;
-
 		size = I915_GTT_PAGE_SIZE_4K;
 	} while (1);
 }
@@ -404,6 +389,9 @@ skip:
 void free_scratch(struct i915_address_space *vm)
 {
 	int i;
+
+	if (!vm->scratch[0])
+		return;
 
 	for (i = 0; i <= vm->top; i++)
 		i915_gem_object_put(vm->scratch[i]);
