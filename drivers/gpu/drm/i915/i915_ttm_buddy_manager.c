@@ -4,6 +4,7 @@
  */
 
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
@@ -62,8 +63,13 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 	if (place->fpfn || lpfn != man->size)
 		bman_res->flags |= DRM_BUDDY_RANGE_ALLOCATION;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	GEM_BUG_ON(!bman_res->base.size);
+	size = bman_res->base.size;
+#else
 	GEM_BUG_ON(!bman_res->base.num_pages);
 	size = bman_res->base.num_pages << PAGE_SHIFT;
+#endif
 
 	min_page_size = bman->default_page_size;
 	if (bo->page_alignment)
@@ -72,7 +78,11 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 	GEM_BUG_ON(min_page_size < mm->chunk_size);
 	GEM_BUG_ON(!IS_ALIGNED(size, min_page_size));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	if (place->fpfn + PFN_UP(bman_res->base.size) != place->lpfn &&
+#else
 	if (place->fpfn + bman_res->base.num_pages != place->lpfn &&
+#endif
 	    place->flags & TTM_PL_FLAG_CONTIGUOUS) {
 		unsigned long pages;
 
@@ -108,7 +118,11 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 		goto err_free_blocks;
 
 	if (place->flags & TTM_PL_FLAG_CONTIGUOUS) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+		u64 original_size = (u64)bman_res->base.size;
+#else
 		u64 original_size = (u64)bman_res->base.num_pages << PAGE_SHIFT;
+#endif
 
 		drm_buddy_block_trim(mm,
 				     original_size,
@@ -116,7 +130,11 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 	}
 
 	if (lpfn <= bman->visible_size) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+		bman_res->used_visible_size = PFN_UP(bman_res->base.size);
+#else
 		bman_res->used_visible_size = bman_res->base.num_pages;
+#endif
 	} else {
 		struct drm_buddy_block *block;
 
@@ -228,7 +246,11 @@ static bool i915_ttm_buddy_man_compatible(struct ttm_resource_manager *man,
 
 	if (!place->fpfn &&
 	    place->lpfn == i915_ttm_buddy_man_visible_size(man))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+		return bman_res->used_visible_size == PFN_UP(res->size);
+#else
 		return bman_res->used_visible_size == res->num_pages;
+#endif
 
 	/* Check each drm buddy block individually */
 	list_for_each_entry(block, &bman_res->blocks, link) {

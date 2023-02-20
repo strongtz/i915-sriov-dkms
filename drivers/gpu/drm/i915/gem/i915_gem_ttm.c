@@ -4,6 +4,7 @@
  */
 
 #include <linux/shmem_fs.h>
+#include <linux/version.h>
 
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
@@ -644,7 +645,11 @@ bool i915_ttm_resource_mappable(struct ttm_resource *res)
 	if (!i915_ttm_cpu_maps_iomem(res))
 		return true;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	return bman_res->used_visible_size == PFN_UP(bman_res->base.size);
+#else
 	return bman_res->used_visible_size == bman_res->base.num_pages;
+#endif
 }
 
 static int i915_ttm_io_mem_reserve(struct ttm_device *bdev, struct ttm_resource *mem)

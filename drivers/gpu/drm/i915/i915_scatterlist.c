@@ -11,6 +11,7 @@
 #include <drm/drm_mm.h>
 
 #include <linux/slab.h>
+#include <linux/version.h>
 
 bool i915_sg_trim(struct sg_table *orig_st)
 {
@@ -158,7 +159,11 @@ struct i915_refct_sgt *i915_rsgt_from_buddy_resource(struct ttm_resource *res,
 						     u32 page_alignment)
 {
 	struct i915_ttm_buddy_resource *bman_res = to_ttm_buddy_resource(res);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	const u64 size = res->size;
+#else
 	const u64 size = res->num_pages << PAGE_SHIFT;
+#endif
 	const u32 max_segment = round_down(UINT_MAX, page_alignment);
 	struct drm_buddy *mm = bman_res->mm;
 	struct list_head *blocks = &bman_res->blocks;
@@ -177,7 +182,11 @@ struct i915_refct_sgt *i915_rsgt_from_buddy_resource(struct ttm_resource *res,
 
 	i915_refct_sgt_init(rsgt, size);
 	st = &rsgt->table;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	if (sg_alloc_table(st, PFN_UP(res->size), GFP_KERNEL)) {
+#else
 	if (sg_alloc_table(st, res->num_pages, GFP_KERNEL)) {
+#endif
 		i915_refct_sgt_put(rsgt);
 		return ERR_PTR(-ENOMEM);
 	}
