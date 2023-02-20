@@ -36,6 +36,7 @@
 #include <linux/sysrq.h>
 #include <linux/tty.h>
 #include <linux/vga_switcheroo.h>
+#include <linux/version.h>
 
 #include <drm/drm_crtc.h>
 #include <drm/drm_fb_helper.h>
@@ -124,6 +125,10 @@ static const struct fb_ops intelfb_ops = {
 	.owner = THIS_MODULE,
 	DRM_FB_HELPER_DEFAULT_OPS,
 	.fb_set_par = intel_fbdev_set_par,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	.fb_read = drm_fb_helper_cfb_read,
+	.fb_write = drm_fb_helper_cfb_write,
+#endif
 	.fb_fillrect = drm_fb_helper_cfb_fillrect,
 	.fb_copyarea = drm_fb_helper_cfb_copyarea,
 	.fb_imageblit = drm_fb_helper_cfb_imageblit,
@@ -175,7 +180,7 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	}
 
 	if (IS_ERR(obj)) {
-		drm_err(&dev_priv->drm, "failed to allocate framebuffer\n");
+		drm_err(&dev_priv->drm, "failed to allocate framebuffer (%pe)\n", obj);
 		return PTR_ERR(obj);
 	}
 
@@ -254,9 +259,13 @@ static int intelfb_create(struct drm_fb_helper *helper,
 		goto out_unlock;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	info = drm_fb_helper_alloc_info(helper);
+#else
 	info = drm_fb_helper_alloc_fbi(helper);
+#endif
 	if (IS_ERR(info)) {
-		drm_err(&dev_priv->drm, "Failed to allocate fb_info\n");
+		drm_err(&dev_priv->drm, "Failed to allocate fb_info (%pe)\n", info);
 		ret = PTR_ERR(info);
 		goto out_unpin;
 	}
@@ -291,7 +300,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	vaddr = i915_vma_pin_iomap(vma);
 	if (IS_ERR(vaddr)) {
 		drm_err(&dev_priv->drm,
-			"Failed to remap framebuffer into virtual memory\n");
+			"Failed to remap framebuffer into virtual memory (%pe)\n", vaddr);
 		ret = PTR_ERR(vaddr);
 		goto out_unpin;
 	}
@@ -584,7 +593,11 @@ void intel_fbdev_unregister(struct drm_i915_private *dev_priv)
 	if (!current_is_async())
 		intel_fbdev_sync(ifbdev);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	drm_fb_helper_unregister_info(&ifbdev->helper);
+#else
 	drm_fb_helper_unregister_fbi(&ifbdev->helper);
+#endif
 }
 
 void intel_fbdev_fini(struct drm_i915_private *dev_priv)
@@ -627,7 +640,11 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous
 	if (!ifbdev || !ifbdev->vma)
 		goto set_suspend;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	info = ifbdev->helper.info;
+#else
 	info = ifbdev->helper.fbdev;
+#endif
 
 	if (synchronous) {
 		/* Flush any pending work to turn the console on, and then
