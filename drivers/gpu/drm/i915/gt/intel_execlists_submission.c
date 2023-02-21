@@ -108,6 +108,7 @@
  */
 #include <linux/interrupt.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "i915_trace.h"
@@ -3689,7 +3690,11 @@ static void virtual_engine_initial_hint(struct virtual_engine *ve)
 	 * NB This does not force us to execute on this engine, it will just
 	 * typically be the first we inspect for submission.
 	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,6)
 	swp = get_random_u32_below(ve->num_siblings);
+#else
+	swp = prandom_u32_max(ve->num_siblings);
+#endif
 	if (swp)
 		swap(ve->siblings[swp], ve->siblings[0]);
 }
