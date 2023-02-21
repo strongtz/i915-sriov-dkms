@@ -8,6 +8,7 @@
 #include <linux/highmem.h>
 #include <linux/sync_file.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include <drm/drm_syncobj.h>
 
@@ -2462,7 +2463,11 @@ gen8_dispatch_bsd_engine(struct drm_i915_private *dev_priv,
 	/* Check whether the file_priv has already selected one ring. */
 	if ((int)file_priv->bsd_engine < 0)
 		file_priv->bsd_engine =
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,6)
 			get_random_u32_below(num_vcs_engines(dev_priv));
+#else
+			prandom_u32_max(num_vcs_engines(dev_priv));
+#endif
 
 	return file_priv->bsd_engine;
 }
