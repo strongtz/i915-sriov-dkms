@@ -39,7 +39,7 @@ You can create up to 7 VFs on UHD Graphics 770
 2. Install some tools. `apt install build-* dkms`
 3. Go inside the repo, edit the `dkms.conf`file, change the `PACKAGE_NAME` to `i915-sriov-dkms`, and change the `PACKAGE_VERSION` to `6.1`. Save the file.
 4. Move the entire content of the repository to `/usr/src/i915-sriov-dkms`. The folder name will be the DKMS package name.
-5. Execute command `dkms -i -m i915-sriov-dkms -v 6.1. `-m` argument denotes the package name, and it should be the same as the folder name which contains the package content. `-v` argument denotes the package version, which we have specified in the `dkms.conf` as `6.1`
+5. Execute command `dkms -i -m i915-sriov-dkms -v 6.1`. `-m` argument denotes the package name, and it should be the same as the folder name which contains the package content. `-v` argument denotes the package version, which we have specified in the `dkms.conf` as `6.1`
 6. The kernel module should begin building.
 7. Once finished, we need to make a few changes to the kernel commandline. `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to 'intel_iommu=on i915.enable_guc=7`, or add to it if you have other arguments there already.
 8. Update `grub` and `initrramfs` by executing `update-grub` and `update-initramfs -u`
