@@ -8,6 +8,7 @@
 #include <linux/mman.h>
 #include <linux/pfn_t.h>
 #include <linux/sizes.h>
+#include <linux/version.h>
 
 #include <drm/drm_cache.h>
 
@@ -697,7 +698,11 @@ insert:
 	GEM_BUG_ON(lookup_mmo(obj, mmap_type) != mmo);
 out:
 	if (file)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,9)
+		drm_vma_node_allow_once(&mmo->vma_node, file);
+#else
 		drm_vma_node_allow(&mmo->vma_node, file);
+#endif
 	return mmo;
 
 err:
