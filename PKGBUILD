@@ -15,6 +15,11 @@ install=${pkgname}.install
 source=("git+https://github.com/strongtz/i915-sriov-dkms.git")
 md5sums=('SKIP')
 
+prepare() {
+	cd "$srcdir/$_pkgbase"
+	patch -p1 -N -i "$srcdir/drm-display-dp_mst-handle-old-new-payload-states-in-drm_dp_remove_payload.patch"
+}
+
 package() {
   cd "$srcdir/$_pkgbase"
   # Copy dkms.conf
