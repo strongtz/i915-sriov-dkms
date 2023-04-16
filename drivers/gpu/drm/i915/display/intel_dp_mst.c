@@ -365,7 +365,7 @@ static void intel_mst_disable_dp(struct intel_atomic_state *state,
 	struct intel_dp *intel_dp = &dig_port->dp;
 	struct intel_connector *connector =
 		to_intel_connector(old_conn_state->connector);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,5)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,24)
 	struct drm_dp_mst_topology_state *old_mst_state =
 		drm_atomic_get_old_mst_topology_state(&state->base, &intel_dp->mst_mgr);
 	struct drm_dp_mst_topology_state *new_mst_state =
@@ -385,7 +385,7 @@ static void intel_mst_disable_dp(struct intel_atomic_state *state,
 
 	intel_hdcp_disable(intel_mst->connector);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,5)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,24)
 	drm_dp_remove_payload(&intel_dp->mst_mgr, new_mst_state,
 			      old_payload, new_payload);
 #else
