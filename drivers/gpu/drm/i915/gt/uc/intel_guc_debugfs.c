@@ -14,7 +14,7 @@
 #include "intel_guc.h"
 #include "intel_guc_debugfs.h"
 #include "intel_guc_log_debugfs.h"
-#include "intel_runtime_pm.h"
+#include "i915_sriov.h"
 
 static int guc_info_show(struct seq_file *m, void *data)
 {
@@ -26,7 +26,9 @@ static int guc_info_show(struct seq_file *m, void *data)
 
 	intel_guc_load_status(guc, &p);
 	drm_puts(&p, "\n");
-	intel_guc_log_info(&guc->log, &p);
+
+	if (!IS_SRIOV_VF(guc_to_gt(guc)->i915))
+		intel_guc_log_info(&guc->log, &p);
 
 	if (!intel_guc_submission_is_used(guc))
 		return 0;
@@ -73,68 +75,63 @@ static bool intel_eval_slpc_support(void *data)
 	return intel_guc_slpc_is_used(guc);
 }
 
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
-static ssize_t guc_send_mmio_write(struct file *file, const char __user *user,
-				   size_t count, loff_t *ppos)
+static int guc_sched_disable_delay_ms_get(void *data, u64 *val)
 {
-	struct intel_guc *guc = file->private_data;
-	struct intel_runtime_pm *rpm = guc_to_gt(guc)->uncore->rpm;
-	u32 request[GUC_MAX_MMIO_MSG_LEN];
-	u32 response[GUC_MAX_MMIO_MSG_LEN];
-	intel_wakeref_t wakeref;
-	int ret;
+	struct intel_guc *guc = data;
 
-	if (*ppos)
-		return 0;
+	if (!intel_guc_submission_is_used(guc))
+		return -ENODEV;
 
-	ret = from_user_to_u32array(user, count, request, ARRAY_SIZE(request));
-	if (ret < 0)
-		return ret;
+	*val = (u64)guc->submission_state.sched_disable_delay_ms;
 
-	with_intel_runtime_pm(rpm, wakeref)
-		ret = intel_guc_send_mmio(guc, request, ret, response, ARRAY_SIZE(response));
-	if (ret < 0)
-		return ret;
-
-	return count;
+	return 0;
 }
 
-static const struct file_operations guc_send_mmio_fops = {
-	.write =	guc_send_mmio_write,
-	.open =		simple_open,
-	.llseek =	default_llseek,
-};
-
-static ssize_t guc_send_ctb_write(struct file *file, const char __user *user,
-				  size_t count, loff_t *ppos)
+static int guc_sched_disable_delay_ms_set(void *data, u64 val)
 {
-	struct intel_guc *guc = file->private_data;
-	struct intel_runtime_pm *rpm = guc_to_gt(guc)->uncore->rpm;
-	u32 request[32], response[8];	/* reasonable limits */
-	intel_wakeref_t wakeref;
-	int ret;
+	struct intel_guc *guc = data;
 
-	if (*ppos)
-		return 0;
+	if (!intel_guc_submission_is_used(guc))
+		return -ENODEV;
 
-	ret = from_user_to_u32array(user, count, request, ARRAY_SIZE(request));
-	if (ret < 0)
-		return ret;
+	/* clamp to a practical limit, 1 minute is reasonable for a longest delay */
+	guc->submission_state.sched_disable_delay_ms = min_t(u64, val, 60000);
 
-	with_intel_runtime_pm(rpm, wakeref)
-		ret = intel_guc_send_and_receive(guc, request, ret, response, ARRAY_SIZE(response));
-	if (ret < 0)
-		return ret;
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(guc_sched_disable_delay_ms_fops,
+			guc_sched_disable_delay_ms_get,
+			guc_sched_disable_delay_ms_set, "%lld\n");
 
-	return count;
+static int guc_sched_disable_gucid_threshold_get(void *data, u64 *val)
+{
+	struct intel_guc *guc = data;
+
+	if (!intel_guc_submission_is_used(guc))
+		return -ENODEV;
+
+	*val = guc->submission_state.sched_disable_gucid_threshold;
+	return 0;
 }
 
-static const struct file_operations guc_send_ctb_fops = {
-	.write =	guc_send_ctb_write,
-	.open =		simple_open,
-	.llseek =	default_llseek,
-};
-#endif
+static int guc_sched_disable_gucid_threshold_set(void *data, u64 val)
+{
+	struct intel_guc *guc = data;
+
+	if (!intel_guc_submission_is_used(guc))
+		return -ENODEV;
+
+	if (val > intel_guc_sched_disable_gucid_threshold_max(guc))
+		guc->submission_state.sched_disable_gucid_threshold =
+			intel_guc_sched_disable_gucid_threshold_max(guc);
+	else
+		guc->submission_state.sched_disable_gucid_threshold = val;
+
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(guc_sched_disable_gucid_threshold_fops,
+			guc_sched_disable_gucid_threshold_get,
+			guc_sched_disable_gucid_threshold_set, "%lld\n");
 
 void intel_guc_debugfs_register(struct intel_guc *guc, struct dentry *root)
 {
@@ -142,10 +139,9 @@ void intel_guc_debugfs_register(struct intel_guc *guc, struct dentry *root)
 		{ "guc_info", &guc_info_fops, NULL },
 		{ "guc_registered_contexts", &guc_registered_contexts_fops, NULL },
 		{ "guc_slpc_info", &guc_slpc_info_fops, &intel_eval_slpc_support},
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
-		{ "guc_send_mmio", &guc_send_mmio_fops, NULL },
-		{ "guc_send_ctb", &guc_send_ctb_fops, NULL },
-#endif
+		{ "guc_sched_disable_delay_ms", &guc_sched_disable_delay_ms_fops, NULL },
+		{ "guc_sched_disable_gucid_threshold", &guc_sched_disable_gucid_threshold_fops,
+		   NULL },
 	};
 
 	if (!intel_guc_is_supported(guc))

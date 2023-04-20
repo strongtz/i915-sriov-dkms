@@ -105,48 +105,9 @@ DEFINE_SIMPLE_ATTRIBUTE(guc_log_level_fops,
 			guc_log_level_get, guc_log_level_set,
 			"%lld\n");
 
-static int guc_log_relay_buf_size_get(void *data, u64 *val)
-{
-	struct intel_guc_log *log = data;
-
-	if (!log)
-		return -ENODEV;
-	if (!log->vma)
-		return -ENODEV;
-
-	*val = (u64) intel_guc_log_size(log);
-
-	return 0;
-}
-
-DEFINE_SIMPLE_ATTRIBUTE(guc_log_relay_buf_size_fops,
-			guc_log_relay_buf_size_get, NULL,
-			"%lld\n");
-
-static int guc_log_relay_subbuf_count_get(void *data, u64 *val)
-{
-	struct intel_guc_log *log = data;
-
-	if (!log)
-		return -ENODEV;
-	if (!log->vma)
-		return -ENODEV;
-
-	*val = intel_guc_log_relay_subbuf_count(log);
-
-	return 0;
-}
-
-DEFINE_SIMPLE_ATTRIBUTE(guc_log_relay_subbuf_count_fops,
-			guc_log_relay_subbuf_count_get, NULL,
-			"%lld\n");
-
-static int guc_log_relay_ctl_open(struct inode *inode, struct file *file)
+static int guc_log_relay_open(struct inode *inode, struct file *file)
 {
 	struct intel_guc_log *log = inode->i_private;
-
-	if (!log)
-		return -ENODEV;
 
 	if (!intel_guc_is_ready(log_to_guc(log)))
 		return -ENODEV;
@@ -157,7 +118,7 @@ static int guc_log_relay_ctl_open(struct inode *inode, struct file *file)
 }
 
 static ssize_t
-guc_log_relay_ctl_write(struct file *filp,
+guc_log_relay_write(struct file *filp,
 		    const char __user *ubuf,
 		    size_t cnt,
 		    loff_t *ppos)
@@ -182,7 +143,7 @@ guc_log_relay_ctl_write(struct file *filp,
 	return ret ?: cnt;
 }
 
-static int guc_log_relay_ctl_release(struct inode *inode, struct file *file)
+static int guc_log_relay_release(struct inode *inode, struct file *file)
 {
 	struct intel_guc_log *log = inode->i_private;
 
@@ -190,11 +151,11 @@ static int guc_log_relay_ctl_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations guc_log_relay_ctl_fops = {
+static const struct file_operations guc_log_relay_fops = {
 	.owner = THIS_MODULE,
-	.open = guc_log_relay_ctl_open,
-	.write = guc_log_relay_ctl_write,
-	.release = guc_log_relay_ctl_release,
+	.open = guc_log_relay_open,
+	.write = guc_log_relay_write,
+	.release = guc_log_relay_release,
 };
 
 void intel_guc_log_debugfs_register(struct intel_guc_log *log,
@@ -204,9 +165,7 @@ void intel_guc_log_debugfs_register(struct intel_guc_log *log,
 		{ "guc_log_dump", &guc_log_dump_fops, NULL },
 		{ "guc_load_err_log_dump", &guc_load_err_log_dump_fops, NULL },
 		{ "guc_log_level", &guc_log_level_fops, NULL },
-		{ "guc_log_relay_ctl", &guc_log_relay_ctl_fops, NULL },
-		{ "guc_log_relay_buf_size", &guc_log_relay_buf_size_fops, NULL },
-		{ "guc_log_relay_subbuf_count", &guc_log_relay_subbuf_count_fops, NULL },
+		{ "guc_log_relay", &guc_log_relay_fops, NULL },
 	};
 
 	if (!intel_guc_is_supported(log_to_guc(log)))

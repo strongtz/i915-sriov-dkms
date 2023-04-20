@@ -7,17 +7,24 @@
 #ifndef INTEL_WAKEREF_H
 #define INTEL_WAKEREF_H
 
+#include <drm/drm_print.h>
+
 #include <linux/atomic.h>
 #include <linux/bitfield.h>
 #include <linux/bits.h>
 #include <linux/lockdep.h>
 #include <linux/mutex.h>
 #include <linux/refcount.h>
+#include <linux/ref_tracker.h>
+#include <linux/slab.h>
 #include <linux/stackdepot.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 
-#include "intel_wakeref_tracker.h"
+typedef unsigned long intel_wakeref_t;
+
+#define INTEL_REFTRACK_DEAD_COUNT 16
+#define INTEL_REFTRACK_PRINT_LIMIT 16
 
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_WAKEREF)
 #define INTEL_WAKEREF_BUG_ON(expr) BUG_ON(expr)
@@ -45,7 +52,7 @@ struct intel_wakeref {
 	struct delayed_work work;
 
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_WAKEREF)
-	struct intel_wakeref_tracker debug;
+	struct ref_tracker_dir debug;
 #endif
 };
 
@@ -57,11 +64,12 @@ struct intel_wakeref_lockclass {
 void __intel_wakeref_init(struct intel_wakeref *wf,
 			  struct intel_runtime_pm *rpm,
 			  const struct intel_wakeref_ops *ops,
-			  struct intel_wakeref_lockclass *key);
-#define intel_wakeref_init(wf, rpm, ops) do {				\
+			  struct intel_wakeref_lockclass *key,
+			  const char *name);
+#define intel_wakeref_init(wf, rpm, ops, name) do {				\
 	static struct intel_wakeref_lockclass __key;			\
 									\
-	__intel_wakeref_init((wf), (rpm), (ops), &__key);		\
+	__intel_wakeref_init((wf), (rpm), (ops), &__key, name);		\
 } while (0)
 
 int __intel_wakeref_get_first(struct intel_wakeref *wf);
@@ -72,11 +80,12 @@ void __intel_wakeref_put_last(struct intel_wakeref *wf, unsigned long flags);
  * @wf: the wakeref
  *
  * Acquire a hold on the wakeref. The first user to do so, will acquire
- * the runtime pm wakeref and then call the @fn underneath the wakeref
- * mutex.
+ * the runtime pm wakeref and then call the intel_wakeref_ops->get()
+ * underneath the wakeref mutex.
  *
- * Note that @fn is allowed to fail, in which case the runtime-pm wakeref
- * will be released and the acquisition unwound, and an error reported.
+ * Note that intel_wakeref_ops->get() is allowed to fail, in which case
+ * the runtime-pm wakeref will be released and the acquisition unwound,
+ * and an error reported.
  *
  * Returns: 0 if the wakeref was acquired successfully, or a negative error
  * code otherwise.
@@ -134,19 +143,17 @@ intel_wakeref_might_get(struct intel_wakeref *wf)
 }
 
 /**
- * intel_wakeref_put_flags: Release the wakeref
+ * __intel_wakeref_put: Release the wakeref
  * @wf: the wakeref
  * @flags: control flags
  *
  * Release our hold on the wakeref. When there are no more users,
- * the runtime pm wakeref will be released after the @fn callback is called
- * underneath the wakeref mutex.
+ * the runtime pm wakeref will be released after the intel_wakeref_ops->put()
+ * callback is called underneath the wakeref mutex.
  *
- * Note that @fn is allowed to fail, in which case the runtime-pm wakeref
- * is retained and an error reported.
+ * Note that intel_wakeref_ops->put() is allowed to fail, in which case the
+ * runtime-pm wakeref is retained.
  *
- * Returns: 0 if the wakeref was released successfully, or a negative error
- * code otherwise.
  */
 static inline void
 __intel_wakeref_put(struct intel_wakeref *wf, unsigned long flags)
@@ -266,17 +273,67 @@ __intel_wakeref_defer_park(struct intel_wakeref *wf)
  */
 int intel_wakeref_wait_for_idle(struct intel_wakeref *wf);
 
+#define INTEL_WAKEREF_DEF ((intel_wakeref_t)(-1))
+
+static inline intel_wakeref_t intel_ref_tracker_alloc(struct ref_tracker_dir *dir)
+{
+	struct ref_tracker *user = NULL;
+
+	ref_tracker_alloc(dir, &user, GFP_NOWAIT);
+
+	return (intel_wakeref_t)user ?: INTEL_WAKEREF_DEF;
+}
+
+static inline void intel_ref_tracker_free(struct ref_tracker_dir *dir,
+					  intel_wakeref_t handle)
+{
+	struct ref_tracker *user;
+
+	user = (handle == INTEL_WAKEREF_DEF) ? NULL : (void *)handle;
+
+	ref_tracker_free(dir, &user);
+}
+
+static inline void
+intel_wakeref_tracker_show(struct ref_tracker_dir *dir,
+			   struct drm_printer *p)
+{
+	const size_t buf_size = PAGE_SIZE;
+	char *buf, *sb, *se;
+	size_t count;
+
+	buf = kmalloc(buf_size, GFP_NOWAIT);
+	if (!buf)
+		return;
+
+	count = ref_tracker_dir_snprint(dir, buf, buf_size);
+	if (!count)
+		goto free;
+	/* printk does not like big buffers, so we split it */
+	for (sb = buf; *sb; sb = se + 1) {
+		se = strchrnul(sb, '\n');
+		drm_printf(p, "%.*s", (int)(se - sb + 1), sb);
+		if (!*se)
+			break;
+	}
+	if (count >= buf_size)
+		drm_printf(p, "\n...dropped %zd extra bytes of leak report.\n",
+			   count + 1 - buf_size);
+free:
+	kfree(buf);
+}
+
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_WAKEREF)
 
 static inline intel_wakeref_t intel_wakeref_track(struct intel_wakeref *wf)
 {
-	return intel_wakeref_tracker_add(&wf->debug);
+	return intel_ref_tracker_alloc(&wf->debug);
 }
 
 static inline void intel_wakeref_untrack(struct intel_wakeref *wf,
 					 intel_wakeref_t handle)
 {
-	intel_wakeref_tracker_remove(&wf->debug, handle);
+	intel_ref_tracker_free(&wf->debug, handle);
 }
 
 static inline void intel_wakeref_show(struct intel_wakeref *wf,

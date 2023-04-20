@@ -67,7 +67,6 @@ static void mock_device_release(struct drm_device *dev)
 	intel_gt_driver_remove(to_gt(i915));
 
 	i915_gem_drain_workqueue(i915);
-	i915_gem_drain_freed_objects(i915);
 
 	mock_fini_ggtt(to_gt(i915)->ggtt);
 	destroy_workqueue(i915->wq);
@@ -163,6 +162,7 @@ struct drm_i915_private *mock_gem_device(void)
 	if (pm_runtime_enabled(&pdev->dev))
 		WARN_ON(pm_runtime_get_sync(&pdev->dev));
 
+	i915->__mode = I915_IOV_MODE_NONE;
 
 	i915_params_copy(&i915->params, &i915_modparams);
 
@@ -185,7 +185,6 @@ struct drm_i915_private *mock_gem_device(void)
 
 	spin_lock_init(&i915->gpu_error.lock);
 
-	i915->__mode = I915_IOV_MODE_NONE;
 	i915_gem_init__mm(i915);
 	intel_root_gt_init_early(i915);
 	mock_uncore_init(&i915->uncore, i915);

@@ -7,6 +7,7 @@
 #define __INTEL_IOV_UTILS_H__
 
 #include "i915_drv.h"
+#include "gt/intel_gt_print.h"
 
 static inline struct intel_gt *iov_to_gt(struct intel_iov *iov)
 {
@@ -26,6 +27,21 @@ static inline struct drm_i915_private *iov_to_i915(struct intel_iov *iov)
 static inline struct device *iov_to_dev(struct intel_iov *iov)
 {
 	return iov_to_i915(iov)->drm.dev;
+}
+
+static inline struct intel_iov *iov_get_root(struct intel_iov *iov)
+{
+	return &to_gt(iov_to_i915(iov))->iov;
+}
+
+static inline bool iov_is_root(struct intel_iov *iov)
+{
+	return iov == iov_get_root(iov);
+}
+
+static inline bool iov_is_remote(struct intel_iov *iov)
+{
+	return !iov_is_root(iov);
 }
 
 static inline bool intel_iov_is_pf(struct intel_iov *iov)
@@ -66,17 +82,18 @@ static inline int pf_get_status(struct intel_iov *iov)
 static inline struct mutex *pf_provisioning_mutex(struct intel_iov *iov)
 {
 	GEM_BUG_ON(!intel_iov_is_pf(iov));
-	return &iov->pf.provisioning.lock;
+	/* always use mutex from the root tile */
+	return &iov_get_root(iov)->pf.provisioning.lock;
 }
 
 #define IOV_ERROR(_iov, _fmt, ...) \
-	drm_notice(&iov_to_i915(_iov)->drm, "IOV: " _fmt, ##__VA_ARGS__)
+	gt_notice(iov_to_gt(_iov), "IOV: " _fmt, ##__VA_ARGS__)
 #define IOV_PROBE_ERROR(_iov, _fmt, ...) \
-	i915_probe_error(iov_to_i915(_iov), "IOV: " _fmt, ##__VA_ARGS__)
+	gt_probe_error(iov_to_gt(_iov), "IOV: " _fmt, ##__VA_ARGS__)
 
 #ifdef CONFIG_DRM_I915_DEBUG_IOV
 #define IOV_DEBUG(_iov, _fmt, ...) \
-	drm_dbg(&iov_to_i915(_iov)->drm, "IOV: " _fmt, ##__VA_ARGS__)
+	gt_dbg(iov_to_gt(_iov), "IOV: " _fmt, ##__VA_ARGS__)
 #else
 #define IOV_DEBUG(_iov, _fmt, ...) typecheck(struct intel_iov *, _iov)
 #endif
@@ -114,5 +131,16 @@ static inline int __intel_iov_live_teardown(int err, void *data)
 	return __intel_gt_live_teardown(err, iov_to_gt(data));
 }
 #endif /* IS_ENABLED(CONFIG_DRM_I915_SELFTEST) */
+
+static inline const char *intel_iov_threshold_to_string(enum intel_iov_threshold threshold)
+{
+	switch (threshold) {
+#define __iov_threshold_to_string(K, N, ...) \
+	case IOV_THRESHOLD_##K: return #N;
+	IOV_THRESHOLDS(__iov_threshold_to_string)
+	}
+#undef __iov_threshold_to_string
+	return "<invalid>";
+}
 
 #endif /* __INTEL_IOV_UTILS_H__ */

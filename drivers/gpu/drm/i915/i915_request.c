@@ -43,6 +43,7 @@
 #include "gt/intel_rps.h"
 
 #include "i915_active.h"
+#include "i915_config.h"
 #include "i915_deps.h"
 #include "i915_driver.h"
 #include "i915_drv.h"
@@ -2259,7 +2260,7 @@ enum i915_request_state i915_test_request_state(struct i915_request *rq)
 	if (!i915_request_started(rq))
 		return I915_REQUEST_PENDING;
 
-	if (match_ring(rq))
+	if (IS_SRIOV_VF(rq->engine->i915) ? i915_request_is_active(rq) : match_ring(rq))
 		return I915_REQUEST_ACTIVE;
 
 	return I915_REQUEST_QUEUED;

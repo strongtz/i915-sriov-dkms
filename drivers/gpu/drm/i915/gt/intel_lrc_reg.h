@@ -30,6 +30,14 @@
 
 #define GEN9_CTX_RING_MI_MODE		0x54
 
+/* VF Reg State Context */
+#define GEN12_CTX_LRM_HEADER_0			0x50
+#define GEN12_CTX_INT_MASK_REG			0x51
+#define GEN12_CTX_INT_MASK_PTR			0x52
+#define GEN12_CTX_LRI_HEADER_4			0x55
+#define GEN12_CTX_INT_STATUS_REPORT_PTR		0x56
+#define GEN12_CTX_INT_SRC_REPORT_PTR		0x58
+
 #define ASSIGN_CTX_PDP(ppgtt, reg_state, n) do { \
 	u32 *reg_state__ = (reg_state); \
 	const u64 addr__ = i915_page_dir_dma_addr((ppgtt), (n)); \

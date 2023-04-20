@@ -7,6 +7,7 @@
 #include <linux/mei_aux.h>
 #include "i915_drv.h"
 #include "i915_reg.h"
+#include "gem/i915_gem_lmem.h"
 #include "gem/i915_gem_region.h"
 #include "gt/intel_gsc.h"
 #include "gt/intel_gt.h"
@@ -173,6 +174,14 @@ static void gsc_init_one(struct drm_i915_private *i915, struct intel_gsc *gsc,
 	intf->irq = -1;
 	intf->id = intf_id;
 
+	/*
+	 * On the multi-tile setups the GSC is functional on the first tile only
+	 */
+	if (gsc_to_gt(gsc)->info.id != 0) {
+		drm_dbg(&i915->drm, "Not initializing gsc for remote tiles\n");
+		return;
+	}
+
 	if (intf_id == 0 && !HAS_HECI_PXP(i915))
 		return;
 
@@ -306,7 +315,7 @@ void intel_gsc_init(struct intel_gsc *gsc, struct drm_i915_private *i915)
 {
 	unsigned int i;
 
-	if (!HAS_HECI_GSC(i915))
+	if (!HAS_HECI_GSC(i915) || IS_SRIOV_VF(i915))
 		return;
 
 	for (i = 0; i < INTEL_GSC_NUM_INTERFACES; i++)
@@ -318,7 +327,7 @@ void intel_gsc_fini(struct intel_gsc *gsc)
 	struct intel_gt *gt = gsc_to_gt(gsc);
 	unsigned int i;
 
-	if (!HAS_HECI_GSC(gt->i915))
+	if (!HAS_HECI_GSC(gt->i915) || IS_SRIOV_VF(gt->i915))
 		return;
 
 	for (i = 0; i < INTEL_GSC_NUM_INTERFACES; i++)

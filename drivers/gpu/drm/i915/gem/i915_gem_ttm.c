@@ -6,8 +6,8 @@
 #include <linux/shmem_fs.h>
 #include <linux/version.h>
 
-#include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
+#include <drm/ttm/ttm_tt.h>
 #include <drm/drm_buddy.h>
 
 #include "i915_drv.h"
@@ -141,13 +141,16 @@ i915_ttm_place_from_region(const struct intel_memory_region *mr,
 	if (flags & I915_BO_ALLOC_CONTIGUOUS)
 		place->flags |= TTM_PL_FLAG_CONTIGUOUS;
 	if (offset != I915_BO_INVALID_OFFSET) {
+		WARN_ON(overflows_type(offset >> PAGE_SHIFT, place->fpfn));
 		place->fpfn = offset >> PAGE_SHIFT;
+		WARN_ON(overflows_type(place->fpfn + (size >> PAGE_SHIFT), place->lpfn));
 		place->lpfn = place->fpfn + (size >> PAGE_SHIFT);
 	} else if (mr->io_size && mr->io_size < mr->total) {
 		if (flags & I915_BO_ALLOC_GPU_ONLY) {
 			place->flags |= TTM_PL_FLAG_TOPDOWN;
 		} else {
 			place->fpfn = 0;
+			WARN_ON(overflows_type(mr->io_size >> PAGE_SHIFT, place->lpfn));
 			place->lpfn = mr->io_size >> PAGE_SHIFT;
 		}
 	}
@@ -600,13 +603,16 @@ i915_ttm_resource_get_st(struct drm_i915_gem_object *obj,
 static int i915_ttm_truncate(struct drm_i915_gem_object *obj)
 {
 	struct ttm_buffer_object *bo = i915_gem_to_ttm(obj);
-	int err;
+	long err;
 
 	WARN_ON_ONCE(obj->mm.madv == I915_MADV_WILLNEED);
 
-	err = ttm_bo_wait(bo, true, false);
-	if (err)
+	err = dma_resv_wait_timeout(bo->base.resv, DMA_RESV_USAGE_BOOKKEEP,
+				    true, 15 * HZ);
+	if (err < 0)
 		return err;
+	if (err == 0)
+		return -EBUSY;
 
 	err = i915_ttm_move_notify(bo);
 	if (err)
@@ -694,9 +700,53 @@ static unsigned long i915_ttm_io_mem_pfn(struct ttm_buffer_object *bo,
 	GEM_WARN_ON(bo->ttm);
 
 	base = obj->mm.region->iomap.base - obj->mm.region->region.start;
-	sg = __i915_gem_object_get_sg(obj, &obj->ttm.get_io_page, page_offset, &ofs, true);
+	sg = i915_gem_object_page_iter_get_sg(obj, &obj->ttm.get_io_page, page_offset, &ofs);
 
 	return ((base + sg_dma_address(sg)) >> PAGE_SHIFT) + ofs;
+}
+
+static int i915_ttm_access_memory(struct ttm_buffer_object *bo,
+				  unsigned long offset, void *buf,
+				  int len, int write)
+{
+	struct drm_i915_gem_object *obj = i915_ttm_to_gem(bo);
+	resource_size_t iomap = obj->mm.region->iomap.base -
+		obj->mm.region->region.start;
+	unsigned long page = offset >> PAGE_SHIFT;
+	unsigned long bytes_left = len;
+
+	/*
+	 * TODO: For now just let it fail if the resource is non-mappable,
+	 * otherwise we need to perform the memcpy from the gpu here, without
+	 * interfering with the object (like moving the entire thing).
+	 */
+	if (!i915_ttm_resource_mappable(bo->resource))
+		return -EIO;
+
+	offset -= page << PAGE_SHIFT;
+	do {
+		unsigned long bytes = min(bytes_left, PAGE_SIZE - offset);
+		void __iomem *ptr;
+		dma_addr_t daddr;
+
+		daddr = i915_gem_object_get_dma_address(obj, page);
+		ptr = ioremap_wc(iomap + daddr + offset, bytes);
+		if (!ptr)
+			return -EIO;
+
+		if (write)
+			memcpy_toio(ptr, buf, bytes);
+		else
+			memcpy_fromio(buf, ptr, bytes);
+		iounmap(ptr);
+
+		page++;
+		buf += bytes;
+		bytes_left -= bytes;
+		offset = 0;
+	} while (bytes_left);
+
+	return len;
 }
 
 /*
@@ -715,6 +765,7 @@ static struct ttm_device_funcs i915_ttm_bo_driver = {
 	.delete_mem_notify = i915_ttm_delete_mem_notify,
 	.io_mem_reserve = i915_ttm_io_mem_reserve,
 	.io_mem_pfn = i915_ttm_io_mem_pfn,
+	.access_memory = i915_ttm_access_memory,
 };
 
 /**
@@ -779,8 +830,7 @@ static int __i915_ttm_get_pages(struct drm_i915_gem_object *obj,
 
 		GEM_BUG_ON(obj->mm.rsgt);
 		obj->mm.rsgt = rsgt;
-		__i915_gem_object_set_pages(obj, &rsgt->table,
-					    i915_sg_dma_sizes(rsgt->table.sgl));
+		__i915_gem_object_set_pages(obj, &rsgt->table);
 	}
 
 	GEM_BUG_ON(bo->ttm && ((obj->base.size >> PAGE_SHIFT) < bo->ttm->num_pages));
@@ -792,6 +842,10 @@ static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 {
 	struct ttm_place requested, busy[I915_TTM_MAX_PLACEMENTS];
 	struct ttm_placement placement;
+
+	/* restricted by sg_alloc_table */
+	if (overflows_type(obj->base.size >> PAGE_SHIFT, unsigned int))
+		return -E2BIG;
 
 	GEM_BUG_ON(obj->mm.n_placements > I915_TTM_MAX_PLACEMENTS);
 
@@ -995,9 +1049,6 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 	vm_fault_t ret;
 	int idx;
 
-	if (i915_ttm_is_ghost_object(bo))
-		return VM_FAULT_SIGBUS;
-
 	/* Sanity check that we allow writing into this object */
 	if (unlikely(i915_gem_object_is_readonly(obj) &&
 		     area->vm_flags & VM_WRITE))
@@ -1031,7 +1082,8 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 		}
 
 		if (err) {
-			drm_dbg(dev, "Unable to make resource CPU accessible\n");
+			drm_dbg(dev, "Unable to make resource CPU accessible(err = %pe)\n",
+				ERR_PTR(err));
 			dma_resv_unlock(bo->base.resv);
 			ret = VM_FAULT_SIGBUS;
 			goto out_rpm;
@@ -1061,6 +1113,8 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 		spin_lock(&to_i915(obj->base.dev)->runtime_pm.lmem_userfault_lock);
 		list_add(&obj->userfault_link, &to_i915(obj->base.dev)->runtime_pm.lmem_userfault_list);
 		spin_unlock(&to_i915(obj->base.dev)->runtime_pm.lmem_userfault_lock);
+
+		GEM_WARN_ON(!i915_ttm_cpu_maps_iomem(bo->resource));
 	}
 
 	if (wakeref & CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND)
@@ -1142,6 +1196,8 @@ static void i915_ttm_unmap_virtual(struct drm_i915_gem_object *obj)
 			obj->userfault_count = 0;
 		}
 	}
+
+	GEM_WARN_ON(obj->userfault_count);
 
 	ttm_bo_unmap_virtual(i915_gem_to_ttm(obj));
 
@@ -1261,6 +1317,17 @@ int __i915_gem_ttm_object_init(struct intel_memory_region *mem,
 	ret = ttm_bo_init_reserved(&i915->bdev, i915_gem_to_ttm(obj), bo_type,
 				   &i915_sys_placement, page_size >> PAGE_SHIFT,
 				   &ctx, NULL, NULL, i915_ttm_bo_destroy);
+
+	/*
+	 * XXX: The ttm_bo_init_reserved() functions returns -ENOSPC if the size
+	 * is too big to add vma. The direct function that returns -ENOSPC is
+	 * drm_mm_insert_node_in_range(). To handle the same error as other code
+	 * that returns -E2BIG when the size is too large, it converts -ENOSPC to
+	 * -E2BIG.
+	 */
+	if (size >> PAGE_SHIFT > INT_MAX && ret == -ENOSPC)
+		ret = -E2BIG;
+
 	if (ret)
 		return i915_ttm_err_to_gem(ret);
 

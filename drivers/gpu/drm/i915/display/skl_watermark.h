@@ -8,7 +8,7 @@
 
 #include <linux/types.h>
 
-#include "intel_display.h"
+#include "intel_display_limits.h"
 #include "intel_global_state.h"
 #include "intel_pm_types.h"
 
@@ -47,7 +47,7 @@ void intel_wm_state_verify(struct intel_crtc *crtc,
 void skl_watermark_ipc_init(struct drm_i915_private *i915);
 void skl_watermark_ipc_update(struct drm_i915_private *i915);
 bool skl_watermark_ipc_enabled(struct drm_i915_private *i915);
-void skl_watermark_ipc_debugfs_register(struct drm_i915_private *i915);
+void skl_watermark_debugfs_register(struct drm_i915_private *i915);
 
 void skl_wm_init(struct drm_i915_private *i915);
 

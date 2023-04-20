@@ -8,9 +8,6 @@
 #include "i915_sriov_sysfs_types.h"
 #include "i915_sysfs.h"
 
-#include "gt/iov/intel_iov_provisioning.h"
-#include "gt/iov/intel_iov_state.h"
-
 /*
  * /sys/class/drm/card*
  * └── iov/
@@ -21,7 +18,8 @@
  *     │   └── ...
  */
 
-#define SRIOV_KOBJ_HOME_NAME "iov"
+#define SRIOV_PRELIMINARY "prelim_"
+#define SRIOV_KOBJ_HOME_NAME SRIOV_PRELIMINARY "iov"
 #define SRIOV_EXT_KOBJ_PF_NAME "pf"
 #define SRIOV_EXT_KOBJ_VFn_NAME "vf%u"
 #define SRIOV_DEVICE_LINK_NAME "device"
@@ -109,17 +107,16 @@ static ssize_t control_sriov_ext_attr_store(struct drm_i915_private *i915,
 					    unsigned int id,
 					    const char *buf, size_t count)
 {
-	struct intel_iov *iov = &to_gt(i915)->iov;
 	int err = -EPERM;
 
 	if (sysfs_streq(buf, CONTROL_STOP)) {
-		err = intel_iov_state_stop_vf(iov, id);
+		err = i915_sriov_pf_stop_vf(i915, id);
 	} else if (sysfs_streq(buf, CONTROL_PAUSE)) {
-		err = intel_iov_state_pause_vf(iov, id);
+		err = i915_sriov_pf_pause_vf(i915, id);
 	} else if (sysfs_streq(buf, CONTROL_RESUME)) {
-		err = intel_iov_state_resume_vf(iov, id);
+		err = i915_sriov_pf_resume_vf(i915, id);
 	} else if (sysfs_streq(buf, CONTROL_CLEAR)) {
-		err = intel_iov_provisioning_clear(iov, id);
+		err = i915_sriov_pf_clear_vf(i915, id);
 	} else {
 		err = -EINVAL;
 	}
@@ -442,6 +439,13 @@ static void pf_goodbye(struct drm_i915_private *i915)
 	GEM_WARN_ON(i915->sriov.pf.sysfs.home);
 }
 
+static bool pf_initialized(struct drm_i915_private *i915)
+{
+	GEM_WARN_ON(i915->sriov.pf.sysfs.home && !i915->sriov.pf.sysfs.kobjs);
+	GEM_WARN_ON(!i915->sriov.pf.sysfs.home && i915->sriov.pf.sysfs.kobjs);
+	return i915->sriov.pf.sysfs.home;
+}
+
 /**
  * i915_sriov_sysfs_setup - Setup SR-IOV sysfs tree.
  * @i915: the i915 struct
@@ -493,6 +497,9 @@ failed:
 void i915_sriov_sysfs_teardown(struct drm_i915_private *i915)
 {
 	if (!IS_SRIOV_PF(i915))
+		return;
+
+	if (!pf_initialized(i915))
 		return;
 
 	pf_teardown_device_link(i915);

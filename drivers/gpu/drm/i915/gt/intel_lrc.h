@@ -102,8 +102,6 @@ enum {
 #define GEN8_CTX_ID_WIDTH			21
 #define GEN11_SW_CTX_ID_SHIFT			37
 #define GEN11_SW_CTX_ID_WIDTH			11
-#define GEN11_SW_COUNTER_SHIFT			55
-#define GEN11_SW_COUNTER_WIDTH			6
 #define GEN11_ENGINE_CLASS_SHIFT		61
 #define GEN11_ENGINE_CLASS_WIDTH		3
 #define GEN11_ENGINE_INSTANCE_SHIFT		48
@@ -112,6 +110,8 @@ enum {
 #define XEHP_SW_CTX_ID_WIDTH			16
 #define XEHP_SW_COUNTER_SHIFT			58
 #define XEHP_SW_COUNTER_WIDTH			6
+#define GEN12_GUC_SW_CTX_ID_SHIFT		39
+#define GEN12_GUC_SW_CTX_ID_WIDTH		16
 
 static inline void lrc_runtime_start(struct intel_context *ce)
 {

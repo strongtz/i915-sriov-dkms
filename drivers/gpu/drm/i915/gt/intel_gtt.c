@@ -12,9 +12,12 @@
 
 #include "gem/i915_gem_internal.h"
 #include "gem/i915_gem_lmem.h"
+#include "i915_reg.h"
 #include "i915_trace.h"
 #include "i915_utils.h"
 #include "intel_gt.h"
+#include "intel_gt_mcr.h"
+#include "intel_gt_print.h"
 #include "intel_gt_regs.h"
 #include "intel_gtt.h"
 
@@ -462,10 +465,29 @@ void gtt_write_workarounds(struct intel_gt *gt)
 		intel_uncore_write(uncore,
 				   HSW_GTT_CACHE_EN,
 				   can_use_gtt_cache ? GTT_CACHE_EN_ALL : 0);
-		drm_WARN_ON_ONCE(&i915->drm, can_use_gtt_cache &&
-				 intel_uncore_read(uncore,
-						   HSW_GTT_CACHE_EN) == 0);
+		gt_WARN_ON_ONCE(gt, can_use_gtt_cache &&
+				intel_uncore_read(uncore,
+						  HSW_GTT_CACHE_EN) == 0);
 	}
+}
+
+static void mtl_setup_private_ppat(struct intel_uncore *uncore)
+{
+	intel_uncore_write(uncore, GEN12_PAT_INDEX(0),
+			   MTL_PPAT_L4_0_WB);
+	intel_uncore_write(uncore, GEN12_PAT_INDEX(1),
+			   MTL_PPAT_L4_1_WT);
+	intel_uncore_write(uncore, GEN12_PAT_INDEX(2),
+			   MTL_PPAT_L4_3_UC);
+	intel_uncore_write(uncore, GEN12_PAT_INDEX(3),
+			   MTL_PPAT_L4_0_WB | MTL_2_COH_1W);
+	intel_uncore_write(uncore, GEN12_PAT_INDEX(4),
+			   MTL_PPAT_L4_0_WB | MTL_3_COH_2W);
+
+	/*
+	 * Remaining PAT entries are left at the hardware-default
+	 * fully-cached setting
+	 */
 }
 
 static void tgl_setup_private_ppat(struct intel_uncore *uncore)
@@ -479,6 +501,29 @@ static void tgl_setup_private_ppat(struct intel_uncore *uncore)
 	intel_uncore_write(uncore, GEN12_PAT_INDEX(5), GEN8_PPAT_WB);
 	intel_uncore_write(uncore, GEN12_PAT_INDEX(6), GEN8_PPAT_WB);
 	intel_uncore_write(uncore, GEN12_PAT_INDEX(7), GEN8_PPAT_WB);
+}
+
+static void xehp_setup_private_ppat(struct intel_gt *gt)
+{
+	enum forcewake_domains fw;
+	unsigned long flags;
+
+	fw = intel_uncore_forcewake_for_reg(gt->uncore, _MMIO(XEHP_PAT_INDEX(0).reg),
+					    FW_REG_WRITE);
+	intel_uncore_forcewake_get(gt->uncore, fw);
+
+	intel_gt_mcr_lock(gt, &flags);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(0), GEN8_PPAT_WB);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(1), GEN8_PPAT_WC);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(2), GEN8_PPAT_WT);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(3), GEN8_PPAT_UC);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(4), GEN8_PPAT_WB);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(5), GEN8_PPAT_WB);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(6), GEN8_PPAT_WB);
+	intel_gt_mcr_multicast_write_fw(gt, XEHP_PAT_INDEX(7), GEN8_PPAT_WB);
+	intel_gt_mcr_unlock(gt, flags);
+
+	intel_uncore_forcewake_put(gt->uncore, fw);
 }
 
 static void icl_setup_private_ppat(struct intel_uncore *uncore)
@@ -573,16 +618,21 @@ static void chv_setup_private_ppat(struct intel_uncore *uncore)
 	intel_uncore_write(uncore, GEN8_PRIVATE_PAT_HI, upper_32_bits(pat));
 }
 
-void setup_private_pat(struct intel_uncore *uncore)
+void setup_private_pat(struct intel_gt *gt)
 {
-	struct drm_i915_private *i915 = uncore->i915;
+	struct intel_uncore *uncore = gt->uncore;
+	struct drm_i915_private *i915 = gt->i915;
 
 	GEM_BUG_ON(GRAPHICS_VER(i915) < 8);
 
 	if (IS_SRIOV_VF(i915))
 		return;
 
-	if (GRAPHICS_VER(i915) >= 12)
+	if (IS_METEORLAKE(i915))
+		mtl_setup_private_ppat(uncore);
+	else if (GRAPHICS_VER_FULL(i915) >= IP_VER(12, 50))
+		xehp_setup_private_ppat(gt);
+	else if (GRAPHICS_VER(i915) >= 12)
 		tgl_setup_private_ppat(uncore);
 	else if (GRAPHICS_VER(i915) >= 11)
 		icl_setup_private_ppat(uncore);

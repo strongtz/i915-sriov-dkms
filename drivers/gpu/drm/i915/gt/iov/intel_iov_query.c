@@ -14,6 +14,7 @@
 #include "gt/uc/abi/guc_actions_vf_abi.h"
 #include "gt/uc/abi/guc_klvs_abi.h"
 #include "gt/uc/abi/guc_version_abi.h"
+#include "gt/uc/intel_guc_print.h"
 #include "i915_drv.h"
 #include "intel_iov_relay.h"
 #include "intel_iov_utils.h"
@@ -105,11 +106,13 @@ static int vf_handshake_with_guc(struct intel_iov *iov)
 	if (major != GUC_VF_VERSION_LATEST_MAJOR || minor != GUC_VF_VERSION_LATEST_MINOR)
 		goto fail;
 
-	dev_info(iov_to_dev(iov), "%s interface version %u.%u.%u.%u\n",
-		 intel_uc_fw_type_repr(guc->fw.type),
+	guc_info(iov_to_guc(iov), "interface version %u.%u.%u.%u\n",
 		 branch, major, minor, patch);
 
-	intel_uc_fw_set_preloaded(&guc->fw, major, minor);
+	iov->vf.config.guc_abi.branch = branch;
+	iov->vf.config.guc_abi.major = major;
+	iov->vf.config.guc_abi.minor = minor;
+	iov->vf.config.guc_abi.patch = patch;
 	return 0;
 
 fail:
@@ -227,6 +230,7 @@ static int vf_get_ggtt_info(struct intel_iov *iov)
 	int err;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
+	GEM_BUG_ON(iov->vf.config.ggtt_size);
 
 	err = guc_action_query_single_klv64(guc, GUC_KLV_VF_CFG_GGTT_START_KEY, &start);
 	if (unlikely(err))
@@ -238,12 +242,6 @@ static int vf_get_ggtt_info(struct intel_iov *iov)
 
 	IOV_DEBUG(iov, "GGTT %#llx-%#llx = %lluK\n",
 		  start, start + size - 1, size / SZ_1K);
-
-	if (iov->vf.config.ggtt_size && iov->vf.config.ggtt_size != size) {
-		IOV_ERROR(iov, "Unexpected GGTT reassignment: %lluK != %lluK\n",
-			  size / SZ_1K, iov->vf.config.ggtt_size / SZ_1K);
-		return -EREMCHG;
-	}
 
 	iov->vf.config.ggtt_base = start;
 	iov->vf.config.ggtt_size = size;
@@ -258,6 +256,7 @@ static int vf_get_submission_cfg(struct intel_iov *iov)
 	int err;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
+	GEM_BUG_ON(iov->vf.config.num_ctxs);
 
 	err = guc_action_query_single_klv32(guc, GUC_KLV_VF_CFG_NUM_CONTEXTS_KEY, &num_ctxs);
 	if (unlikely(err))
@@ -268,17 +267,6 @@ static int vf_get_submission_cfg(struct intel_iov *iov)
 		return err;
 
 	IOV_DEBUG(iov, "CTXs %u DBs %u\n", num_ctxs, num_dbs);
-
-	if (iov->vf.config.num_ctxs && iov->vf.config.num_ctxs != num_ctxs) {
-		IOV_ERROR(iov, "Unexpected CTXs reassignment: %u != %u\n",
-			  num_ctxs, iov->vf.config.num_ctxs);
-		return -EREMCHG;
-	}
-	if (iov->vf.config.num_dbs && iov->vf.config.num_dbs != num_dbs) {
-		IOV_ERROR(iov, "Unexpected DBs reassignment: %u != %u\n",
-			  num_dbs, iov->vf.config.num_dbs);
-		return -EREMCHG;
-	}
 
 	iov->vf.config.num_ctxs = num_ctxs;
 	iov->vf.config.num_dbs = num_dbs;
@@ -398,6 +386,22 @@ static const i915_reg_t tgl_early_regs[] = {
 	GEN12_GT_GEOMETRY_DSS_ENABLE,	/* _MMIO(0x913C) */
 	GEN11_GT_VEBOX_VDBOX_DISABLE,	/* _MMIO(0x9140) */
 	CTC_MODE,			/* _MMIO(0xA26C) */
+	GEN11_HUC_KERNEL_LOAD_INFO,	/* _MMIO(0xC1DC) */
+};
+
+static const i915_reg_t mtl_early_regs[] = {
+	RPM_CONFIG0,			/* _MMIO(0x0D00) */
+	XEHP_FUSE4,			/* _MMIO(0x9114) */
+	GEN10_MIRROR_FUSE3,		/* _MMIO(0x9118) */
+	HSW_PAVP_FUSE1,			/* _MMIO(0x911C) */
+	XEHP_EU_ENABLE,			/* _MMIO(0x9134) */
+	GEN12_GT_GEOMETRY_DSS_ENABLE,	/* _MMIO(0x913C) */
+	GEN11_GT_VEBOX_VDBOX_DISABLE,	/* _MMIO(0x9140) */
+	GEN12_GT_COMPUTE_DSS_ENABLE,	/* _MMIO(0x9144) */
+	XEHPC_GT_COMPUTE_DSS_ENABLE_EXT,/* _MMIO(0x9148) */
+	CTC_MODE,			/* _MMIO(0xA26C) */
+	GEN11_HUC_KERNEL_LOAD_INFO,	/* _MMIO(0xC1DC) */
+	MTL_GT_ACTIVITY_FACTOR,		/* _MMIO(0x138010) */
 };
 
 static const i915_reg_t *get_early_regs(struct drm_i915_private *i915,
@@ -405,7 +409,10 @@ static const i915_reg_t *get_early_regs(struct drm_i915_private *i915,
 {
 	const i915_reg_t *regs;
 
-	if (IS_TIGERLAKE(i915) || IS_ALDERLAKE_S(i915) || IS_ALDERLAKE_P(i915)) {
+	if (GRAPHICS_VER_FULL(i915) >= IP_VER(12, 70)) {
+		regs = mtl_early_regs;
+		*size = ARRAY_SIZE(mtl_early_regs);
+	} else if (IS_TIGERLAKE(i915) || IS_ALDERLAKE_S(i915) || IS_ALDERLAKE_P(i915)) {
 		regs = tgl_early_regs;
 		*size = ARRAY_SIZE(tgl_early_regs);
 	} else {

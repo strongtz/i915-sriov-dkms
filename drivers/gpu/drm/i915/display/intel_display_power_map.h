@@ -10,7 +10,5 @@ struct i915_power_domains;
 
 int intel_display_power_map_init(struct i915_power_domains *power_domains);
 void intel_display_power_map_cleanup(struct i915_power_domains *power_domains);
-void intel_display_power_map_prune(struct i915_power_domains *power_domains);
-
 
 #endif

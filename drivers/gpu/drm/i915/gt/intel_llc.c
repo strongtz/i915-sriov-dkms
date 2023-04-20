@@ -53,6 +53,9 @@ static bool get_ia_constants(struct intel_llc *llc,
 	struct drm_i915_private *i915 = llc_to_gt(llc)->i915;
 	struct intel_rps *rps = &llc_to_gt(llc)->rps;
 
+	if (IS_SRIOV_VF(i915))
+		return false;
+
 	if (!HAS_LLC(i915) || IS_DGFX(i915))
 		return false;
 

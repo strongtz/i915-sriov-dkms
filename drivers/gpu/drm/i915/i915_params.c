@@ -126,11 +126,8 @@ i915_param_named_unsafe(enable_psr2_sel_fetch, bool, 0400,
 	"Default: 0");
 
 i915_param_named_unsafe(force_probe, charp, 0400,
-	"Force probe the driver for specified devices. "
+	"Force probe options for specified supported devices. "
 	"See CONFIG_DRM_I915_FORCE_PROBE for details.");
-
-i915_param_named_unsafe(enable_secure_batch, bool, 0400,
-	"Enable for legacy tests I915_EXEC_SECURE. (default: 0)");
 
 i915_param_named_unsafe(disable_power_well, int, 0400,
 	"Disable display power wells when possible "
@@ -184,11 +181,7 @@ i915_param_named_unsafe(edp_vswing, int, 0400,
 i915_param_named_unsafe(enable_guc, int, 0400,
 	"Enable GuC load for GuC submission and/or HuC load. "
 	"Required functionality can be selected using bitmask values. "
-	"(-1=auto [default], 0=disable, 1=GuC submission, 2=HuC load, "
-	"4=SR-IOV PF)");
-
-i915_param_named_unsafe(guc_feature_flags, uint, 0400,
-	"GuC feature flags. Requires GuC to be loaded. (0=none [default])");
+	"(-1=auto [default], 0=disable, 1=GuC submission, 2=HuC load)");
 
 i915_param_named(guc_log_level, int, 0400,
 	"GuC firmware logging level. Requires GuC to be loaded. "
@@ -202,6 +195,9 @@ i915_param_named_unsafe(huc_firmware_path, charp, 0400,
 
 i915_param_named_unsafe(dmc_firmware_path, charp, 0400,
 	"DMC firmware path to use instead of the default one");
+
+i915_param_named_unsafe(gsc_firmware_path, charp, 0400,
+	"GSC firmware path to use instead of the default one");
 
 i915_param_named_unsafe(enable_dp_mst, bool, 0400,
 	"Enable multi-stream transport (MST) for new DisplayPort sinks. (default: true)");
@@ -232,35 +228,45 @@ i915_param_named_unsafe(lmem_bar_size, uint, 0400,
 
 i915_param_named(max_vfs, uint, 0400,
 	"Limit number of virtual functions to allocate. "
-	"(default: no limit; N=limit to N, 0=no VFs)");
+	"(0 = no VFs [default]; N = allow up to N VFs)");
 
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV)
-i915_param_named_unsafe(vfs_flr_mask, ulong, 0600,
-	"Bitmask to enable (1) or disable (0) cleaning by PF VF's resources "
-	"(GGTT and LMEM) after FLR (default: ~0 - cleaning enable for all VFs) "
-	"Bit number indicates VF number, e.g. bit 1 indicates VF1");
-#endif
-
-static __always_inline void _print_param(struct drm_printer *p,
-					 const char *name,
-					 const char *type,
-					 const void *x)
+static void _param_print_bool(struct drm_printer *p, const char *name,
+			      bool val)
 {
-	if (!__builtin_strcmp(type, "bool"))
-		drm_printf(p, "i915.%s=%s\n", name,
-			   str_yes_no(*(const bool *)x));
-	else if (!__builtin_strcmp(type, "int"))
-		drm_printf(p, "i915.%s=%d\n", name, *(const int *)x);
-	else if (!__builtin_strcmp(type, "unsigned int"))
-		drm_printf(p, "i915.%s=%u\n", name, *(const unsigned int *)x);
-	else if (!__builtin_strcmp(type, "unsigned long"))
-		drm_printf(p, "i915.%s=%lu\n", name, *(const unsigned long *)x);
-	else if (!__builtin_strcmp(type, "char *"))
-		drm_printf(p, "i915.%s=%s\n", name, *(const char **)x);
-	else
-		WARN_ONCE(1, "no printer defined for param type %s (i915.%s)\n",
-			  type, name);
+	drm_printf(p, "i915.%s=%s\n", name, str_yes_no(val));
 }
+
+static void _param_print_int(struct drm_printer *p, const char *name,
+			     int val)
+{
+	drm_printf(p, "i915.%s=%d\n", name, val);
+}
+
+static void _param_print_uint(struct drm_printer *p, const char *name,
+			      unsigned int val)
+{
+	drm_printf(p, "i915.%s=%u\n", name, val);
+}
+
+static void _param_print_ulong(struct drm_printer *p, const char *name,
+			       unsigned long val)
+{
+	drm_printf(p, "i915.%s=%lu\n", name, val);
+}
+
+static void _param_print_charp(struct drm_printer *p, const char *name,
+			       const char *val)
+{
+	drm_printf(p, "i915.%s=%s\n", name, val);
+}
+
+#define _param_print(p, name, val)				\
+	_Generic(val,						\
+		 bool: _param_print_bool,			\
+		 int: _param_print_int,				\
+		 unsigned int: _param_print_uint,		\
+		 unsigned long: _param_print_ulong,		\
+		 char *: _param_print_charp)(p, name, val)
 
 /**
  * i915_params_dump - dump i915 modparams
@@ -271,37 +277,48 @@ static __always_inline void _print_param(struct drm_printer *p,
  */
 void i915_params_dump(const struct i915_params *params, struct drm_printer *p)
 {
-#define PRINT(T, x, ...) _print_param(p, #x, #T, &params->x);
+#define PRINT(T, x, ...) _param_print(p, #x, params->x);
 	I915_PARAMS_FOR_EACH(PRINT);
 #undef PRINT
 }
 
-static __always_inline void dup_param(const char *type, void *x)
+static void _param_dup_charp(char **valp)
 {
-	if (!__builtin_strcmp(type, "char *"))
-		*(void **)x = kstrdup(*(void **)x, GFP_ATOMIC);
+	*valp = kstrdup(*valp, GFP_ATOMIC);
 }
+
+static void _param_nop(void *valp)
+{
+}
+
+#define _param_dup(valp)				\
+	_Generic(valp,					\
+		 char **: _param_dup_charp,		\
+		 default: _param_nop)(valp)
 
 void i915_params_copy(struct i915_params *dest, const struct i915_params *src)
 {
 	*dest = *src;
-#define DUP(T, x, ...) dup_param(#T, &dest->x);
+#define DUP(T, x, ...) _param_dup(&dest->x);
 	I915_PARAMS_FOR_EACH(DUP);
 #undef DUP
 }
 
-static __always_inline void free_param(const char *type, void *x)
+static void _param_free_charp(char **valp)
 {
-	if (!__builtin_strcmp(type, "char *")) {
-		kfree(*(void **)x);
-		*(void **)x = NULL;
-	}
+	kfree(*valp);
+	*valp = NULL;
 }
+
+#define _param_free(valp)				\
+	_Generic(valp,					\
+		 char **: _param_free_charp,		\
+		 default: _param_nop)(valp)
 
 /* free the allocated members, *not* the passed in params itself */
 void i915_params_free(struct i915_params *params)
 {
-#define FREE(T, x, ...) free_param(#T, &params->x);
+#define FREE(T, x, ...) _param_free(&params->x);
 	I915_PARAMS_FOR_EACH(FREE);
 #undef FREE
 }

@@ -81,8 +81,6 @@ unsigned int intel_guc_get_log_buffer_size(struct intel_guc_log *log,
 size_t intel_guc_get_log_buffer_offset(struct intel_guc_log *log, enum guc_log_buffer_type type);
 int intel_guc_log_create(struct intel_guc_log *log);
 void intel_guc_log_destroy(struct intel_guc_log *log);
-u32 intel_guc_log_size(struct intel_guc_log *log);
-u32 intel_guc_log_relay_subbuf_count(struct intel_guc_log *log);
 
 int intel_guc_log_set_level(struct intel_guc_log *log, u32 level);
 bool intel_guc_log_relay_created(const struct intel_guc_log *log);

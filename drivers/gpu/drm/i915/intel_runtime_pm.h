@@ -83,12 +83,12 @@ struct intel_runtime_pm {
 	 * paired rpm_put) we can remove corresponding pairs of and keep
 	 * the array trimmed to active wakerefs.
 	 */
-	struct intel_wakeref_tracker debug;
+	struct ref_tracker_dir debug;
 #endif
 };
 
 #define BITS_PER_WAKEREF	\
-	BITS_PER_TYPE(struct_member(struct intel_runtime_pm, wakeref_count))
+	BITS_PER_TYPE(typeof_member(struct intel_runtime_pm, wakeref_count))
 #define INTEL_RPM_WAKELOCK_SHIFT	(BITS_PER_WAKEREF / 2)
 #define INTEL_RPM_WAKELOCK_BIAS		(1 << INTEL_RPM_WAKELOCK_SHIFT)
 #define INTEL_RPM_RAW_WAKEREF_MASK	(INTEL_RPM_WAKELOCK_BIAS - 1)
@@ -187,6 +187,7 @@ void intel_runtime_pm_init_early(struct intel_runtime_pm *rpm);
 void intel_runtime_pm_enable(struct intel_runtime_pm *rpm);
 void intel_runtime_pm_disable(struct intel_runtime_pm *rpm);
 void intel_runtime_pm_driver_release(struct intel_runtime_pm *rpm);
+void intel_runtime_pm_driver_last_release(struct intel_runtime_pm *rpm);
 
 intel_wakeref_t intel_runtime_pm_get(struct intel_runtime_pm *rpm);
 intel_wakeref_t intel_runtime_pm_get_if_in_use(struct intel_runtime_pm *rpm);
