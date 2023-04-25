@@ -34,11 +34,14 @@ int i915_sriov_pf_get_device_totalvfs(struct drm_i915_private *i915);
 int i915_sriov_pf_get_totalvfs(struct drm_i915_private *i915);
 int i915_sriov_pf_enable_vfs(struct drm_i915_private *i915, int numvfs);
 int i915_sriov_pf_disable_vfs(struct drm_i915_private *i915);
+int i915_sriov_pf_stop_vf(struct drm_i915_private *i915, unsigned int vfid);
+int i915_sriov_pf_pause_vf(struct drm_i915_private *i915, unsigned int vfid);
+int i915_sriov_pf_resume_vf(struct drm_i915_private *i915, unsigned int vfid);
+int i915_sriov_pf_clear_vf(struct drm_i915_private *i915, unsigned int vfid);
 
 bool i915_sriov_pf_is_auto_provisioning_enabled(struct drm_i915_private *i915);
 int i915_sriov_pf_set_auto_provisioning(struct drm_i915_private *i915, bool enable);
 
-/* VF only */
-void i915_sriov_vf_start_migration_recovery(struct drm_i915_private *i915);
-
+int i915_sriov_suspend_late(struct drm_i915_private *i915);
+int i915_sriov_resume_early(struct drm_i915_private *i915);
 #endif /* __I915_SRIOV_H__ */

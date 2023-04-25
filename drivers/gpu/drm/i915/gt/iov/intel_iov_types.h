@@ -60,6 +60,18 @@ struct intel_iov_config {
 };
 
 /**
+ * struct intel_iov_spare_config - PF spare configuration data.
+ * @ggtt_size: GGTT size.
+ * @num_ctxs: number of GuC submission contexts.
+ * @num_dbs: number of GuC doorbells.
+ */
+struct intel_iov_spare_config {
+	u64 ggtt_size;
+	u16 num_ctxs;
+	u16 num_dbs;
+};
+
+/**
  * struct intel_iov_sysfs - IOV sysfs data.
  * @entries: array with kobjects that represent PF and VFs.
  */
@@ -91,6 +103,7 @@ struct intel_iov_provisioning {
 	unsigned int num_pushed;
 	struct work_struct worker;
 	struct intel_iov_policies policies;
+	struct intel_iov_spare_config spare;
 	struct intel_iov_config *configs;
 	struct mutex lock;
 
@@ -157,6 +170,18 @@ struct intel_iov_vf_runtime {
 };
 
 /**
+ * struct intel_iov_memirq - IOV interrupts data.
+ * @obj: GEM object with memory interrupt data.
+ * @vma: VMA of the object.
+ * @vaddr: pointer to memory interrupt data.
+ */
+struct intel_iov_memirq {
+	struct drm_i915_gem_object *obj;
+	struct i915_vma *vma;
+	void *vaddr;
+};
+
+/**
  * struct intel_iov_relay - IOV Relay Communication data.
  * @lock: protects #pending_relays and #last_fence.
  * @pending_relays: list of relay requests that await a response.
@@ -185,6 +210,12 @@ struct intel_iov_relay {
  * @num_dbs: number of GuC doorbells.
  */
 struct intel_iov_vf_config {
+	struct {
+		u8 branch;
+		u8 major;
+		u8 minor;
+		u8 patch;
+	} guc_abi;
 	u64 ggtt_base;
 	u64 ggtt_size;
 	u16 num_ctxs;
@@ -199,6 +230,7 @@ struct intel_iov_vf_config {
  * @pf.state: placeholder for VFs data.
  * @vf.config: configuration of the resources assigned to VF.
  * @vf.runtime: retrieved runtime info.
+ * @vf.irq: Memory based interrupts data.
  * @relay: data related to VF/PF communication based on GuC Relay messages.
  */
 struct intel_iov {
@@ -214,6 +246,7 @@ struct intel_iov {
 			struct intel_iov_vf_config config;
 			struct intel_iov_vf_runtime runtime;
 			struct drm_mm_node ggtt_balloon[2];
+			struct intel_iov_memirq irq;
 		} vf;
 	};
 

@@ -97,6 +97,13 @@ struct i915_refct_sgt *i915_rsgt_from_mm_node(const struct drm_mm_node *node,
 
 	i915_refct_sgt_init(rsgt, node->size << PAGE_SHIFT);
 	st = &rsgt->table;
+	/* restricted by sg_alloc_table */
+	if (WARN_ON(overflows_type(DIV_ROUND_UP_ULL(node->size, segment_pages),
+				   unsigned int))) {
+		i915_refct_sgt_put(rsgt);
+		return ERR_PTR(-E2BIG);
+	}
+
 	if (sg_alloc_table(st, DIV_ROUND_UP_ULL(node->size, segment_pages),
 			   GFP_KERNEL)) {
 		i915_refct_sgt_put(rsgt);
@@ -182,6 +189,16 @@ struct i915_refct_sgt *i915_rsgt_from_buddy_resource(struct ttm_resource *res,
 
 	i915_refct_sgt_init(rsgt, size);
 	st = &rsgt->table;
+	/* restricted by sg_alloc_table */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+	if (WARN_ON(overflows_type(PFN_UP(res->size), unsigned int))) {
+#else
+	if (WARN_ON(overflows_type(res->num_pages, unsigned int))) {
+#endif
+		i915_refct_sgt_put(rsgt);
+		return ERR_PTR(-E2BIG);
+	}
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	if (sg_alloc_table(st, PFN_UP(res->size), GFP_KERNEL)) {
 #else

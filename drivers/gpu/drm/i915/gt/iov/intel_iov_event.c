@@ -65,6 +65,12 @@ static void pf_emit_threshold_uevent(struct intel_iov *iov, u32 vfid, u32 thresh
 	kfree(envp[2]);
 }
 
+static void pf_emit_log_message(struct intel_iov *iov, u32 vfid, int e)
+{
+	dev_info_ratelimited(iov_to_dev(iov), "VF%u has exceeded '%s' threshold\n",
+			     vfid, intel_iov_threshold_to_string(e));
+}
+
 static int pf_handle_vf_threshold_event(struct intel_iov *iov, u32 vfid, u32 threshold)
 {
 	int e = threshold_key_to_enum(threshold);
@@ -82,6 +88,7 @@ static int pf_handle_vf_threshold_event(struct intel_iov *iov, u32 vfid, u32 thr
 	if (IS_ENABLED(CONFIG_DRM_I915_SELFTEST))
 		pf_emit_threshold_uevent(iov, vfid, threshold);
 
+	pf_emit_log_message(iov, vfid, e);
 
 	return 0;
 }

@@ -1,6 +1,6 @@
-BEGIN SR-IOV ENABLING
+SR-IOV GENERAL SUPPORT (done)
 D:	Michal Wajdeczko <michal.wajdeczko@intel.com>
 M:	Michal Wajdeczko <michal.wajdeczko@intel.com>
 T:	drm/i915/iov
 T:	drm/i915/pf
-END TGL
+T:	drm/i915/vf

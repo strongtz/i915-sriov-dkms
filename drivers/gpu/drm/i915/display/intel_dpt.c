@@ -5,6 +5,7 @@
 
 #include "gem/i915_gem_domain.h"
 #include "gem/i915_gem_internal.h"
+#include "gem/i915_gem_lmem.h"
 #include "gt/gen8_ppgtt.h"
 
 #include "i915_drv.h"
@@ -31,6 +32,11 @@ i915_vm_to_dpt(struct i915_address_space *vm)
 }
 
 #define dpt_total_entries(dpt) ((dpt)->vm.total >> PAGE_SHIFT)
+
+static void gen8_set_pte(void __iomem *addr, gen8_pte_t pte)
+{
+	writeq(pte, addr);
+}
 
 static void dpt_insert_page(struct i915_address_space *vm,
 			    dma_addr_t addr,

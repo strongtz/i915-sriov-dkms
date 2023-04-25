@@ -39,19 +39,24 @@ int intel_guc_wait_for_pending_msg(struct intel_guc *guc,
 				   bool interruptible,
 				   long timeout);
 
-static inline bool intel_guc_submission_is_supported(struct intel_guc *guc)
+static inline bool intel_guc_submission_is_supported(const struct intel_guc *guc)
 {
 	return guc->submission_supported;
 }
 
-static inline bool intel_guc_submission_is_wanted(struct intel_guc *guc)
+static inline bool intel_guc_submission_is_wanted(const struct intel_guc *guc)
 {
 	return guc->submission_selected;
 }
 
-static inline bool intel_guc_submission_is_used(struct intel_guc *guc)
+static inline bool intel_guc_submission_is_used(const struct intel_guc *guc)
 {
 	return intel_guc_is_used(guc) && intel_guc_submission_is_wanted(guc);
+}
+
+static inline u16 intel_guc_submission_ids_in_use(struct intel_guc *guc)
+{
+	return guc->submission_state.guc_ids_in_use;
 }
 
 #endif

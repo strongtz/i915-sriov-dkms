@@ -8,9 +8,14 @@
 #define __I915_GEM_OBJECT_TYPES_H__
 
 #include <linux/mmu_notifier.h>
+#include <linux/version.h>
 
 #include <drm/drm_gem.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+#include <drm/ttm/ttm_bo.h>
+#else
 #include <drm/ttm/ttm_bo_api.h>
+#endif
 #include <uapi/drm/i915_drm.h>
 
 #include "i915_active.h"

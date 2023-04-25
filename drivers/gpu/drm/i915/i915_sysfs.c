@@ -34,7 +34,6 @@
 #include "gt/intel_rc6.h"
 #include "gt/intel_rps.h"
 #include "gt/sysfs_engines.h"
-#include "gt/iov/intel_iov_sysfs.h"
 
 #include "i915_drv.h"
 #include "i915_sriov_sysfs.h"
@@ -220,7 +219,8 @@ static const struct bin_attribute error_state_attr = {
 static void i915_setup_error_capture(struct device *kdev)
 {
 	if (sysfs_create_bin_file(&kdev->kobj, &error_state_attr))
-		DRM_ERROR("error_state sysfs setup failed\n");
+		drm_err(&kdev_minor_to_i915(kdev)->drm,
+			"error_state sysfs setup failed\n");
 }
 
 static void i915_teardown_error_capture(struct device *kdev)
@@ -262,15 +262,12 @@ void i915_setup_sysfs(struct drm_i915_private *dev_priv)
 	i915_setup_error_capture(kdev);
 
 	intel_engines_add_sysfs(dev_priv);
-
-	intel_iov_sysfs_setup(&to_gt(dev_priv)->iov);
 }
 
 void i915_teardown_sysfs(struct drm_i915_private *dev_priv)
 {
 	struct device *kdev = dev_priv->drm.primary->kdev;
 
-	intel_iov_sysfs_teardown(&to_gt(dev_priv)->iov);
 	i915_teardown_error_capture(kdev);
 
 	i915_sriov_sysfs_teardown(dev_priv);

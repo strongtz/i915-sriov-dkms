@@ -55,7 +55,7 @@ static bool intel_gvt_is_valid_gfn(struct intel_vgpu *vgpu, unsigned long gfn)
 	int idx;
 	bool ret;
 
-	if (!vgpu->attached)
+	if (!test_bit(INTEL_VGPU_STATUS_ATTACHED, vgpu->status))
 		return false;
 
 	idx = srcu_read_lock(&kvm->srcu);
@@ -280,11 +280,6 @@ static const struct gtt_type_table_entry gtt_type_table[] = {
 static inline int get_next_pt_type(int type)
 {
 	return gtt_type_table[type].next_pt_type;
-}
-
-static inline int get_pt_type(int type)
-{
-	return gtt_type_table[type].pt_type;
 }
 
 static inline int get_entry_type(int type)
@@ -1183,7 +1178,7 @@ static int is_2MB_gtt_possible(struct intel_vgpu *vgpu,
 	if (!HAS_PAGE_SIZES(vgpu->gvt->gt->i915, I915_GTT_PAGE_SIZE_2M))
 		return 0;
 
-	if (!vgpu->attached)
+	if (!test_bit(INTEL_VGPU_STATUS_ATTACHED, vgpu->status))
 		return -EINVAL;
 	pfn = gfn_to_pfn(vgpu->vfio_device.kvm, ops->get_pfn(entry));
 	if (is_error_noslot_pfn(pfn))
@@ -2794,7 +2789,7 @@ int intel_gvt_init_gtt(struct intel_gvt *gvt)
  * intel_gvt_clean_gtt - clean up mm components of a GVT device
  * @gvt: GVT device
  *
- * This function is called at the driver unloading stage, to clean up the
+ * This function is called at the driver unloading stage, to clean up
  * the mm components of a GVT device.
  *
  */

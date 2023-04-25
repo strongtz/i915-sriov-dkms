@@ -32,8 +32,7 @@ struct drm_printer;
 
 #define ENABLE_GUC_SUBMISSION		BIT(0)
 #define ENABLE_GUC_LOAD_HUC		BIT(1)
-#define ENABLE_GUC_SRIOV_PF		BIT(2)
-#define ENABLE_GUC_MASK			GENMASK(2, 0)
+#define ENABLE_GUC_MASK			GENMASK(1, 0)
 
 /*
  * Invoke param, a function-like macro, for each i915 param, with arguments:
@@ -62,11 +61,11 @@ struct drm_printer;
 	param(int, enable_ips, 1, 0600) \
 	param(int, invert_brightness, 0, 0600) \
 	param(int, enable_guc, -1, 0400) \
-	param(unsigned int, guc_feature_flags, 0, 0400) \
 	param(int, guc_log_level, -1, 0400) \
 	param(char *, guc_firmware_path, NULL, 0400) \
 	param(char *, huc_firmware_path, NULL, 0400) \
 	param(char *, dmc_firmware_path, NULL, 0400) \
+	param(char *, gsc_firmware_path, NULL, 0400) \
 	param(bool, memtest, false, 0400) \
 	param(int, mmio_debug, -IS_ENABLED(CONFIG_DRM_I915_DEBUG_MMIO), 0600) \
 	param(int, edp_vswing, 0, 0400) \
@@ -78,10 +77,8 @@ struct drm_printer;
 	param(unsigned int, request_timeout_ms, CONFIG_DRM_I915_REQUEST_TIMEOUT, CONFIG_DRM_I915_REQUEST_TIMEOUT ? 0600 : 0) \
 	param(unsigned int, lmem_size, 0, 0400) \
 	param(unsigned int, lmem_bar_size, 0, 0400) \
-	param(unsigned int, max_vfs, ~0, 0400) \
-	param(unsigned long, vfs_flr_mask, ~0, IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV) ? 0600 : 0) \
+	param(unsigned int, max_vfs, 0, 0400) \
 	/* leave bools at the end to not create holes */ \
-	param(bool, enable_secure_batch, false, 0400) \
 	param(bool, enable_hangcheck, true, 0600) \
 	param(bool, load_detect_test, false, 0600) \
 	param(bool, force_reset_modeset_test, false, 0600) \

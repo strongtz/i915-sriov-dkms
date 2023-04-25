@@ -227,16 +227,21 @@ int selftest_perf_iov_relay(struct drm_i915_private *i915)
 		return -EHOSTDOWN;
 
 	with_intel_runtime_pm(&i915->runtime_pm, wakeref) {
-		struct intel_iov *iov = &to_gt(i915)->iov;
+		struct intel_gt *gt;
+		unsigned int id;
 
-		if (IS_SRIOV_PF(i915)) {
-			intel_iov_provisioning_force_vgt_mode(iov);
-			err = intel_iov_live_subtests(pf_tests, iov);
-		} else if (IS_SRIOV_VF(i915)) {
-			err = intel_iov_live_subtests(vf_tests, iov);
+		for_each_gt(gt, i915, id) {
+			struct intel_iov *iov = &gt->iov;
+
+			if (IS_SRIOV_PF(i915)) {
+				intel_iov_provisioning_force_vgt_mode(iov);
+				err = intel_iov_live_subtests(pf_tests, iov);
+			} else if (IS_SRIOV_VF(i915)) {
+				err = intel_iov_live_subtests(vf_tests, iov);
+			}
+			if (err)
+				break;
 		}
-		if (err)
-			break;
 	}
 
 	return err;

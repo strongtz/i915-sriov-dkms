@@ -41,6 +41,16 @@ static int perf_end(struct intel_gt *gt, intel_wakeref_t wakeref)
 	return igt_flush_test(gt->i915);
 }
 
+static i915_reg_t timestamp_reg(struct intel_engine_cs *engine)
+{
+	struct drm_i915_private *i915 = engine->i915;
+
+	if (GRAPHICS_VER(i915) == 5 || IS_G4X(i915))
+		return RING_TIMESTAMP_UDW(engine->mmio_base);
+	else
+		return RING_TIMESTAMP(engine->mmio_base);
+}
+
 static int write_timestamp(struct i915_request *rq, int slot)
 {
 	struct intel_timeline *tl =
@@ -57,7 +67,7 @@ static int write_timestamp(struct i915_request *rq, int slot)
 	if (GRAPHICS_VER(rq->engine->i915) >= 8)
 		cmd++;
 	*cs++ = cmd;
-	*cs++ = i915_mmio_reg_offset(RING_TIMESTAMP(rq->engine->mmio_base));
+	*cs++ = i915_mmio_reg_offset(timestamp_reg(rq->engine));
 	*cs++ = tl->hwsp_offset + slot * sizeof(u32);
 	*cs++ = 0;
 
@@ -128,7 +138,7 @@ static int perf_mi_bb_start(void *arg)
 	intel_wakeref_t wakeref;
 	int err = 0;
 
-	if (GRAPHICS_VER(gt->i915) < 7) /* for per-engine CS_TIMESTAMP */
+	if (GRAPHICS_VER(gt->i915) < 4) /* Any CS_TIMESTAMP? */
 		return 0;
 
 	wakeref = perf_begin(gt);
@@ -137,6 +147,9 @@ static int perf_mi_bb_start(void *arg)
 		struct i915_vma *batch;
 		u32 cycles[COUNT];
 		int i;
+
+		if (GRAPHICS_VER(engine->i915) < 7 && engine->id != RCS0)
+			continue;
 
 		intel_engine_pm_get(engine);
 
@@ -168,7 +181,7 @@ static int perf_mi_bb_start(void *arg)
 				goto out;
 
 			err = rq->engine->emit_bb_start(rq,
-							batch->node.start, 8,
+							i915_vma_offset(batch), 8,
 							0);
 			if (err)
 				goto out;
@@ -253,7 +266,7 @@ static int perf_mi_noop(void *arg)
 	intel_wakeref_t wakeref;
 	int err = 0;
 
-	if (GRAPHICS_VER(gt->i915) < 7) /* for per-engine CS_TIMESTAMP */
+	if (GRAPHICS_VER(gt->i915) < 4) /* Any CS_TIMESTAMP? */
 		return 0;
 
 	wakeref = perf_begin(gt);
@@ -262,6 +275,9 @@ static int perf_mi_noop(void *arg)
 		struct i915_vma *base, *nop;
 		u32 cycles[COUNT];
 		int i;
+
+		if (GRAPHICS_VER(engine->i915) < 7 && engine->id != RCS0)
+			continue;
 
 		intel_engine_pm_get(engine);
 
@@ -309,7 +325,7 @@ static int perf_mi_noop(void *arg)
 				goto out;
 
 			err = rq->engine->emit_bb_start(rq,
-							base->node.start, 8,
+							i915_vma_offset(base), 8,
 							0);
 			if (err)
 				goto out;
@@ -319,8 +335,8 @@ static int perf_mi_noop(void *arg)
 				goto out;
 
 			err = rq->engine->emit_bb_start(rq,
-							nop->node.start,
-							nop->node.size,
+							i915_vma_offset(nop),
+							i915_vma_size(nop),
 							0);
 			if (err)
 				goto out;

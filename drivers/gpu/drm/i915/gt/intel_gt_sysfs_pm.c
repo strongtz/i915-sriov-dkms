@@ -11,6 +11,7 @@
 #include "i915_reg.h"
 #include "i915_sysfs.h"
 #include "intel_gt.h"
+#include "intel_gt_print.h"
 #include "intel_gt_regs.h"
 #include "intel_gt_sysfs.h"
 #include "intel_gt_sysfs_pm.h"
@@ -164,14 +165,13 @@ sysfs_gt_attribute_r_func(struct kobject *kobj, struct attribute *attr,
 								 NULL);			\
 	INTEL_GT_ATTR_RO(_name)
 
-#ifdef CONFIG_PM
-static u32 get_residency(struct intel_gt *gt, i915_reg_t reg)
+static u32 get_residency(struct intel_gt *gt, enum intel_rc6_res_type id)
 {
 	intel_wakeref_t wakeref;
 	u64 res = 0;
 
 	with_intel_runtime_pm(gt->uncore->rpm, wakeref)
-		res = intel_rc6_residency_us(&gt->rc6, reg);
+		res = intel_rc6_residency_us(&gt->rc6, id);
 
 	return DIV_ROUND_CLOSEST_ULL(res, 1000);
 }
@@ -210,22 +210,22 @@ static ssize_t rc6_enable_dev_show(struct device *dev,
 
 static u32 __rc6_residency_ms_show(struct intel_gt *gt)
 {
-	return get_residency(gt, GEN6_GT_GFX_RC6);
+	return get_residency(gt, INTEL_RC6_RES_RC6);
 }
 
 static u32 __rc6p_residency_ms_show(struct intel_gt *gt)
 {
-	return get_residency(gt, GEN6_GT_GFX_RC6p);
+	return get_residency(gt, INTEL_RC6_RES_RC6p);
 }
 
 static u32 __rc6pp_residency_ms_show(struct intel_gt *gt)
 {
-	return get_residency(gt, GEN6_GT_GFX_RC6pp);
+	return get_residency(gt, INTEL_RC6_RES_RC6pp);
 }
 
 static u32 __media_rc6_residency_ms_show(struct intel_gt *gt)
 {
-	return get_residency(gt, VLV_GT_MEDIA_RC6);
+	return get_residency(gt, INTEL_RC6_RES_VLV_MEDIA);
 }
 
 INTEL_GT_SYSFS_SHOW_MIN(rc6_residency_ms);
@@ -300,14 +300,12 @@ static void intel_sysfs_rc6_init(struct intel_gt *gt, struct kobject *kobj)
 {
 	int ret;
 
-	if (!HAS_RC6(gt->i915))
+	if (!IS_ENABLED(CONFIG_PM) || !HAS_RC6(gt->i915))
 		return;
 
 	ret = __intel_gt_sysfs_create_group(kobj, rc6_attr_group);
 	if (ret)
-		drm_warn(&gt->i915->drm,
-			 "failed to create gt%u RC6 sysfs files (%pe)\n",
-			 gt->info.id, ERR_PTR(ret));
+		gt_warn(gt, "failed to create RC6 sysfs files (%pe)\n", ERR_PTR(ret));
 
 	/*
 	 * cannot use the is_visible() attribute because
@@ -316,24 +314,15 @@ static void intel_sysfs_rc6_init(struct intel_gt *gt, struct kobject *kobj)
 	if (HAS_RC6p(gt->i915)) {
 		ret = __intel_gt_sysfs_create_group(kobj, rc6p_attr_group);
 		if (ret)
-			drm_warn(&gt->i915->drm,
-				 "failed to create gt%u RC6p sysfs files (%pe)\n",
-				 gt->info.id, ERR_PTR(ret));
+			gt_warn(gt, "failed to create RC6p sysfs files (%pe)\n", ERR_PTR(ret));
 	}
 
 	if (IS_VALLEYVIEW(gt->i915) || IS_CHERRYVIEW(gt->i915)) {
 		ret = __intel_gt_sysfs_create_group(kobj, media_rc6_attr_group);
 		if (ret)
-			drm_warn(&gt->i915->drm,
-				 "failed to create media %u RC6 sysfs files (%pe)\n",
-				 gt->info.id, ERR_PTR(ret));
+			gt_warn(gt, "failed to create media RC6 sysfs files (%pe)\n", ERR_PTR(ret));
 	}
 }
-#else
-static void intel_sysfs_rc6_init(struct intel_gt *gt, struct kobject *kobj)
-{
-}
-#endif /* CONFIG_PM */
 
 static u32 __act_freq_mhz_show(struct intel_gt *gt)
 {
@@ -466,7 +455,7 @@ struct intel_gt_bool_throttle_attr {
 	struct attribute attr;
 	ssize_t (*show)(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf);
-	i915_reg_t reg32;
+	i915_reg_t (*reg32)(struct intel_gt *gt);
 	u32 mask;
 };
 
@@ -477,7 +466,7 @@ static ssize_t throttle_reason_bool_show(struct kobject *kobj,
 	struct intel_gt *gt = intel_gt_sysfs_get_drvdata(kobj, attr->attr.name);
 	struct intel_gt_bool_throttle_attr *t_attr =
 				(struct intel_gt_bool_throttle_attr *) attr;
-	bool val = rps_read_mask_mmio(&gt->rps, t_attr->reg32, t_attr->mask);
+	bool val = rps_read_mask_mmio(&gt->rps, t_attr->reg32(gt), t_attr->mask);
 
 	return sysfs_emit(buff, "%u\n", val);
 }
@@ -486,7 +475,7 @@ static ssize_t throttle_reason_bool_show(struct kobject *kobj,
 struct intel_gt_bool_throttle_attr attr_##sysfs_func__ = { \
 	.attr = { .name = __stringify(sysfs_func__), .mode = 0444 }, \
 	.show = throttle_reason_bool_show, \
-	.reg32 = GT0_PERF_LIMIT_REASONS, \
+	.reg32 = intel_gt_perf_limit_reasons_reg, \
 	.mask = mask__, \
 }
 
@@ -741,13 +730,14 @@ void intel_gt_sysfs_pm_init(struct intel_gt *gt, struct kobject *kobj)
 {
 	int ret;
 
+	if (IS_SRIOV_VF(gt->i915))
+		return;
+
 	intel_sysfs_rc6_init(gt, kobj);
 
 	ret = intel_sysfs_rps_init(gt, kobj);
 	if (ret)
-		drm_warn(&gt->i915->drm,
-			 "failed to create gt%u RPS sysfs files (%pe)",
-			 gt->info.id, ERR_PTR(ret));
+		gt_warn(gt, "failed to create RPS sysfs files (%pe)", ERR_PTR(ret));
 
 	/* end of the legacy interfaces */
 	if (!is_object_gt(kobj))
@@ -755,29 +745,22 @@ void intel_gt_sysfs_pm_init(struct intel_gt *gt, struct kobject *kobj)
 
 	ret = sysfs_create_file(kobj, &attr_punit_req_freq_mhz.attr);
 	if (ret)
-		drm_warn(&gt->i915->drm,
-			 "failed to create gt%u punit_req_freq_mhz sysfs (%pe)",
-			 gt->info.id, ERR_PTR(ret));
+		gt_warn(gt, "failed to create punit_req_freq_mhz sysfs (%pe)", ERR_PTR(ret));
 
-	if (GRAPHICS_VER(gt->i915) >= 11) {
+	if (i915_mmio_reg_valid(intel_gt_perf_limit_reasons_reg(gt))) {
 		ret = sysfs_create_files(kobj, throttle_reason_attrs);
 		if (ret)
-			drm_warn(&gt->i915->drm,
-				 "failed to create gt%u throttle sysfs files (%pe)",
-				 gt->info.id, ERR_PTR(ret));
+			gt_warn(gt, "failed to create throttle sysfs files (%pe)", ERR_PTR(ret));
 	}
 
 	if (HAS_MEDIA_RATIO_MODE(gt->i915) && intel_uc_uses_guc_slpc(&gt->uc)) {
 		ret = sysfs_create_files(kobj, media_perf_power_attrs);
 		if (ret)
-			drm_warn(&gt->i915->drm,
-				 "failed to create gt%u media_perf_power_attrs sysfs (%pe)\n",
-				 gt->info.id, ERR_PTR(ret));
+			gt_warn(gt, "failed to create media_perf_power_attrs sysfs (%pe)\n",
+				ERR_PTR(ret));
 	}
 
 	ret = sysfs_create_files(gt->sysfs_defaults, rps_defaults_attrs);
 	if (ret)
-		drm_warn(&gt->i915->drm,
-			 "failed to add gt%u rps defaults (%pe)\n",
-			 gt->info.id, ERR_PTR(ret));
+		gt_warn(gt, "failed to add rps defaults (%pe)\n", ERR_PTR(ret));
 }

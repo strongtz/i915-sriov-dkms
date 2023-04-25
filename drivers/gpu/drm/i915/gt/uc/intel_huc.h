@@ -60,17 +60,17 @@ static inline int intel_huc_sanitize(struct intel_huc *huc)
 	return 0;
 }
 
-static inline bool intel_huc_is_supported(struct intel_huc *huc)
+static inline bool intel_huc_is_supported(const struct intel_huc *huc)
 {
 	return intel_uc_fw_is_supported(&huc->fw);
 }
 
-static inline bool intel_huc_is_wanted(struct intel_huc *huc)
+static inline bool intel_huc_is_wanted(const struct intel_huc *huc)
 {
 	return intel_uc_fw_is_enabled(&huc->fw);
 }
 
-static inline bool intel_huc_is_used(struct intel_huc *huc)
+static inline bool intel_huc_is_used(const struct intel_huc *huc)
 {
 	GEM_BUG_ON(__intel_uc_fw_status(&huc->fw) == INTEL_UC_FIRMWARE_SELECTED);
 	return intel_uc_fw_is_available(&huc->fw) ||

@@ -331,7 +331,7 @@ retry:
 	if (ret)
 		goto err_rpm;
 
-	ret = intel_gt_reset_trylock(ggtt->vm.gt, &srcu);
+	ret = intel_gt_reset_lock_interruptible(ggtt->vm.gt, &srcu);
 	if (ret)
 		goto err_pages;
 
@@ -396,7 +396,7 @@ retry:
 	/* Finally, remap it using the new GTT offset */
 	ret = remap_io_mapping(area,
 			       area->vm_start + (vma->gtt_view.partial.offset << PAGE_SHIFT),
-			       (ggtt->gmadr.start + vma->node.start) >> PAGE_SHIFT,
+			       (ggtt->gmadr.start + i915_ggtt_offset(vma)) >> PAGE_SHIFT,
 			       min_t(u64, vma->size, area->vm_end - area->vm_start),
 			       &ggtt->iomap);
 	if (ret)
@@ -984,7 +984,11 @@ int i915_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 			i915_gem_object_put(obj);
 			return -EINVAL;
 		}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+		vm_flags_clear(vma, VM_MAYWRITE);
+#else
 		vma->vm_flags &= ~VM_MAYWRITE;
+#endif
 	}
 
 	anon = mmap_singleton(to_i915(dev));
@@ -993,7 +997,11 @@ int i915_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 		return PTR_ERR(anon);
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+	vm_flags_set(vma, VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP | VM_IO);
+#else
 	vma->vm_flags |= VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP | VM_IO;
+#endif
 
 	/*
 	 * We keep the ref on mmo->obj, not vm_file, but we require

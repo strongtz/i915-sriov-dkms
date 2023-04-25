@@ -7,7 +7,6 @@
 #define __INTEL_IOV_SERVICE_H__
 
 #include <linux/types.h>
-#include <linux/errno.h>
 
 struct intel_iov;
 

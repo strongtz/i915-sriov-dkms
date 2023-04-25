@@ -9,6 +9,7 @@
 #include <linux/stringify.h>
 #include <linux/types.h>
 #include <linux/tracepoint.h>
+#include <linux/version.h>
 
 #include <drm/drm_drv.h>
 
@@ -671,6 +672,7 @@ TRACE_EVENT_CONDITION(i915_reg_rw,
 		(u32)(__entry->val >> 32))
 );
 
+#if !(LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0))
 TRACE_EVENT(intel_gpu_freq_change,
 	    TP_PROTO(u32 freq),
 	    TP_ARGS(freq),
@@ -685,6 +687,7 @@ TRACE_EVENT(intel_gpu_freq_change,
 
 	    TP_printk("new_freq=%u", __entry->freq)
 );
+#endif
 
 /**
  * DOC: i915_ppgtt_create and i915_ppgtt_release tracepoints

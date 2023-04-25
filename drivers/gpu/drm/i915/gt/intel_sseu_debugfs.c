@@ -241,6 +241,9 @@ int intel_sseu_status(struct seq_file *m, struct intel_gt *gt)
 	seq_puts(m, "SSEU Device Info\n");
 	i915_print_sseu_info(m, true, HAS_POOLED_EU(i915), &info->sseu);
 
+	if (IS_SRIOV_VF(i915))
+		return 0;
+
 	seq_puts(m, "SSEU Device Status\n");
 
 	sseu = kzalloc(sizeof(*sseu), GFP_KERNEL);

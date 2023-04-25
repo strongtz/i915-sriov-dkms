@@ -3,7 +3,12 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+#include <drm/ttm/ttm_tt.h>
+#else
 #include <drm/ttm/ttm_bo_driver.h>
+#endif
 
 #include "i915_deps.h"
 #include "i915_drv.h"
