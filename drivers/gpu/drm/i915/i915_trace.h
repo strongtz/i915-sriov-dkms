@@ -9,12 +9,14 @@
 #include <linux/stringify.h>
 #include <linux/types.h>
 #include <linux/tracepoint.h>
+#include <linux/version.h>
 
 #include <drm/drm_drv.h>
 
 #include "gt/intel_engine.h"
 
 #include "i915_drv.h"
+#include "i915_irq.h"
 
 /* object tracking */
 
@@ -669,6 +671,23 @@ TRACE_EVENT_CONDITION(i915_reg_rw,
 		(u32)(__entry->val & 0xffffffff),
 		(u32)(__entry->val >> 32))
 );
+
+#if !(LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0))
+TRACE_EVENT(intel_gpu_freq_change,
+	    TP_PROTO(u32 freq),
+	    TP_ARGS(freq),
+
+	    TP_STRUCT__entry(
+			     __field(u32, freq)
+			     ),
+
+	    TP_fast_assign(
+			   __entry->freq = freq;
+			   ),
+
+	    TP_printk("new_freq=%u", __entry->freq)
+);
+#endif
 
 /**
  * DOC: i915_ppgtt_create and i915_ppgtt_release tracepoints

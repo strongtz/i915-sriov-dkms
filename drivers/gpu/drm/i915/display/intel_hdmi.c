@@ -31,6 +31,7 @@
 #include <linux/i2c.h>
 #include <linux/slab.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_hdcp_helper.h>
 #include <drm/display/drm_hdmi_helper.h>
@@ -2544,8 +2545,18 @@ intel_hdmi_force(struct drm_connector *connector)
 
 static int intel_hdmi_get_modes(struct drm_connector *connector)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 	/* drm_edid_connector_update() done in ->detect() or ->force() */
 	return drm_edid_connector_add_modes(connector);
+#else
+	const struct edid *edid;
+
+	edid = drm_edid_raw(to_intel_connector(connector)->detect_edid);
+	if (edid == NULL)
+		return 0;
+
+	return intel_connector_update_modes(connector, edid);
+#endif
 }
 
 static struct i2c_adapter *

@@ -477,9 +477,14 @@ static int intel_lvds_get_modes(struct drm_connector *_connector)
 
 	/* Use panel fixed edid if we have one */
 	if (!IS_ERR_OR_NULL(fixed_edid)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		drm_edid_connector_update(&connector->base, fixed_edid);
 
 		return drm_edid_connector_add_modes(&connector->base);
+#else
+		struct edid *edid = drm_edid_raw(fixed_edid);
+		return drm_add_edid_modes(&connector->base, edid);
+#endif
 	}
 
 	return intel_panel_get_modes(connector);
@@ -958,12 +963,22 @@ void intel_lvds_init(struct drm_i915_private *i915)
 					     intel_gmbus_get_adapter(i915, pin));
 	}
 	if (drm_edid) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		if (drm_edid_connector_update(&connector->base, drm_edid) ||
 		    !drm_edid_connector_add_modes(&connector->base)) {
 			drm_edid_connector_update(&connector->base, NULL);
 			drm_edid_free(drm_edid);
 			drm_edid = ERR_PTR(-EINVAL);
 		}
+#else
+		const struct edid *edid = drm_edid_raw(drm_edid);
+		if (drm_add_edid_modes(&connector->base, edid)) {
+			drm_connector_update_edid_property(&connector->base, edid);
+		} else {
+			drm_edid_free(drm_edid);
+			drm_edid = ERR_PTR(-EINVAL);
+		}
+#endif
 	} else {
 		drm_edid = ERR_PTR(-ENOENT);
 	}

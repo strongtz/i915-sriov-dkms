@@ -190,7 +190,11 @@ struct i915_refct_sgt *i915_rsgt_from_buddy_resource(struct ttm_resource *res,
 	i915_refct_sgt_init(rsgt, size);
 	st = &rsgt->table;
 	/* restricted by sg_alloc_table */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	if (WARN_ON(overflows_type(PFN_UP(res->size), unsigned int))) {
+#else
+	if (WARN_ON(overflows_type(res->num_pages, unsigned int))) {
+#endif
 		i915_refct_sgt_put(rsgt);
 		return ERR_PTR(-E2BIG);
 	}

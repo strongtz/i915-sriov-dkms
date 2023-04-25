@@ -35,6 +35,7 @@
 #include <linux/pci.h>
 #include <linux/dma-buf.h>
 #include <linux/mman.h>
+#include <linux/version.h>
 
 #include <drm/drm_cache.h>
 #include <drm/drm_vma_manager.h>
@@ -1109,7 +1110,11 @@ void i915_gem_drain_freed_objects(struct drm_i915_private *i915)
 {
 	while (atomic_read(&i915->mm.free_count)) {
 		flush_work(&i915->mm.free_work);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		drain_workqueue(i915->bdev.wq);
+#else
+		flush_delayed_work(&i915->bdev.wq);
+#endif
 		rcu_barrier();
 	}
 }

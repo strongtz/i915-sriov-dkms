@@ -32,6 +32,9 @@
 #include "intel_ring.h"
 #include "uc/intel_guc_submission.h"
 
+#ifndef CONFIG_DRM_I915_PREEMPT_TIMEOUT_COMPUTE
+#define CONFIG_DRM_I915_PREEMPT_TIMEOUT_COMPUTE 7500
+#endif
 /* Haswell does have the CXT_SIZE register however it does not appear to be
  * valid. Now, docs explain in dwords what is in the context object. The full
  * size is 70720 bytes, however, the power context and execlist context will

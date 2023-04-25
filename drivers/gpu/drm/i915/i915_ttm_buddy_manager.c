@@ -6,8 +6,13 @@
 #include <linux/slab.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_bo.h>
+#else
+#include <drm/ttm/ttm_bo_driver.h>
+#include <drm/ttm/ttm_placement.h>
+#endif
 
 #include <drm/drm_buddy.h>
 

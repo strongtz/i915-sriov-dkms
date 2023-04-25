@@ -35,12 +35,14 @@ EXTRA_CFLAGS += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
 				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
 				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP
 
+KBUILD_MODPOST_WARN = 1
 
 # core driver code
 i915-y += i915_driver.o \
 	  i915_drm_client.o \
 	  i915_config.o \
 	  i915_getparam.o \
+	  i915_hwmon.o \
 	  i915_ioctl.o \
 	  i915_irq.o \
 	  i915_mitigations.o \
@@ -242,9 +244,6 @@ iov-y += \
 	gt/iov/intel_iov_sysfs.o
 i915-y += $(iov-y)
 
-# graphics hardware monitoring (HWMON) support
-i915-$(CONFIG_HWMON) += i915_hwmon.o
-
 # modesetting core code
 i915-y += \
 	display/hsw_ips.o \
@@ -408,6 +407,7 @@ i915-y := $(addprefix $(DRMD)i915/,$(i915-y))
 # structs and declarations and so forth that we need for the backport to build.
 
 LINUXINCLUDE := \
+    -I$(INC_INCPATH)/ \
     -I$(INC_INCPATH)/trace \
     -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915 \
     $(LINUXINCLUDE)

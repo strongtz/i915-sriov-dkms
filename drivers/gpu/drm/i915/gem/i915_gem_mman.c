@@ -984,7 +984,11 @@ int i915_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 			i915_gem_object_put(obj);
 			return -EINVAL;
 		}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+		vm_flags_clear(vma, VM_MAYWRITE);
+#else
 		vma->vm_flags &= ~VM_MAYWRITE;
+#endif
 	}
 
 	anon = mmap_singleton(to_i915(dev));
@@ -993,7 +997,11 @@ int i915_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 		return PTR_ERR(anon);
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+	vm_flags_set(vma, VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP | VM_IO);
+#else
 	vma->vm_flags |= VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP | VM_IO;
+#endif
 
 	/*
 	 * We keep the ref on mmo->obj, not vm_file, but we require

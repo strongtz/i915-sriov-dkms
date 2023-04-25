@@ -353,7 +353,9 @@ static int intelfb_dirty(struct drm_fb_helper *helper, struct drm_clip_rect *cli
 
 static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
 	.fb_probe = intelfb_create,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	.fb_dirty = intelfb_dirty,
+#endif
 };
 
 static void intel_fbdev_destroy(struct intel_fbdev *ifbdev)
@@ -551,10 +553,19 @@ int intel_fbdev_init(struct drm_device *dev)
 		return -ENOMEM;
 
 	mutex_init(&ifbdev->hpd_lock);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+	drm_fb_helper_prepare(dev, &ifbdev->helper, 32, &intel_fb_helper_funcs);
+
+	if (intel_fbdev_init_bios(dev, ifbdev))
+		ifbdev->helper.preferred_bpp = ifbdev->preferred_bpp;
+	else
+		ifbdev->preferred_bpp = ifbdev->helper.preferred_bpp;
+#else
 	drm_fb_helper_prepare(dev, &ifbdev->helper, &intel_fb_helper_funcs);
 
 	if (!intel_fbdev_init_bios(dev, ifbdev))
 		ifbdev->preferred_bpp = 32;
+#endif
 
 	ret = drm_fb_helper_init(dev, &ifbdev->helper);
 	if (ret) {
@@ -573,8 +584,12 @@ static void intel_fbdev_initial_config(void *data, async_cookie_t cookie)
 	struct intel_fbdev *ifbdev = data;
 
 	/* Due to peculiar init order wrt to hpd handling this is separate. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+	if (drm_fb_helper_initial_config(&ifbdev->helper))
+#else
 	if (drm_fb_helper_initial_config(&ifbdev->helper,
 					 ifbdev->preferred_bpp))
+#endif
 		intel_fbdev_unregister(to_i915(ifbdev->helper.dev));
 }
 

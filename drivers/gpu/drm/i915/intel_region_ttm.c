@@ -133,7 +133,11 @@ int intel_region_ttm_fini(struct intel_memory_region *mem)
 			break;
 
 		msleep(20);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		drain_workqueue(mem->i915->bdev.wq);
+#else
+		flush_delayed_work(&mem->i915->bdev.wq);
+#endif
 	}
 
 	/* If we leaked objects, Don't free the region causing use after free */

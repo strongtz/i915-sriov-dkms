@@ -28,6 +28,7 @@
 #include <linux/acpi.h>
 #include <linux/dmi.h>
 #include <linux/firmware.h>
+#include <linux/version.h>
 #include <acpi/video.h>
 
 #include <drm/drm_edid.h>
@@ -1122,7 +1123,11 @@ const struct drm_edid *intel_opregion_get_edid(struct intel_connector *intel_con
 
 	drm_edid = drm_edid_alloc(edid, len);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	if (!drm_edid_valid(drm_edid)) {
+#else
+	if (!drm_edid_is_valid(drm_edid_raw(drm_edid))) {
+#endif
 		drm_dbg_kms(&i915->drm, "Invalid EDID in ACPI OpRegion (Mailbox #5)\n");
 		drm_edid_free(drm_edid);
 		drm_edid = NULL;

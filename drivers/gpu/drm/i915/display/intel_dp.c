@@ -32,6 +32,7 @@
 #include <linux/string_helpers.h>
 #include <linux/timekeeping.h>
 #include <linux/types.h>
+#include <linux/version.h>
 
 #include <asm/byteorder.h>
 
@@ -4823,10 +4824,19 @@ intel_dp_force(struct drm_connector *connector)
 static int intel_dp_get_modes(struct drm_connector *connector)
 {
 	struct intel_connector *intel_connector = to_intel_connector(connector);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 	int num_modes;
 
 	/* drm_edid_connector_update() done in ->detect() or ->force() */
 	num_modes = drm_edid_connector_add_modes(connector);
+#else
+	const struct edid *edid;
+	int num_modes = 0;
+
+	edid = drm_edid_raw(intel_connector->detect_edid);
+	if (edid)
+		num_modes = intel_connector_update_modes(connector, edid);
+#endif
 
 	/* Also add fixed mode, which may or may not be present in EDID */
 	if (intel_dp_is_edp(intel_attached_dp(intel_connector)))
@@ -5272,6 +5282,9 @@ static bool intel_edp_init_connector(struct intel_dp *intel_dp,
 	struct intel_encoder *encoder = &dp_to_dig_port(intel_dp)->base;
 	bool has_dpcd;
 	const struct drm_edid *drm_edid;
+#if !(LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0))
+	const struct edid *edid;
+#endif
 
 	if (!intel_dp_is_edp(intel_dp))
 		return true;
@@ -5328,12 +5341,22 @@ static bool intel_edp_init_connector(struct intel_dp *intel_dp,
 				    connector->base.id, connector->name);
 	}
 	if (drm_edid) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		if (drm_edid_connector_update(connector, drm_edid) ||
 		    !drm_edid_connector_add_modes(connector)) {
 			drm_edid_connector_update(connector, NULL);
 			drm_edid_free(drm_edid);
 			drm_edid = ERR_PTR(-EINVAL);
 		}
+#else
+		edid = drm_edid_raw(drm_edid);
+		if (drm_add_edid_modes(connector, edid)) {
+			drm_connector_update_edid_property(connector, edid);
+		} else {
+			drm_edid_free(drm_edid);
+			drm_edid = ERR_PTR(-EINVAL);
+		}
+#endif
 	} else {
 		drm_edid = ERR_PTR(-ENOENT);
 	}
