@@ -3,6 +3,10 @@
 Originally from [linux-intel-lts](https://github.com/intel/linux-intel-lts/tree/lts-v5.15.49-adl-linux-220826T092047Z/drivers/gpu/drm/i915)
 Update to [6.1.12](https://github.com/intel/linux-intel-lts/tree/lts-v6.1.12-linux-230415T124447Z/drivers/gpu/drm/i915)
 
+## Update Notice
+
+The SR-IOV enablement commandline is changed since [commit #092d1cf](https://github.com/strongtz/i915-sriov-dkms/commit/092d1cf126f31eca3c1de4673e537c3c5f1e6ab4). If you are updating from previous version, please modify `i915.enable_guc=7` to **`i915.enable_guc=3 i915.max_vfs=7`** in your kernel command line.
+
 ## Notice
 
 This package is **highly experimental**, you should only use it when you know what you are doing.
@@ -13,7 +17,7 @@ For Arch Linux users, it is available in AUR. [i915-sriov-dkms-git](https://aur.
 
 Tested kernel versions: 
 
-* `pve-kernel-6.2.9-1-pve` on PVE VM Host
+* `pve-kernel-6.1.0-1-pve`~`6.2.9-1-pve` on PVE VM Host
 * `gentoo-sources-6.1.19-gentoo`~`6.2.11-gentoo` on Gentoo VM Guest
 
 Tested usages:
