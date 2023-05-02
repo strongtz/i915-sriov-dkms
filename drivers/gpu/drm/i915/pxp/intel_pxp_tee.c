@@ -142,7 +142,6 @@ static int i915_pxp_tee_component_bind(struct device *i915_kdev,
 	pxp->pxp_component->tee_dev = tee_kdev;
 	mutex_unlock(&pxp->tee_mutex);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	if (intel_uc_uses_huc(uc) && intel_huc_is_loaded_by_gsc(&uc->huc)) {
 		with_intel_runtime_pm(&i915->runtime_pm, wakeref) {
 			/* load huc via pxp */
@@ -151,7 +150,6 @@ static int i915_pxp_tee_component_bind(struct device *i915_kdev,
 				drm_err(&i915->drm, "failed to load huc via gsc %d\n", ret);
 		}
 	}
-#endif
 
 	/* if we are suspended, the HW will be re-initialized on resume */
 	wakeref = intel_runtime_pm_get_if_in_use(&i915->runtime_pm);

@@ -99,7 +99,7 @@ void
 __set_pd_entry(struct i915_page_directory * const pd,
 	       const unsigned short idx,
 	       struct i915_page_table * const to,
-	       u64 (*encode)(const dma_addr_t, const enum i915_cache_level))
+	       u64 (*encode)(const dma_addr_t, const unsigned int))
 {
 	/* Each thread pre-pins the pd, and we may have a thread per pde. */
 	GEM_BUG_ON(atomic_read(px_used(pd)) > NALLOC * I915_PDES);
@@ -182,7 +182,7 @@ struct i915_ppgtt *i915_ppgtt_create(struct intel_gt *gt,
 void ppgtt_bind_vma(struct i915_address_space *vm,
 		    struct i915_vm_pt_stash *stash,
 		    struct i915_vma_resource *vma_res,
-		    enum i915_cache_level cache_level,
+		    unsigned int pat_index,
 		    u32 flags)
 {
 	u32 pte_flags;
@@ -200,7 +200,7 @@ void ppgtt_bind_vma(struct i915_address_space *vm,
 	if (vma_res->bi.lmem)
 		pte_flags |= PTE_LM;
 
-	vm->insert_entries(vm, vma_res, cache_level, pte_flags);
+	vm->insert_entries(vm, vma_res, pat_index, pte_flags);
 	wmb();
 }
 

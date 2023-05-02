@@ -73,4 +73,7 @@ intel_gsc_uc_heci_cmd_submit_nonpriv(struct intel_gsc_uc *gsc,
 				     struct intel_context *ce,
 				     struct intel_gsc_heci_non_priv_pkt *pkt,
 				     u32 *cs, int timeout_ms);
+int intel_gsc_uc_heci_cmd_submit_packet(struct intel_gsc_uc *gsc,
+					u64 addr_in, u32 size_in,
+					u64 addr_out, u32 size_out);
 #endif

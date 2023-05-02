@@ -363,7 +363,9 @@ int intel_pxp_start(struct intel_pxp *pxp)
 		return -ENODEV;
 
 	if (HAS_ENGINE(pxp->ctrl_gt, GSC0)) {
-		if (wait_for(intel_uc_fw_is_running(&pxp->ctrl_gt->uc.gsc.fw), 250))
+		if (wait_for(intel_huc_is_authenticated(&pxp->ctrl_gt->uc.huc,
+							INTEL_HUC_AUTH_BY_GSC),
+				 8000))
 			return -ENXIO;
 	} else {
 		if (wait_for(pxp_component_bound(pxp), 250))

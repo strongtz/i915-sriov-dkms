@@ -349,16 +349,10 @@ i915-y += \
 i915-y += i915_perf.o
 
 # Protected execution platform (PXP) support
-ifeq ($(call kver_ge,6,2,0),1)
 i915-y += \
 	pxp/intel_pxp.o \
 	pxp/intel_pxp_tee.o \
 	pxp/intel_pxp_huc.o
-else
-i915-y += \
-	pxp/intel_pxp.o \
-	pxp/intel_pxp_tee.o
-endif
 
 i915-$(CONFIG_DRM_I915_PXP) += \
 	pxp/intel_pxp_cmd.o \

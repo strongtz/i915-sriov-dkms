@@ -106,6 +106,7 @@ struct intel_uc_fw {
 	 * threaded as it done during driver load (inherently single threaded)
 	 * or during a GT reset (mutex guarantees single threaded).
 	 */
+	bool needs_ggtt_mapping;
 	struct i915_vma_resource dummy;
 	struct i915_vma *rsa_data;
 
@@ -113,7 +114,9 @@ struct intel_uc_fw {
 	u32 ucode_size;
 	u32 private_data_size;
 
-	bool loaded_via_gsc;
+	u32 dma_start_offset;
+
+	bool is_meu_binary;
 };
 
 /*
@@ -293,13 +296,15 @@ static inline u32 intel_uc_fw_get_upload_size(const struct intel_uc_fw *uc_fw)
 }
 
 void intel_uc_fw_init_early(struct intel_uc_fw *uc_fw,
-			    enum intel_uc_fw_type type);
+			    enum intel_uc_fw_type type,
+			    bool needs_ggtt_mapping);
 void intel_uc_fw_set_preloaded(struct intel_uc_fw *uc_fw, u16 major, u16 minor);
 int intel_uc_fw_fetch(struct intel_uc_fw *uc_fw);
 void intel_uc_fw_cleanup_fetch(struct intel_uc_fw *uc_fw);
 int intel_uc_fw_upload(struct intel_uc_fw *uc_fw, u32 offset, u32 dma_flags);
 int intel_uc_fw_init(struct intel_uc_fw *uc_fw);
 void intel_uc_fw_fini(struct intel_uc_fw *uc_fw);
+void intel_uc_fw_resume_mapping(struct intel_uc_fw *uc_fw);
 size_t intel_uc_fw_copy_rsa(struct intel_uc_fw *uc_fw, void *dst, u32 max_len);
 int intel_uc_fw_mark_load_failed(struct intel_uc_fw *uc_fw, int err);
 void intel_uc_fw_dump(const struct intel_uc_fw *uc_fw, struct drm_printer *p);

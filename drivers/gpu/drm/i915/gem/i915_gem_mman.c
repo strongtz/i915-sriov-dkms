@@ -384,7 +384,8 @@ retry:
 	}
 
 	/* Access to snoopable pages through the GTT is incoherent. */
-	if (obj->cache_level != I915_CACHE_NONE && !HAS_LLC(i915)) {
+	if (!(i915_gem_object_has_cache_level(obj, I915_CACHE_NONE) ||
+	      HAS_LLC(i915))) {
 		ret = -EFAULT;
 		goto err_unpin;
 	}

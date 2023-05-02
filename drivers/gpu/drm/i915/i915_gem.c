@@ -421,8 +421,12 @@ i915_gem_gtt_pread(struct drm_i915_gem_object *obj,
 		page_length = remain < page_length ? remain : page_length;
 		if (drm_mm_node_allocated(&node)) {
 			ggtt->vm.insert_page(&ggtt->vm,
-					     i915_gem_object_get_dma_address(obj, offset >> PAGE_SHIFT),
-					     node.start, I915_CACHE_NONE, 0);
+					i915_gem_object_get_dma_address(obj,
+							offset >> PAGE_SHIFT),
+					node.start,
+					i915_gem_get_pat_index(i915,
+							       I915_CACHE_NONE),
+					0);
 		} else {
 			page_base += offset & PAGE_MASK;
 		}
@@ -599,8 +603,12 @@ i915_gem_gtt_pwrite_fast(struct drm_i915_gem_object *obj,
 			/* flush the write before we modify the GGTT */
 			intel_gt_flush_ggtt_writes(ggtt->vm.gt);
 			ggtt->vm.insert_page(&ggtt->vm,
-					     i915_gem_object_get_dma_address(obj, offset >> PAGE_SHIFT),
-					     node.start, I915_CACHE_NONE, 0);
+					i915_gem_object_get_dma_address(obj,
+							offset >> PAGE_SHIFT),
+					node.start,
+					i915_gem_get_pat_index(i915,
+							       I915_CACHE_NONE),
+					0);
 			wmb(); /* flush modifications to the GGTT (insert_page) */
 		} else {
 			page_base += offset & PAGE_MASK;
