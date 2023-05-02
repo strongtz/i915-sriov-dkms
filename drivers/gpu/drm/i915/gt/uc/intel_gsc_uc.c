@@ -33,13 +33,31 @@ static void gsc_work(struct work_struct *work)
 
 	if (actions & GSC_ACTION_FW_LOAD) {
 		ret = intel_gsc_uc_fw_upload(gsc);
-		if (ret == -EEXIST) /* skip proxy if not a new load */
-			actions &= ~GSC_ACTION_FW_LOAD;
-		else if (ret)
+		if (!ret)
+			/* setup proxy on a new load */
+			actions |= GSC_ACTION_SW_PROXY;
+		else if (ret != -EEXIST)
 			goto out_put;
+
+		/*
+		 * The HuC auth can be done both before or after the proxy init;
+		 * if done after, a proxy request will be issued and must be
+		 * serviced before the authentication can complete.
+		 * Since this worker also handles proxy requests, we can't
+		 * perform an action that requires the proxy from within it and
+		 * then stall waiting for it, because we'd be blocking the
+		 * service path. Therefore, it is easier for us to load HuC
+		 * first and do proxy later. The GSC will ack the HuC auth and
+		 * then send the HuC proxy request as part of the proxy init
+		 * flow.
+		 */
+		if (intel_huc_is_loaded_by_gsc(&gt->uc.huc))
+			intel_huc_fw_load_and_auth_via_gsc_cs(&gt->uc.huc);
+		else
+			intel_huc_auth(&gt->uc.huc, INTEL_HUC_AUTH_BY_GSC);
 	}
 
-	if (actions & (GSC_ACTION_FW_LOAD | GSC_ACTION_SW_PROXY)) {
+	if (actions & GSC_ACTION_SW_PROXY) {
 		if (!intel_gsc_uc_fw_init_done(gsc)) {
 			drm_err(&gt->i915->drm,
 				"Proxy request received with GSC not loaded!\n");
@@ -86,7 +104,12 @@ void intel_gsc_uc_init_early(struct intel_gsc_uc *gsc)
 {
 	struct intel_gt *gt = gsc_uc_to_gt(gsc);
 
-	intel_uc_fw_init_early(&gsc->fw, INTEL_UC_FW_TYPE_GSC);
+	/*
+	 * GSC FW needs to be copied to a dedicated memory allocations for
+	 * loading (see gsc->local), so we don't need to GGTT map the FW image
+	 * itself into GGTT.
+	 */
+	intel_uc_fw_init_early(&gsc->fw, INTEL_UC_FW_TYPE_GSC, false);
 	INIT_WORK(&gsc->work, gsc_work);
 
 	/* we can arrive here from i915_driver_early_probe for primary
@@ -183,6 +206,25 @@ void intel_gsc_uc_flush_work(struct intel_gsc_uc *gsc)
 		return;
 
 	flush_work(&gsc->work);
+}
+
+void intel_gsc_uc_resume(struct intel_gsc_uc *gsc)
+{
+	if (!intel_uc_fw_is_loadable(&gsc->fw))
+		return;
+
+	/*
+	 * we only want to start the GSC worker from here in the actual resume
+	 * flow and not during driver load. This is because GSC load is slow and
+	 * therefore we want to make sure that the default state init completes
+	 * first to not slow down the init thread. A separate call to
+	 * intel_gsc_uc_load_start will ensure that the GSC is loaded during
+	 * driver load.
+	 */
+	if (!gsc_uc_to_gt(gsc)->engine[GSC0]->default_state)
+		return;
+
+	intel_gsc_uc_load_start(gsc);
 }
 
 void intel_gsc_uc_load_start(struct intel_gsc_uc *gsc)

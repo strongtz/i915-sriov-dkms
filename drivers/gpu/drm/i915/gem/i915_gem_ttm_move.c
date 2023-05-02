@@ -203,7 +203,8 @@ static struct dma_fence *i915_ttm_accel_move(struct ttm_buffer_object *bo,
 
 		intel_engine_pm_get(to_gt(i915)->migrate.context->engine);
 		ret = intel_context_migrate_clear(to_gt(i915)->migrate.context, deps,
-						  dst_st->sgl, dst_level,
+						  dst_st->sgl,
+						  i915_gem_get_pat_index(i915, dst_level),
 						  i915_ttm_gtt_binds_lmem(dst_mem),
 						  0, &rq);
 	} else {
@@ -216,12 +217,13 @@ static struct dma_fence *i915_ttm_accel_move(struct ttm_buffer_object *bo,
 		src_level = i915_ttm_cache_level(i915, bo->resource, src_ttm);
 		intel_engine_pm_get(to_gt(i915)->migrate.context->engine);
 		ret = intel_context_migrate_copy(to_gt(i915)->migrate.context,
-						 deps, src_rsgt->table.sgl,
-						 src_level,
-						 i915_ttm_gtt_binds_lmem(bo->resource),
-						 dst_st->sgl, dst_level,
-						 i915_ttm_gtt_binds_lmem(dst_mem),
-						 &rq);
+					deps, src_rsgt->table.sgl,
+					i915_gem_get_pat_index(i915, src_level),
+					i915_ttm_gtt_binds_lmem(bo->resource),
+					dst_st->sgl,
+					i915_gem_get_pat_index(i915, dst_level),
+					i915_ttm_gtt_binds_lmem(dst_mem),
+					&rq);
 
 		i915_refct_sgt_put(src_rsgt);
 	}

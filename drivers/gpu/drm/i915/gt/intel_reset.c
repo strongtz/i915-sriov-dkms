@@ -270,7 +270,7 @@ out:
 static int gen6_hw_domain_reset(struct intel_gt *gt, u32 hw_domain_mask)
 {
 	struct intel_uncore *uncore = gt->uncore;
-	int loops = 2;
+	int loops = GRAPHICS_VER_FULL(gt->i915) < IP_VER(12, 70) ? 2 : 1; /* see comment below */
 	int err;
 
 	/*
@@ -294,6 +294,13 @@ static int gen6_hw_domain_reset(struct intel_gt *gt, u32 hw_domain_mask)
 		 * value. However, there is still a concern that upon
 		 * leaving the second reset, the internal engine state
 		 * is still in flux and not ready for resuming.
+		 *
+		 * Starting on MTL, there are some prep steps that we need to do
+		 * when resetting some engines that need to be applied every
+		 * time we write to GEN6_GDRST. As those are time consuming
+		 * (tens of ms), we don't want to perform that twice, so, since
+		 * the Jasperlake issue hasn't been observed on MTL, we avoid
+		 * repeating the reset.
 		 */
 		err = __intel_wait_for_register_fw(uncore, GEN6_GDRST,
 						   hw_domain_mask, 0,

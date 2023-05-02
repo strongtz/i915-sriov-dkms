@@ -459,12 +459,6 @@ static int ct_write(struct intel_guc_ct *ct,
 	}
 	GEM_BUG_ON(tail > size);
 
-	/*
-	 * make sure H2G buffer update and LRC tail update (if this triggering a
-	 * submission) are visible before updating the descriptor tail
-	 */
-	intel_guc_write_barrier(ct_to_guc(ct));
-
 	/* update local copies */
 	ctb->tail = tail;
 	GEM_BUG_ON(atomic_read(&ctb->space) < len + GUC_CTB_HDR_LEN);
@@ -492,6 +486,12 @@ static int ct_write(struct intel_guc_ct *ct,
 	 * Just leave a comment here for now.
 	 */
 	/* intel_guc_write_barrier(ct_to_guc(ct)); */
+
+	/*
+	 * make sure H2G buffer update and LRC tail update (if this triggering a
+	 * submission) are visible before updating the descriptor tail
+	 */
+	intel_guc_write_barrier(ct_to_guc(ct));
 
 	return 0;
 
