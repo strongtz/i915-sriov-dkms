@@ -1838,7 +1838,6 @@ static void wa_list_apply(const struct i915_wa_list *wal)
 	fw = wal_get_fw_for_rmw(uncore, wal);
 
 	spin_lock_irqsave(&uncore->lock, flags);
-	spin_lock(&uncore->lock);
 	intel_uncore_forcewake_get__locked(uncore, fw);
 
 	for (i = 0, wa = wal->list; i < wal->count; i++, wa++) {
@@ -1867,8 +1866,7 @@ static void wa_list_apply(const struct i915_wa_list *wal)
 	}
 
 	intel_uncore_forcewake_put__locked(uncore, fw);
-	spin_unlock(&uncore->lock);
-	intel_gt_mcr_unlock(gt, flags);
+	spin_unlock_irqrestore(&uncore->lock, flags);
 }
 
 void intel_gt_apply_workarounds(struct intel_gt *gt)
