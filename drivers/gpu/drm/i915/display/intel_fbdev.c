@@ -300,7 +300,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 		vaddr = i915_vma_pin_iomap(vma);
 		if (IS_ERR(vaddr)) {
 			drm_err(&dev_priv->drm,
-					"Failed to remap framebuffer into virtual memory (%pe)\n", vaddr);
+				"Failed to remap framebuffer into virtual memory (%pe)\n", vaddr);
 			ret = PTR_ERR(vaddr);
 			continue;
 		}
@@ -672,7 +672,13 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous
 	struct intel_fbdev *ifbdev = dev_priv->display.fbdev.fbdev;
 	struct fb_info *info;
 
-	if (!ifbdev || !ifbdev->vma)
+	if (!ifbdev)
+		return;
+
+	if (drm_WARN_ON(&dev_priv->drm, !HAS_DISPLAY(dev_priv)))
+		return;
+
+	if (!ifbdev->vma)
 		goto set_suspend;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
