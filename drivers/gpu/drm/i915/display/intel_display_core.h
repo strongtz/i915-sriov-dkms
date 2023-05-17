@@ -12,6 +12,7 @@
 #include <linux/types.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
+#include <linux/version.h>
 
 #include <drm/drm_connector.h>
 #include <drm/drm_modeset_lock.h>
@@ -378,7 +379,11 @@ struct intel_display {
 	} gmbus;
 
 	struct {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		struct i915_hdcp_master *master;
+#else
 		struct i915_hdcp_comp_master *master;
+#endif
 		bool comp_added;
 
 		/* Mutex to protect the above hdcp component related values. */

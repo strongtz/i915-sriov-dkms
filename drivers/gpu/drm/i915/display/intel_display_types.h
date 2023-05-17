@@ -30,6 +30,7 @@
 #include <linux/pm_qos.h>
 #include <linux/pwm.h>
 #include <linux/sched/clock.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_dp_dual_mode_helper.h>
 #include <drm/display/drm_dp_mst_helper.h>
@@ -43,7 +44,11 @@
 #include <drm/drm_rect.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_vblank_work.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#include <drm/i915_hdcp_interface.h>
+#else
 #include <drm/i915_mei_hdcp_interface.h>
+#endif
 #include <media/cec-notifier.h>
 
 #include "i915_vma.h"
