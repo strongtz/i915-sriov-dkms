@@ -1143,7 +1143,11 @@ hdcp2_prepare_ake_init(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1154,7 +1158,11 @@ hdcp2_prepare_ake_init(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->initiate_hdcp2_session(comp->hdcp_dev, data, ake_data);
+#else
 	ret = comp->ops->initiate_hdcp2_session(comp->mei_dev, data, ake_data);
+#endif
 	if (ret)
 		drm_dbg_kms(&dev_priv->drm, "Prepare_ake_init failed. %d\n",
 			    ret);
@@ -1173,7 +1181,11 @@ hdcp2_verify_rx_cert_prepare_km(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1184,7 +1196,11 @@ hdcp2_verify_rx_cert_prepare_km(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->verify_receiver_cert_prepare_km(comp->hdcp_dev, data,
+#else
 	ret = comp->ops->verify_receiver_cert_prepare_km(comp->mei_dev, data,
+#endif
 							 rx_cert, paired,
 							 ek_pub_km, msg_sz);
 	if (ret < 0)
@@ -1201,7 +1217,11 @@ static int hdcp2_verify_hprime(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1212,7 +1232,11 @@ static int hdcp2_verify_hprime(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->verify_hprime(comp->hdcp_dev, data, rx_hprime);
+#else
 	ret = comp->ops->verify_hprime(comp->mei_dev, data, rx_hprime);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Verify hprime failed. %d\n", ret);
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
@@ -1227,7 +1251,11 @@ hdcp2_store_pairing_info(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1238,7 +1266,11 @@ hdcp2_store_pairing_info(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->store_pairing_info(comp->hdcp_dev, data, pairing_info);
+#else
 	ret = comp->ops->store_pairing_info(comp->mei_dev, data, pairing_info);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Store pairing info failed. %d\n",
 			    ret);
@@ -1254,7 +1286,11 @@ hdcp2_prepare_lc_init(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1265,7 +1301,11 @@ hdcp2_prepare_lc_init(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->initiate_locality_check(comp->hdcp_dev, data, lc_init);
+#else
 	ret = comp->ops->initiate_locality_check(comp->mei_dev, data, lc_init);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Prepare lc_init failed. %d\n",
 			    ret);
@@ -1281,7 +1321,11 @@ hdcp2_verify_lprime(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1292,7 +1336,11 @@ hdcp2_verify_lprime(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->verify_lprime(comp->hdcp_dev, data, rx_lprime);
+#else
 	ret = comp->ops->verify_lprime(comp->mei_dev, data, rx_lprime);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Verify L_Prime failed. %d\n",
 			    ret);
@@ -1307,7 +1355,11 @@ static int hdcp2_prepare_skey(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1318,7 +1370,11 @@ static int hdcp2_prepare_skey(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->get_session_key(comp->hdcp_dev, data, ske_data);
+#else
 	ret = comp->ops->get_session_key(comp->mei_dev, data, ske_data);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Get session key failed. %d\n",
 			    ret);
@@ -1336,7 +1392,11 @@ hdcp2_verify_rep_topology_prepare_ack(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1347,7 +1407,11 @@ hdcp2_verify_rep_topology_prepare_ack(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->repeater_check_flow_prepare_ack(comp->hdcp_dev, data,
+#else
 	ret = comp->ops->repeater_check_flow_prepare_ack(comp->mei_dev, data,
+#endif
 							 rep_topology,
 							 rep_send_ack);
 	if (ret < 0)
@@ -1365,7 +1429,11 @@ hdcp2_verify_mprime(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1376,7 +1444,11 @@ hdcp2_verify_mprime(struct intel_connector *connector,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->verify_mprime(comp->hdcp_dev, data, stream_ready);
+#else
 	ret = comp->ops->verify_mprime(comp->mei_dev, data, stream_ready);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Verify mprime failed. %d\n", ret);
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
@@ -1389,7 +1461,11 @@ static int hdcp2_authenticate_port(struct intel_connector *connector)
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1400,7 +1476,11 @@ static int hdcp2_authenticate_port(struct intel_connector *connector)
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->enable_hdcp_authentication(comp->hdcp_dev, data);
+#else
 	ret = comp->ops->enable_hdcp_authentication(comp->mei_dev, data);
+#endif
 	if (ret < 0)
 		drm_dbg_kms(&dev_priv->drm, "Enable hdcp auth failed. %d\n",
 			    ret);
@@ -1413,7 +1493,11 @@ static int hdcp2_close_mei_session(struct intel_connector *connector)
 {
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	struct i915_hdcp_master *comp;
+#else
 	struct i915_hdcp_comp_master *comp;
+#endif
 	int ret;
 
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
@@ -1424,7 +1508,11 @@ static int hdcp2_close_mei_session(struct intel_connector *connector)
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = comp->ops->close_hdcp_session(comp->hdcp_dev,
+#else
 	ret = comp->ops->close_hdcp_session(comp->mei_dev,
+#endif
 					     &dig_port->hdcp_port_data);
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
 
@@ -2145,8 +2233,13 @@ static int i915_hdcp_component_bind(struct device *i915_kdev,
 
 	drm_dbg(&dev_priv->drm, "I915 HDCP comp bind\n");
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	dev_priv->display.hdcp.master = (struct i915_hdcp_master *)data;
+	dev_priv->display.hdcp.master->hdcp_dev = mei_kdev;
+#else
 	dev_priv->display.hdcp.master = (struct i915_hdcp_comp_master *)data;
 	dev_priv->display.hdcp.master->mei_dev = mei_kdev;
+#endif
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
 
 	return 0;
@@ -2163,23 +2256,54 @@ static void i915_hdcp_component_unbind(struct device *i915_kdev,
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+static const struct component_ops i915_hdcp_ops = {
+#else
 static const struct component_ops i915_hdcp_component_ops = {
+#endif
 	.bind   = i915_hdcp_component_bind,
 	.unbind = i915_hdcp_component_unbind,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+static enum hdcp_ddi intel_get_hdcp_ddi_index(enum port port)
+#else
 static enum mei_fw_ddi intel_get_mei_fw_ddi_index(enum port port)
+#endif
 {
 	switch (port) {
 	case PORT_A:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		return HDCP_DDI_A;
+#else
 		return MEI_DDI_A;
+#endif
 	case PORT_B ... PORT_F:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		return (enum hdcp_ddi)port;
+#else
 		return (enum mei_fw_ddi)port;
+#endif
 	default:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		return HDCP_DDI_INVALID_PORT;
+#else
 		return MEI_DDI_INVALID_PORT;
+#endif
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+static enum hdcp_transcoder intel_get_hdcp_transcoder(enum transcoder cpu_transcoder)
+{
+	switch (cpu_transcoder) {
+	case TRANSCODER_A ... TRANSCODER_D:
+		return (enum hdcp_transcoder)(cpu_transcoder | 0x10);
+	default: /* eDP, DSI TRANSCODERS are non HDCP capable */
+		return HDCP_INVALID_TRANSCODER;
+	}
+}
+#else
 static enum mei_fw_tc intel_get_mei_fw_tc(enum transcoder cpu_transcoder)
 {
 	switch (cpu_transcoder) {
@@ -2189,6 +2313,7 @@ static enum mei_fw_tc intel_get_mei_fw_tc(enum transcoder cpu_transcoder)
 		return MEI_INVALID_TRANSCODER;
 	}
 }
+#endif
 
 static int initialize_hdcp_port_data(struct intel_connector *connector,
 				     struct intel_digital_port *dig_port,
@@ -2200,20 +2325,32 @@ static int initialize_hdcp_port_data(struct intel_connector *connector,
 	enum port port = dig_port->base.port;
 
 	if (DISPLAY_VER(dev_priv) < 12)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		data->hdcp_ddi = intel_get_hdcp_ddi_index(port);
+#else
 		data->fw_ddi = intel_get_mei_fw_ddi_index(port);
+#endif
 	else
 		/*
 		 * As per ME FW API expectation, for GEN 12+, fw_ddi is filled
 		 * with zero(INVALID PORT index).
 		 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		data->hdcp_ddi = HDCP_DDI_INVALID_PORT;
+#else
 		data->fw_ddi = MEI_DDI_INVALID_PORT;
+#endif
 
 	/*
 	 * As associated transcoder is set and modified at modeset, here fw_tc
 	 * is initialized to zero (invalid transcoder index). This will be
 	 * retained for <Gen12 forever.
 	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	data->hdcp_transcoder = HDCP_INVALID_TRANSCODER;
+#else
 	data->fw_tc = MEI_INVALID_TRANSCODER;
+#endif
 
 	data->port_type = (u8)HDCP_PORT_TYPE_INTEGRATED;
 	data->protocol = (u8)shim->protocol;
@@ -2256,7 +2393,11 @@ void intel_hdcp_component_init(struct drm_i915_private *dev_priv)
 
 	dev_priv->display.hdcp.comp_added = true;
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	ret = component_add_typed(dev_priv->drm.dev, &i915_hdcp_ops,
+#else
 	ret = component_add_typed(dev_priv->drm.dev, &i915_hdcp_component_ops,
+#endif
 				  I915_COMPONENT_HDCP);
 	if (ret < 0) {
 		drm_dbg_kms(&dev_priv->drm, "Failed at component add(%d)\n",
@@ -2350,7 +2491,11 @@ int intel_hdcp_enable(struct intel_connector *connector,
 	}
 
 	if (DISPLAY_VER(dev_priv) >= 12)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+		dig_port->hdcp_port_data.hdcp_transcoder = intel_get_hdcp_transcoder(hdcp->cpu_transcoder);
+#else
 		dig_port->hdcp_port_data.fw_tc = intel_get_mei_fw_tc(hdcp->cpu_transcoder);
+#endif
 
 	/*
 	 * Considering that HDCP2.2 is more secure than HDCP1.4, If the setup
@@ -2485,7 +2630,11 @@ void intel_hdcp_component_fini(struct drm_i915_private *dev_priv)
 	dev_priv->display.hdcp.comp_added = false;
 	mutex_unlock(&dev_priv->display.hdcp.comp_mutex);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	component_del(dev_priv->drm.dev, &i915_hdcp_ops);
+#else
 	component_del(dev_priv->drm.dev, &i915_hdcp_component_ops);
+#endif
 }
 
 void intel_hdcp_cleanup(struct intel_connector *connector)

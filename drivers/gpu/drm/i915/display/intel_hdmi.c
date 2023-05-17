@@ -2691,9 +2691,14 @@ bool intel_hdmi_handle_sink_scrambling(struct intel_encoder *encoder,
 		    str_yes_no(scrambling), high_tmds_clock_ratio ? 40 : 10);
 
 	/* Set TMDS bit clock ratio to 1/40 or 1/10, and enable/disable scrambling */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	return drm_scdc_set_high_tmds_clock_ratio(connector, high_tmds_clock_ratio) &&
+		drm_scdc_set_scrambling(connector, scrambling);
+#else
 	return drm_scdc_set_high_tmds_clock_ratio(adapter,
 						  high_tmds_clock_ratio) &&
 		drm_scdc_set_scrambling(adapter, scrambling);
+#endif
 }
 
 static u8 chv_port_to_ddc_pin(struct drm_i915_private *dev_priv, enum port port)
