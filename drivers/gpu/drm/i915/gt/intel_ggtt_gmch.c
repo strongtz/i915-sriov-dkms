@@ -18,16 +18,16 @@
 static void gmch_ggtt_insert_page(struct i915_address_space *vm,
 				  dma_addr_t addr,
 				  u64 offset,
-				  enum i915_cache_level cache_level,
+				  unsigned int cache_level,
 				  u32 unused)
 {
-	unsigned int flags = (cache_level == I915_CACHE_NONE) ?
+	unsigned int flags = ((enum i915_cache_level)cache_level == I915_CACHE_NONE) ?
 		AGP_USER_MEMORY : AGP_USER_CACHED_MEMORY;
 
 	intel_gmch_gtt_insert_page(addr, offset >> PAGE_SHIFT, flags);
 }
 
-static void gmch_ggtt_insert_entries(struct i915_address_space *vm,
+static void _gmch_ggtt_insert_entries(struct i915_address_space *vm,
 				     struct i915_vma_resource *vma_res,
 				     enum i915_cache_level cache_level,
 				     u32 unused)
@@ -37,6 +37,14 @@ static void gmch_ggtt_insert_entries(struct i915_address_space *vm,
 
 	intel_gmch_gtt_insert_sg_entries(vma_res->bi.pages, vma_res->start >> PAGE_SHIFT,
 					 flags);
+}
+
+static void gmch_ggtt_insert_entries(struct i915_address_space *vm,
+				     struct i915_vma_resource *vma_res,
+				     unsigned int cache_level,
+				     u32 unused)
+{
+	_gmch_ggtt_insert_entries(vm, vma_res, (enum i915_cache_level)cache_level, unused);
 }
 
 static void gmch_ggtt_invalidate(struct i915_ggtt *ggtt)

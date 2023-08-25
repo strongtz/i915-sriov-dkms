@@ -665,7 +665,7 @@ __set_pd_entry(struct i915_page_directory * const pd,
 	       u64 (*encode)(const dma_addr_t, const unsigned int pat_index));
 
 #define set_pd_entry(pd, idx, to) \
-	__set_pd_entry((pd), (idx), px_pt(to), gen8_pde_encode)
+	__set_pd_entry((pd), (idx), px_pt(to), gen8_pde_encode_shim)
 
 void
 clear_pd_entry(struct i915_page_directory * const pd,
