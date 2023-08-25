@@ -3884,10 +3884,14 @@ intel_dp_mst_hpd_irq(struct intel_dp *intel_dp, u8 *esi, u8 *ack)
 {
 	bool handled = false;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,5)
+        drm_dp_mst_hpd_irq_handle_event(&intel_dp->mst_mgr, esi, ack, &handled);
+#else
 	drm_dp_mst_hpd_irq(&intel_dp->mst_mgr, esi, &handled);
 	if (handled)
 		ack[1] |= esi[1] & (DP_DOWN_REP_MSG_RDY | DP_UP_REQ_MSG_RDY);
-
+#endif
+	
 	if (esi[1] & DP_CP_IRQ) {
 		intel_hdcp_handle_cp_irq(intel_dp->attached_connector);
 		ack[1] |= DP_CP_IRQ;
@@ -3961,6 +3965,11 @@ intel_dp_check_mst_status(struct intel_dp *intel_dp)
 
 		if (!intel_dp_ack_sink_irq_esi(intel_dp, ack))
 			drm_dbg_kms(&i915->drm, "Failed to ack ESI\n");
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,5)
+                if (ack[1] & (DP_DOWN_REP_MSG_RDY | DP_UP_REQ_MSG_RDY))
+                        drm_dp_mst_hpd_irq_send_new_request(&intel_dp->mst_mgr);
+#endif
 	}
 
 	return link_ok;
