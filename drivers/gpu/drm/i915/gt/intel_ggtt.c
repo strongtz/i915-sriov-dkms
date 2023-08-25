@@ -1036,7 +1036,7 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
  * so these PTE encode functions are left with using cache_level.
  * See translation table LEGACY_CACHELEVEL.
  */
-static u64 snb_pte_encode(dma_addr_t addr,
+static u64 _snb_pte_encode(dma_addr_t addr,
 			  enum i915_cache_level level,
 			  u32 flags)
 {
@@ -1057,7 +1057,14 @@ static u64 snb_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
-static u64 ivb_pte_encode(dma_addr_t addr,
+static u64 snb_pte_encode(dma_addr_t addr,
+			   unsigned int level,
+			   u32 flags)
+{
+	return _snb_pte_encode(addr, (enum i915_cache_level)level, flags);
+}
+
+static u64 _ivb_pte_encode(dma_addr_t addr,
 			  enum i915_cache_level level,
 			  u32 flags)
 {
@@ -1080,7 +1087,14 @@ static u64 ivb_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
-static u64 byt_pte_encode(dma_addr_t addr,
+static u64 ivb_pte_encode(dma_addr_t addr,
+			   unsigned int level,
+			   u32 flags)
+{
+	return _ivb_pte_encode(addr, (enum i915_cache_level)level, flags);
+}
+
+static u64 _byt_pte_encode(dma_addr_t addr,
 			  enum i915_cache_level level,
 			  u32 flags)
 {
@@ -1095,7 +1109,14 @@ static u64 byt_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
-static u64 hsw_pte_encode(dma_addr_t addr,
+static u64 byt_pte_encode(dma_addr_t addr,
+			   unsigned int level,
+			   u32 flags)
+{
+	return _byt_pte_encode(addr, (enum i915_cache_level)level, flags);
+}
+
+static u64 _hsw_pte_encode(dma_addr_t addr,
 			  enum i915_cache_level level,
 			  u32 flags)
 {
@@ -1107,7 +1128,14 @@ static u64 hsw_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
-static u64 iris_pte_encode(dma_addr_t addr,
+static u64 hsw_pte_encode(dma_addr_t addr,
+			   unsigned int level,
+			   u32 flags)
+{
+	return _hsw_pte_encode(addr, (enum i915_cache_level)level, flags);
+}
+
+static u64 _iris_pte_encode(dma_addr_t addr,
 			   enum i915_cache_level level,
 			   u32 flags)
 {
@@ -1125,6 +1153,13 @@ static u64 iris_pte_encode(dma_addr_t addr,
 	}
 
 	return pte;
+}
+
+static u64 iris_pte_encode(dma_addr_t addr,
+			   unsigned int level,
+			   u32 flags)
+{
+	return _iris_pte_encode(addr, (enum i915_cache_level)level, flags);
 }
 
 static int gen6_gmch_probe(struct i915_ggtt *ggtt)

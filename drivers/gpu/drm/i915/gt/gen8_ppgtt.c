@@ -33,6 +33,12 @@ static u64 gen8_pde_encode(const dma_addr_t addr,
 	return pde;
 }
 
+static u64 gen8_pde_encode_shim(dma_addr_t addr,
+			  unsigned int pat_index)
+{
+	return gen8_pde_encode(addr, (enum i915_cache_level)pat_index);
+}
+
 static u64 gen8_pte_encode(dma_addr_t addr,
 			   enum i915_cache_level level,
 			   u32 flags)
@@ -60,6 +66,13 @@ static u64 gen8_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
+static u64 gen8_pte_encode_shim(dma_addr_t addr,
+			  unsigned int pat_index,
+			  u32 flags)
+{
+	return gen8_pte_encode(addr, (enum i915_cache_level)pat_index, flags);
+}
+
 static u64 gen12_pte_encode(dma_addr_t addr,
 			  unsigned int pat_index,
 			  u32 flags)
@@ -85,6 +98,13 @@ static u64 gen12_pte_encode(dma_addr_t addr,
 		pte |= GEN12_PPGTT_PTE_PAT3;
 
 	return pte;
+}
+
+static u64 gen12_pte_encode_shim(dma_addr_t addr,
+			  enum i915_cache_level level,
+			  u32 flags)
+{
+	return gen12_pte_encode(addr, (unsigned int)level, flags);
 }
 
 static void gen8_ppgtt_notify_vgt(struct i915_ppgtt *ppgtt, bool create)
@@ -1004,7 +1024,7 @@ struct i915_ppgtt *gen8_ppgtt_create(struct intel_gt *gt,
 	if (GRAPHICS_VER(gt->i915) >= 12)
 		ppgtt->vm.pte_encode = gen12_pte_encode;
 	else
-		ppgtt->vm.pte_encode = gen8_pte_encode;
+		ppgtt->vm.pte_encode = gen8_pte_encode_shim;
 
 	ppgtt->vm.bind_async_flags = I915_VMA_LOCAL_BIND;
 	ppgtt->vm.insert_entries = gen8_ppgtt_insert;
