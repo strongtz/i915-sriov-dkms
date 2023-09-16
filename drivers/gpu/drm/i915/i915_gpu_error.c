@@ -186,6 +186,62 @@ i915_error_printer(struct drm_i915_error_state_buf *e)
 	return p;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+/* single threaded page allocator with a reserved stash for emergencies */
+static void pool_fini(struct folio_batch *fbatch)
+{
+	folio_batch_release(fbatch);
+}
+
+static int pool_refill(struct folio_batch *fbatch, gfp_t gfp)
+{
+	while (folio_batch_space(fbatch)) {
+		struct folio *folio;
+
+		folio = folio_alloc(gfp, 0);
+		if (!folio)
+			return -ENOMEM;
+
+		folio_batch_add(fbatch, folio);
+	}
+
+	return 0;
+}
+
+static int pool_init(struct folio_batch *fbatch, gfp_t gfp)
+{
+	int err;
+
+	folio_batch_init(fbatch);
+
+	err = pool_refill(fbatch, gfp);
+	if (err)
+		pool_fini(fbatch);
+
+	return err;
+}
+
+static void *pool_alloc(struct folio_batch *fbatch, gfp_t gfp)
+{
+	struct folio *folio;
+
+	folio = folio_alloc(gfp, 0);
+	if (!folio && folio_batch_count(fbatch))
+		folio = fbatch->folios[--fbatch->nr];
+
+	return folio ? folio_address(folio) : NULL;
+}
+
+static void pool_free(struct folio_batch *fbatch, void *addr)
+{
+	struct folio *folio = virt_to_folio(addr);
+
+	if (folio_batch_space(fbatch))
+		folio_batch_add(fbatch, folio);
+	else
+		folio_put(folio);
+}
+#else
 /* single threaded page allocator with a reserved stash for emergencies */
 static void pool_fini(struct pagevec *pv)
 {
@@ -240,11 +296,16 @@ static void pool_free(struct pagevec *pv, void *addr)
 	else
 		__free_page(p);
 }
+#endif
 
 #ifdef CONFIG_DRM_I915_COMPRESS_ERROR
 
 struct i915_vma_compress {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct folio_batch pool;
+#else
 	struct pagevec pool;
+#endif
 	struct z_stream_s zstream;
 	void *tmp;
 };
@@ -381,7 +442,11 @@ static void err_compression_marker(struct drm_i915_error_state_buf *m)
 #else
 
 struct i915_vma_compress {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct folio_batch pool;
+#else
 	struct pagevec pool;
+#endif
 };
 
 static bool compress_init(struct i915_vma_compress *c)

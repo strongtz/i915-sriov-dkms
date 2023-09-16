@@ -18,6 +18,49 @@
 #include "i915_scatterlist.h"
 #include "i915_trace.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+/*
+ * Move folios to appropriate lru and release the batch, decrementing the
+ * ref count of those folios.
+ */
+static void check_release_folio_batch(struct folio_batch *fbatch)
+{
+	check_move_unevictable_folios(fbatch);
+	__folio_batch_release(fbatch);
+	cond_resched();
+}
+
+void shmem_sg_free_table(struct sg_table *st, struct address_space *mapping,
+			 bool dirty, bool backup)
+{
+	struct sgt_iter sgt_iter;
+	struct folio_batch fbatch;
+	struct folio *last = NULL;
+	struct page *page;
+
+	mapping_clear_unevictable(mapping);
+
+	folio_batch_init(&fbatch);
+	for_each_sgt_page(page, sgt_iter, st) {
+		struct folio *folio = page_folio(page);
+
+		if (folio == last)
+			continue;
+		last = folio;
+		if (dirty)
+			folio_mark_dirty(folio);
+		if (backup)
+			folio_mark_accessed(folio);
+
+		if (!folio_batch_add(&fbatch, folio))
+			check_release_folio_batch(&fbatch);
+	}
+	if (fbatch.nr)
+		check_release_folio_batch(&fbatch);
+
+	sg_free_table(st);
+}
+#else
 /*
  * Move pages to appropriate lru and release the pagevec, decrementing the
  * ref count of those pages.
@@ -54,6 +97,7 @@ void shmem_sg_free_table(struct sg_table *st, struct address_space *mapping,
 
 	sg_free_table(st);
 }
+#endif
 
 int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 			 size_t size, struct intel_memory_region *mr,

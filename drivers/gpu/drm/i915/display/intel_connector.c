@@ -280,14 +280,22 @@ intel_attach_aspect_ratio_property(struct drm_connector *connector)
 void
 intel_attach_hdmi_colorspace_property(struct drm_connector *connector)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	if (!drm_mode_create_hdmi_colorspace_property(connector, 0))
+#else
 	if (!drm_mode_create_hdmi_colorspace_property(connector))
+#endif
 		drm_connector_attach_colorspace_property(connector);
 }
 
 void
 intel_attach_dp_colorspace_property(struct drm_connector *connector)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	if (!drm_mode_create_dp_colorspace_property(connector, 0))
+#else
 	if (!drm_mode_create_dp_colorspace_property(connector))
+#endif
 		drm_connector_attach_colorspace_property(connector);
 }
 

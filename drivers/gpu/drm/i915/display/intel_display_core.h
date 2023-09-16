@@ -379,7 +379,9 @@ struct intel_display {
 	} gmbus;
 
 	struct {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+		struct i915_hdcp_arbiter *master;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 		struct i915_hdcp_master *master;
 #else
 		struct i915_hdcp_comp_master *master;
