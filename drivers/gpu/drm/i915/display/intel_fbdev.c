@@ -37,12 +37,21 @@
 #include <linux/tty.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+#include <linux/fb.h>
+#endif
 
 #include <drm/drm_crtc.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+#include <drm/drm_gem_framebuffer_helper.h>
+#endif
 
 #include "gem/i915_gem_lmem.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+#include "gem/i915_gem_mman.h"
+#endif
 
 #include "i915_drv.h"
 #include "intel_display_types.h"
@@ -68,6 +77,13 @@ struct intel_fbdev {
 	struct mutex hpd_lock;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+static struct intel_fbdev *to_intel_fbdev(struct drm_fb_helper *fb_helper)
+{
+	return container_of(fb_helper, struct intel_fbdev, helper);
+}
+#endif
+
 static struct intel_frontbuffer *to_frontbuffer(struct intel_fbdev *ifbdev)
 {
 	return ifbdev->fb->frontbuffer;
@@ -77,6 +93,12 @@ static void intel_fbdev_invalidate(struct intel_fbdev *ifbdev)
 {
 	intel_frontbuffer_invalidate(to_frontbuffer(ifbdev), ORIGIN_CPU);
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+FB_GEN_DEFAULT_DEFERRED_IO_OPS(intel_fbdev,
+				  drm_fb_helper_damage_range,
+				  drm_fb_helper_damage_area)
+#endif
 
 static int intel_fbdev_set_par(struct fb_info *info)
 {
@@ -121,6 +143,27 @@ static int intel_fbdev_pan_display(struct fb_var_screeninfo *var,
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+static int intel_fbdev_mmap(struct fb_info *info, struct vm_area_struct *vma)
+{
+	struct intel_fbdev *fbdev = to_intel_fbdev(info->par);
+	struct drm_gem_object *bo = drm_gem_fb_get_obj(&fbdev->fb->base, 0);
+	struct drm_i915_gem_object *obj = to_intel_bo(bo);
+
+	return i915_gem_fb_mmap(obj, vma);
+}
+
+static const struct fb_ops intelfb_ops = {
+	.owner = THIS_MODULE,
+	__FB_DEFAULT_DEFERRED_OPS_RDWR(intel_fbdev),
+	DRM_FB_HELPER_DEFAULT_OPS,
+	.fb_set_par = intel_fbdev_set_par,
+	.fb_blank = intel_fbdev_blank,
+	.fb_pan_display = intel_fbdev_pan_display,
+	__FB_DEFAULT_DEFERRED_OPS_DRAW(intel_fbdev),
+	.fb_mmap = intel_fbdev_mmap,
+};
+#else
 static const struct fb_ops intelfb_ops = {
 	.owner = THIS_MODULE,
 	DRM_FB_HELPER_DEFAULT_OPS,
@@ -135,6 +178,7 @@ static const struct fb_ops intelfb_ops = {
 	.fb_pan_display = intel_fbdev_pan_display,
 	.fb_blank = intel_fbdev_blank,
 };
+#endif
 
 static int intelfb_alloc(struct drm_fb_helper *helper,
 			 struct drm_fb_helper_surface_size *sizes)

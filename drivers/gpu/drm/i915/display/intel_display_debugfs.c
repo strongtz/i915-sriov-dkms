@@ -534,7 +534,11 @@ static void intel_dp_info(struct seq_file *m,
 static void intel_dp_mst_info(struct seq_file *m,
 			      struct intel_connector *intel_connector)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	bool has_audio = intel_connector->base.display_info.has_audio;
+#else
 	bool has_audio = intel_connector->port->has_audio;
+#endif
 
 	seq_printf(m, "\taudio support: %s\n", str_yes_no(has_audio));
 }

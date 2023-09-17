@@ -1143,7 +1143,9 @@ hdcp2_prepare_ake_init(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1181,7 +1183,9 @@ hdcp2_verify_rx_cert_prepare_km(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1217,7 +1221,9 @@ static int hdcp2_verify_hprime(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1251,7 +1257,9 @@ hdcp2_store_pairing_info(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1286,7 +1294,9 @@ hdcp2_prepare_lc_init(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1321,7 +1331,9 @@ hdcp2_verify_lprime(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1355,7 +1367,9 @@ static int hdcp2_prepare_skey(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1392,7 +1406,9 @@ hdcp2_verify_rep_topology_prepare_ack(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1429,7 +1445,9 @@ hdcp2_verify_mprime(struct intel_connector *connector,
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1461,7 +1479,9 @@ static int hdcp2_authenticate_port(struct intel_connector *connector)
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct hdcp_port_data *data = &dig_port->hdcp_port_data;
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -1493,7 +1513,9 @@ static int hdcp2_close_mei_session(struct intel_connector *connector)
 {
 	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
 	struct drm_i915_private *dev_priv = to_i915(connector->base.dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	struct i915_hdcp_arbiter *comp;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	struct i915_hdcp_master *comp;
 #else
 	struct i915_hdcp_comp_master *comp;
@@ -2234,7 +2256,11 @@ static int i915_hdcp_component_bind(struct device *i915_kdev,
 	drm_dbg(&dev_priv->drm, "I915 HDCP comp bind\n");
 	mutex_lock(&dev_priv->display.hdcp.comp_mutex);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+	dev_priv->display.hdcp.master = (struct i915_hdcp_arbiter *)data;
+#else
 	dev_priv->display.hdcp.master = (struct i915_hdcp_master *)data;
+#endif
 	dev_priv->display.hdcp.master->hdcp_dev = mei_kdev;
 #else
 	dev_priv->display.hdcp.master = (struct i915_hdcp_comp_master *)data;
