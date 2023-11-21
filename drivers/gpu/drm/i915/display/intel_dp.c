@@ -3884,7 +3884,7 @@ intel_dp_mst_hpd_irq(struct intel_dp *intel_dp, u8 *esi, u8 *ack)
 {
 	bool handled = false;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,99)) || LINUX_VERSION_CODE > KERNEL_VERSION(6,4,5)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,99)) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	drm_dp_mst_hpd_irq_handle_event(&intel_dp->mst_mgr, esi, ack, &handled);
 #else
 	drm_dp_mst_hpd_irq(&intel_dp->mst_mgr, esi, &handled);
@@ -3966,7 +3966,7 @@ intel_dp_check_mst_status(struct intel_dp *intel_dp)
 		if (!intel_dp_ack_sink_irq_esi(intel_dp, ack))
 			drm_dbg_kms(&i915->drm, "Failed to ack ESI\n");
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,99)) || LINUX_VERSION_CODE > KERNEL_VERSION(6,4,5)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,99)) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 		if (ack[1] & (DP_DOWN_REP_MSG_RDY | DP_UP_REQ_MSG_RDY))
                         drm_dp_mst_hpd_irq_send_new_request(&intel_dp->mst_mgr);
 #endif
