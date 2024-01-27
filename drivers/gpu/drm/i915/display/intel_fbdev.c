@@ -94,10 +94,15 @@ static void intel_fbdev_invalidate(struct intel_fbdev *ifbdev)
 	intel_frontbuffer_invalidate(to_frontbuffer(ifbdev), ORIGIN_CPU);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0) && LINUX_VERSION_CODE < KERNEL_VERSION(6,6,0)
 FB_GEN_DEFAULT_DEFERRED_IO_OPS(intel_fbdev,
 				  drm_fb_helper_damage_range,
 				  drm_fb_helper_damage_area)
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
+FB_GEN_DEFAULT_DEFERRED_IOMEM_OPS(intel_fbdev,
+                                  drm_fb_helper_damage_range,
+                                  drm_fb_helper_damage_area)
 #endif
 
 static int intel_fbdev_set_par(struct fb_info *info)
