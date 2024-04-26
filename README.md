@@ -3,6 +3,9 @@
 Originally from [linux-intel-lts](https://github.com/intel/linux-intel-lts/tree/lts-v5.15.49-adl-linux-220826T092047Z/drivers/gpu/drm/i915)
 Update to [6.1.12](https://github.com/intel/linux-intel-lts/tree/lts-v6.1.12-linux-230415T124447Z/drivers/gpu/drm/i915)
 
+## PVE 8.2 and Kernel 6.8
+At the time of writing (Apr 26 2024), this dkms will not work with Kernel 6.8, so you should consider pinning the kernel with `proxmox-boot-tool kernel pin` before proceeding with the upgrade. You can also list all available kernels with `proxmox-boot-tool kernel list`.
+
 ## Update Notice
 
 The SR-IOV enablement commandline is changed since [commit #092d1cf](https://github.com/strongtz/i915-sriov-dkms/commit/092d1cf126f31eca3c1de4673e537c3c5f1e6ab4). If you are updating from previous version, please modify `i915.enable_guc=7` to **`i915.enable_guc=3 i915.max_vfs=7`** in your kernel command line.
@@ -56,6 +59,11 @@ You can create up to 7 VFs on UHD Graphics 770
 We will need to run the same driver under Linux guests. We can repeat the steps for installing the driver. However, when modifying command line defaults, we use `i915.enable_guc=3` instead of `i915.enable_guc=3 i915.max_vfs=7`. Furthermore, we don't need to use `sysfsutils` to create any more VFs since we ARE using a VF.
 Once that's done, update `grub` and `initramfs`, then reboot. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel.
 Optionally, install `vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
+
+## Windows Guest
+It is required to set the host CPU type in Proxmox to "host". I was able to get it working without further fiddling in the config files but your mileage may vary (i5-12500T with UHD 770).
+I've used Intel gfx version 4316 to get it working. Here's a link to download it.
+(https://www.intel.com/content/www/us/en/download/741626/780560/intel-arc-pro-graphics-windows.html)
 
 ## Debian Guest Installation
 
