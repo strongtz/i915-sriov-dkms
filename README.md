@@ -46,7 +46,7 @@ You can create up to 7 VFs on UHD Graphics 770
 5. Execute command `dkms install -m i915-sriov-dkms -v 6.1 --force`. `-m` argument denotes the package name, and it should be the same as the folder name which contains the package content. `-v` argument denotes the package version, which we have specified in the `dkms.conf` as `6.1`. `--force` argument will reinstall the module even if a module with same name has been already installed.
 6. The kernel module should begin building.
 7. Once finished, we need to make a few changes to the kernel commandline. `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to 'intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
-8. Update `grub` and `initrramfs` by executing `update-grub` and `update-initramfs -u`
+8. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
 9. In order to enable the VFs, we need to modify some variables in the `sysfs`. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
 10. Reboot the system.
 11. When the system is back up again, you should see the number of VFs you specified show up under 02:00.1 - 02:00.7. Again, assuming your iGPU is on 00:02 bus.
