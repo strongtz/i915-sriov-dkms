@@ -82,8 +82,15 @@ static int intel_dp_mst_find_vcpi_slots_for_bpp(struct intel_encoder *encoder,
 	}
 
 	for (bpp = max_bpp; bpp >= min_bpp; bpp -= step) {
-	    crtc_state->pbn = drm_dp_calc_pbn_mode(adjusted_mode->crtc_clock,
-      						       dsc ? bpp << 4 : bpp);
+	    #if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,14)
+			crtc_state->pbn = drm_dp_calc_pbn_mode(adjusted_mode->crtc_clock,
+						       dsc ? bpp << 4 : bpp,
+						       dsc);
+		#endif
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,14)
+				crtc_state->pbn = drm_dp_calc_pbn_mode(adjusted_mode->crtc_clock,
+								dsc ? bpp << 4 : bpp);
+		#endif
 		drm_dbg_kms(&i915->drm, "Trying bpp %d\n", bpp);
 
 		slots = drm_dp_atomic_find_time_slots(state, &intel_dp->mst_mgr,
@@ -894,10 +901,16 @@ intel_dp_mst_mode_valid_ctx(struct drm_connector *connector,
 	ret = drm_modeset_lock(&mgr->base.lock, ctx);
 	if (ret)
 		return ret;
-	if (mode_rate > max_rate || mode->clock > max_dotclk ||
-	    drm_dp_calc_pbn_mode(mode->clock, min_bpp) > port->full_pbn) {
-	    *status = MODE_CLOCK_HIGH;
-	    return 0;
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,14)
+	    if (mode_rate > max_rate || mode->clock > max_dotclk ||
+	        drm_dp_calc_pbn_mode(mode->clock, min_bpp, false) > port->full_pbn) {
+    #endif
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,14)
+	    if (mode_rate > max_rate || mode->clock > max_dotclk ||
+	        drm_dp_calc_pbn_mode(mode->clock, min_bpp) > port->full_pbn) {
+    #endif
+		*status = MODE_CLOCK_HIGH;
+		return 0;
 	}
 
 	if (mode->clock < 10000) {
