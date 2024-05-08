@@ -554,12 +554,14 @@ static void intel_mst_disable_dp(struct intel_atomic_state *state,
 
 	intel_hdcp_disable(intel_mst->connector);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,5) || (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,24) && LINUX_VERSION_CODE < KERNEL_VERSION(6,2,0) )
 	drm_dp_remove_payload(&intel_dp->mst_mgr, new_mst_state,
 			      old_payload, new_payload);
 #else
 	drm_dp_remove_payload(&intel_dp->mst_mgr, mst_state,
 			      drm_atomic_get_mst_payload_state(mst_state, connector->port));
+#endif
 #endif
 
 	intel_audio_codec_disable(encoder, old_crtc_state, old_conn_state);

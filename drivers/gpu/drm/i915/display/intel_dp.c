@@ -4536,14 +4536,21 @@ intel_dp_update_dfp(struct intel_dp *intel_dp,
 	/* FIXME: Get rid of drm_edid_raw() */
 	edid = drm_edid_raw(drm_edid);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	intel_dp->dfp.max_bpc =
 		drm_dp_downstream_max_bpc(intel_dp->dpcd,
 					  intel_dp->downstream_ports, edid);
+#else
+	intel_dp->dfp.max_bpc =
+		drm_dp_downstream_max_bpc(intel_dp->dpcd,
+					  intel_dp->downstream_ports, drm_edid);
+#endif
 
 	intel_dp->dfp.max_dotclock =
 		drm_dp_downstream_max_dotclock(intel_dp->dpcd,
 					       intel_dp->downstream_ports);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	intel_dp->dfp.min_tmds_clock =
 		drm_dp_downstream_min_tmds_clock(intel_dp->dpcd,
 						 intel_dp->downstream_ports,
@@ -4552,6 +4559,16 @@ intel_dp_update_dfp(struct intel_dp *intel_dp,
 		drm_dp_downstream_max_tmds_clock(intel_dp->dpcd,
 						 intel_dp->downstream_ports,
 						 edid);
+#else
+	intel_dp->dfp.min_tmds_clock =
+		drm_dp_downstream_min_tmds_clock(intel_dp->dpcd,
+						 intel_dp->downstream_ports,
+						 drm_edid);
+	intel_dp->dfp.max_tmds_clock =
+		drm_dp_downstream_max_tmds_clock(intel_dp->dpcd,
+						 intel_dp->downstream_ports,
+						 drm_edid);
+#endif
 
 	intel_dp->dfp.pcon_max_frl_bw =
 		drm_dp_get_pcon_max_frl_bw(intel_dp->dpcd,
@@ -5117,7 +5134,7 @@ static const struct drm_connector_funcs intel_dp_connector_funcs = {
 	.destroy = intel_connector_destroy,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 	.atomic_duplicate_state = intel_digital_connector_duplicate_state,
-	.oob_hotplug_event = intel_dp_oob_hotplug_event,
+	.oob_hotplug_event = (void *) intel_dp_oob_hotplug_event,
 };
 
 static const struct drm_connector_helper_funcs intel_dp_connector_helper_funcs = {

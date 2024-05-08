@@ -1112,7 +1112,11 @@ static int intel_fb_offset_to_xy(int *x, int *y,
 		return -EINVAL;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	height = drm_framebuffer_plane_height(fb->height, fb, color_plane);
+#else
+	height = drm_format_info_plane_height(fb->format, fb->height, color_plane);
+#endif
 	height = ALIGN(height, intel_tile_height(fb, color_plane));
 
 	/* Catch potential overflows early */

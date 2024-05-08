@@ -166,7 +166,11 @@ struct i915_gem_mm {
 
 	struct notifier_block oom_notifier;
 	struct notifier_block vmap_notifier;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	struct shrinker shrinker;
+#else
+	struct shrinker *shrinker;
+#endif
 
 #ifdef CONFIG_MMU_NOTIFIER
 	/**

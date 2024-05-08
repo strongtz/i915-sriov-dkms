@@ -21,6 +21,10 @@
 #include "intel_pxp_tee.h"
 #include "intel_pxp_types.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,7,0)
+#define PXP_TRANSPORT_TIMEOUT_MS 5000 /* 5 sec */
+#endif
+
 static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 				    void *msg_in, u32 msg_in_size,
 				    void *msg_out, u32 msg_out_max_size,
@@ -41,13 +45,23 @@ static int intel_pxp_tee_io_message(struct intel_pxp *pxp,
 		goto unlock;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	ret = pxp_component->ops->send(pxp_component->tee_dev, msg_in, msg_in_size);
+#else
+	ret = pxp_component->ops->send(pxp_component->tee_dev, msg_in, msg_in_size,
+				       PXP_TRANSPORT_TIMEOUT_MS);
+#endif
 	if (ret) {
 		drm_err(&i915->drm, "Failed to send PXP TEE message\n");
 		goto unlock;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	ret = pxp_component->ops->recv(pxp_component->tee_dev, msg_out, msg_out_max_size);
+#else
+	ret = pxp_component->ops->recv(pxp_component->tee_dev, msg_out, msg_out_max_size,
+				       PXP_TRANSPORT_TIMEOUT_MS);
+#endif
 	if (ret < 0) {
 		drm_err(&i915->drm, "Failed to receive PXP TEE message\n");
 		goto unlock;
