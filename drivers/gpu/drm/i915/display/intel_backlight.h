@@ -7,6 +7,7 @@
 #define __INTEL_BACKLIGHT_H__
 
 #include <linux/types.h>
+#include <linux/version.h>
 
 struct drm_connector_state;
 struct intel_atomic_state;
@@ -35,6 +36,15 @@ void intel_backlight_set_pwm_level(const struct drm_connector_state *conn_state,
 u32 intel_backlight_invert_pwm_level(struct intel_connector *connector, u32 level);
 u32 intel_backlight_level_to_pwm(struct intel_connector *connector, u32 level);
 u32 intel_backlight_level_from_pwm(struct intel_connector *connector, u32 val);
+
+/* it was renamed to pwm_apply_might_sleep from 6.6.33 and 6.8 but not yet in 6.7 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 33) || \
+    (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0) && \
+     LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0))
+#define APPLY_PWM_STATE(pwm, pwm_state) pwm_apply_state(pwm, pwm_state)
+#else
+#define APPLY_PWM_STATE(pwm, pwm_state) pwm_apply_might_sleep(pwm, pwm_state)
+#endif
 
 #if IS_ENABLED(CONFIG_BACKLIGHT_CLASS_DEVICE)
 int intel_backlight_device_register(struct intel_connector *connector);
