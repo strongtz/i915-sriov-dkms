@@ -103,7 +103,8 @@ static int vf_handshake_with_guc(struct intel_iov *iov)
 		goto fail;
 
 	/* XXX we only support one version, there must be a match */
-	if (major != GUC_VF_VERSION_LATEST_MAJOR || (minor != GUC_VF_VERSION_LATEST_MINOR && minor != GUC_VF_VERSION_ALTERNATE_MINOR))
+        /* This line was changed by PR #126 and the additional checks for the ALTERNATE_MINOR is causing problems in PVE 8.1/6.15-13. I do not know if this will break compatibility with older versions/kernels so use at your own risk. */
+	if (major != GUC_VF_VERSION_LATEST_MAJOR || minor != GUC_VF_VERSION_LATEST_MINOR)
 		goto fail;
 
 	guc_info(iov_to_guc(iov), "interface version %u.%u.%u.%u\n",
