@@ -24,6 +24,23 @@ if($(KREV) < $(3)) {print 0} else { print 1 } \
 }}}}}' \
 )
 
+
+EXTRAVERSION        := $(shell var=$(KVER); echo $${var#*-})
+EXTRAVERSION_NAME   := $(shell var=$(EXTRAVERSION); echo $${var#*-})
+EXTRAVERSION_DEFINE := $(shell var=$(EXTRAVERSION_NAME); var=$$(echo $$var | awk '{print toupper($$0)}'); echo EXTRAVERSION_$${var:-EMPTY})
+EXTRAVERSION        := $(shell var=$(EXTRAVERSION); echo $${var%-*})
+EXTRAVERSION_MAJOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $$var | awk -F. '{print $$1}'); echo $${var:-0})
+EXTRAVERSION_MINOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $$var | awk -F. '{print $$2}'); echo $${var:-0})
+
+version:
+$(info VERSION_MAJOR=$(KMAJ))
+$(info VERSION_MINOR=$(KMIN))
+$(info VERSION_PATCH=$(KREV))
+$(info EXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR))
+$(info EXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR))
+$(info EXTRAVERSION_NAME=$(EXTRAVERSION_NAME))
+$(info EXTRAVERSION_DEFINE=$(EXTRAVERSION_DEFINE))
+
 # ----------------------------------------------------------------------------
 # i915 module - copied from drivers/gpu/drm/i915/Makefile
 #
@@ -33,7 +50,10 @@ EXTRA_CFLAGS += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
 				-DCONFIG_MMU_NOTIFIER -DCONFIG_DRM_I915_COMPRESS_ERROR \
 				-DCONFIG_COMPAT -DCONFIG_PERF_EVENTS -DCONFIG_PCI_IOV \
 				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
-				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP
+				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP \
+				-DEXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR) \
+				-DEXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR) \
+				-D$(EXTRAVERSION_DEFINE)
 
 KBUILD_MODPOST_WARN = 1
 

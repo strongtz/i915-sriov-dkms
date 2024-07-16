@@ -103,7 +103,7 @@ static int vf_handshake_with_guc(struct intel_iov *iov)
 		goto fail;
 
 	/* XXX we only support one version, there must be a match */
-	if (major != GUC_VF_VERSION_LATEST_MAJOR || (minor != GUC_VF_VERSION_LATEST_MINOR && minor != GUC_VF_VERSION_ALTERNATE_MINOR))
+	if (major != GUC_VF_VERSION_LATEST_MAJOR || minor != GUC_VF_VERSION_LATEST_MINOR)
 		goto fail;
 
 	guc_info(iov_to_guc(iov), "interface version %u.%u.%u.%u\n",

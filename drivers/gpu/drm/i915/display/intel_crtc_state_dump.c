@@ -3,7 +3,12 @@
  * Copyright © 2022 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_edid.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#include <drm/drm_eld.h>
+#endif
 
 #include "i915_drv.h"
 #include "intel_crtc_state_dump.h"

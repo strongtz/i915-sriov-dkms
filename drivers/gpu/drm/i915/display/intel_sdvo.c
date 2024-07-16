@@ -30,11 +30,15 @@
 #include <linux/export.h>
 #include <linux/i2c.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_hdmi_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#include <drm/drm_eld.h>
+#endif
 
 #include "i915_drv.h"
 #include "i915_reg.h"
@@ -48,6 +52,9 @@
 #include "intel_gmbus.h"
 #include "intel_hdmi.h"
 #include "intel_hotplug.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#include "intel_i2c.h"
+#endif
 #include "intel_panel.h"
 #include "intel_sdvo.h"
 #include "intel_sdvo_regs.h"

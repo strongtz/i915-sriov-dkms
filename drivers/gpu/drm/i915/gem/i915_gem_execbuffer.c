@@ -10,6 +10,9 @@
 #include <linux/uaccess.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#include <drm/drm_auth.h>
+#endif
 #include <drm/drm_syncobj.h>
 
 #include "display/intel_frontbuffer.h"

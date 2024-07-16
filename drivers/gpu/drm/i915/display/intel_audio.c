@@ -23,8 +23,12 @@
 
 #include <linux/component.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
 
 #include <drm/drm_edid.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#include <drm/drm_eld.h>
+#endif
 #include <drm/i915_component.h>
 
 #include "i915_drv.h"

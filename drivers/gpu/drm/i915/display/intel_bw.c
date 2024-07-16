@@ -3,6 +3,8 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_atomic_state_helper.h>
 
 #include "i915_drv.h"
