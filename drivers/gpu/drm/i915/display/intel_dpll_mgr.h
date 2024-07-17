@@ -29,12 +29,14 @@
 
 #include "intel_wakeref.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,8,0)
 /*FIXME: Move this to a more appropriate place. */
 #define abs_diff(a, b) ({			\
 	typeof(a) __a = (a);			\
 	typeof(b) __b = (b);			\
 	(void) (&__a == &__b);			\
 	__a > __b ? (__a - __b) : (__b - __a); })
+#endif
 
 enum tc_port;
 struct drm_i915_private;

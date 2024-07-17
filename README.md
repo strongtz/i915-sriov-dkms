@@ -1,59 +1,69 @@
-# Linux i915 driver with SR-IOV support (dkms module) for linux 6.1 ~ linux 6.5
+# Linux i915 driver (dkms module) with SR-IOV support for linux 6.1 ~ linux 6.8
 
 Originally from [linux-intel-lts](https://github.com/intel/linux-intel-lts/tree/lts-v5.15.49-adl-linux-220826T092047Z/drivers/gpu/drm/i915)
 Update to [6.1.12](https://github.com/intel/linux-intel-lts/tree/lts-v6.1.12-linux-230415T124447Z/drivers/gpu/drm/i915)
 
-## PVE 8.2 and Kernel 6.8
-At the time of writing (Apr 26 2024), this dkms will not work with Kernel 6.8, so you should consider pinning the kernel with `proxmox-boot-tool kernel pin` before proceeding with the upgrade. You can also list all available kernels with `proxmox-boot-tool kernel list`.
-
 ## Update Notice
 
-The SR-IOV enablement commandline is changed since [commit #092d1cf](https://github.com/strongtz/i915-sriov-dkms/commit/092d1cf126f31eca3c1de4673e537c3c5f1e6ab4). If you are updating from previous version, please modify `i915.enable_guc=7` to **`i915.enable_guc=3 i915.max_vfs=7`** in your kernel command line.
+The i915 module parameter to enable SR-IOV functionality has changed since [commit #092d1cf](https://github.com/strongtz/i915-sriov-dkms/commit/092d1cf126f31eca3c1de4673e537c3c5f1e6ab4). If you are updating from previous version, please modify `i915.enable_guc=7` to **`i915.enable_guc=3 i915.max_vfs=7`** in your kernel command line or in the corresponding modprobe config file.
 
-## Notice
+## Warning
 
 This package is **highly experimental**, you should only use it when you know what you are doing.
 
-You need to install this dkms module in **both host and VM!**
+You need to install this dkms module in **both host and guest!**
 
 For Arch Linux users, it is available in AUR. [i915-sriov-dkms-git](https://aur.archlinux.org/packages/i915-sriov-dkms-git)
 
 Tested kernel versions: 
 
-* `pve-kernel-6.1.0-1-pve`~`6.2.9-1-pve` on PVE VM Host
+* `pve-kernel-6.1.0-1-pve`~`6.2.9-1-pve`, `proxmox-kernel-6.5.13-3-pve`, `proxmox-kernel-6.5.13-5-pve`, `proxmox-kernel-6.8.8-2-pve` on Proxmox VE Host
 * `gentoo-sources-6.1.19-gentoo`~`6.2.11-gentoo` on Gentoo VM Guest
 
 Tested usages:
 
 - VA-API video acceleration in VM (need to remove any other display device such as virtio-gpu)
 
-## My testing cmdline
 
+## Required Kernel Parameters
 ```
 intel_iommu=on i915.enable_guc=3 i915.max_vfs=7
 ```
 
-## Creating virtual functions
+## Creating Virtual Functions (VF)
 
 ```
 echo 2 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs
 ```
 
-You can create up to 7 VFs on UHD Graphics 770
+You can create up to 7 VFs on Intel UHD Graphics 
+
+## PVE Host Installation Steps (Tested Kernel 6.5 and 6.8)
+1. Clone this repo
+1. Install build tools: `apt install build-* dkms`
+1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8.8-2-pve proxmox-kernel-6.8.8-2-pve` (for unsigned kernel).
+1. Change into the root of the cloned repository and run `dkms add .`.
+1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.07.17 --force`.
+1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
+1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
+1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
+1. Reboot the system.
+1. When the system is back up again, you should see the number of VFs under 02:00.1 - 02:00.7. Again, assuming your iGPU is on 00:02 bus.
+1. You can passthrough the VFs to LXCs or VMs. However, never touch the PF which is 02:00.0 under any circumstances.
 
 ## PVE Host Installation Steps (Tested Kernel 6.1 and 6.2) 
 1. Clone this repo
-2. Install some tools. `apt install build-* dkms`
-3. Go inside the repo, edit the `dkms.conf`file, change the `PACKAGE_NAME` to `i915-sriov-dkms`, and change the `PACKAGE_VERSION` to `6.1`. Save the file.
-4. Move the entire content of the repository to `/usr/src/i915-sriov-dkms-6.1`. The folder name will be the DKMS package name.
-5. Execute command `dkms install -m i915-sriov-dkms -v 6.1 --force`. `-m` argument denotes the package name, and it should be the same as the folder name which contains the package content. `-v` argument denotes the package version, which we have specified in the `dkms.conf` as `6.1`. `--force` argument will reinstall the module even if a module with same name has been already installed.
-6. The kernel module should begin building.
-7. Once finished, we need to make a few changes to the kernel commandline. `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to 'intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
-8. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
-9. In order to enable the VFs, we need to modify some variables in the `sysfs`. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
-10. Reboot the system.
-11. When the system is back up again, you should see the number of VFs you specified show up under 02:00.1 - 02:00.7. Again, assuming your iGPU is on 00:02 bus.
-12. You can passthrough the VFs to LXCs or VMs. However, never touch the PF which is 02:00.0 under any circumstances.
+1. Install some tools. `apt install build-* dkms`
+1. Go inside the repo, edit the `dkms.conf`file, change the `PACKAGE_NAME` to `i915-sriov-dkms`, and change the `PACKAGE_VERSION` to `6.1`. Save the file.
+1. Move the entire content of the repository to `/usr/src/i915-sriov-dkms-6.1`. The folder name will be the DKMS package name.
+1. Execute command `dkms install -m i915-sriov-dkms -v 6.1 --force`. `-m` argument denotes the package name, and it should be the same as the folder name which contains the package content. `-v` argument denotes the package version, which we have specified in the `dkms.conf` as `6.1`. `--force` argument will reinstall the module even if a module with same name has been already installed.
+1. The kernel module should begin building.
+1. Once finished, we need to make a few changes to the kernel commandline. `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to 'intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
+1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
+1. In order to enable the VFs, we need to modify some variables in the `sysfs`. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
+1. Reboot the system.
+1. When the system is back up again, you should see the number of VFs you specified show up under 02:00.1 - 02:00.7. Again, assuming your iGPU is on 00:02 bus.
+1. You can passthrough the VFs to LXCs or VMs. However, never touch the PF which is 02:00.0 under any circumstances.
 
 ## Linux Guest Installation Steps (Tested Kernel 6.2)
 We will need to run the same driver under Linux guests. We can repeat the steps for installing the driver. However, when modifying command line defaults, we use `i915.enable_guc=3` instead of `i915.enable_guc=3 i915.max_vfs=7`. Furthermore, we don't need to use `sysfsutils` to create any more VFs since we ARE using a VF.

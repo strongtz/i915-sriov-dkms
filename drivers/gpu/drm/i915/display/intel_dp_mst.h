@@ -6,6 +6,27 @@
 #ifndef __INTEL_DP_MST_H__
 #define __INTEL_DP_MST_H__
 
+#include <extraversion.h>
+
+#if defined EXTRAVERSION_PVE
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,5,13)) \
+ || (LINUX_VERSION_CODE == KERNEL_VERSION(6,5,13) && EXTRAVERSION_CODE < EXTRAVERSION(4,0))
+#define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
+#else
+#define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp)
+#endif
+
+#else
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,14)
+#define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
+#else
+#define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp)
+#endif
+
+#endif
+
 #include <linux/types.h>
 
 struct intel_atomic_state;

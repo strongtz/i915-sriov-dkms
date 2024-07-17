@@ -115,7 +115,11 @@ static int get_huge_pages(struct drm_i915_gem_object *obj)
 		do {
 			struct page *page;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,8,0)
 			GEM_BUG_ON(order >= MAX_ORDER);
+#else
+			GEM_BUG_ON(order >= MAX_PAGE_ORDER);
+#endif
 			page = alloc_pages(GFP | __GFP_ZERO, order);
 			if (!page)
 				goto err;

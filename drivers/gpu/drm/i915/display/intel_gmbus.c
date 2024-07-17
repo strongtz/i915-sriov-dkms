@@ -40,6 +40,10 @@
 #include "intel_display_types.h"
 #include "intel_gmbus.h"
 #include "intel_gmbus_regs.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#include "intel_i2c.h"
+#endif
+
 
 struct intel_gmbus {
 	struct i2c_adapter adapter;

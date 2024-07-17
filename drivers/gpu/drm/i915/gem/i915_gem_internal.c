@@ -36,7 +36,11 @@ static int i915_gem_object_get_pages_internal(struct drm_i915_gem_object *obj)
 	struct sg_table *st;
 	struct scatterlist *sg;
 	unsigned int npages; /* restricted by sg_alloc_table */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,8,0)
 	int max_order = MAX_ORDER;
+#else
+	int max_order = MAX_PAGE_ORDER;
+#endif
 	unsigned int max_segment;
 	gfp_t gfp;
 

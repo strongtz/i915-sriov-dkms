@@ -1,28 +1,30 @@
-KVER        ?= $(shell uname -r)
-KBASE       := /lib/modules/$(KVER)
-KSRC        := $(KBASE)/source
-KBUILD      := $(KBASE)/build
-MOD_DIR     := $(KBASE)/kernel
+KERNELRELEASE       ?= $(shell uname -r)
+KERNELVERSION       := $(shell var=$(KERNELRELEASE); echo $${var%%-*})
 
-INC_INCPATH := $(KBUILD_EXTMOD)/include
-DRMD        := drivers/gpu/drm/
+EXTRAVERSION        := $(shell var=$(KERNELRELEASE); echo $${var#*-})
+EXTRAVERSION_MAJOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $${var%-*} | awk -F. '{x=$$1+0; print x}'); echo $${var:-0})
+EXTRAVERSION_MINOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $${var%-*} | awk -F. '{x=$$2+0; print x}'); echo $${var:-0})
+EXTRAVERSION_NAME   := $(shell var=$(EXTRAVERSION); echo $${var#*-})
+EXTRAVERSION_DEFINE := $(shell var=$(EXTRAVERSION_NAME); var=$$(echo $$var  | sed 's/-/_/'| awk '{print toupper($$0)}'); echo EXTRAVERSION_$${var:-EMPTY})
 
-# Function for kernel version check
-KMAJ = $(shell echo $(KVER) | \
-sed -e 's/^\([0-9][0-9]*\)\.[0-9][0-9]*\.[0-9][0-9]*.*/\1/')
-KMIN = $(shell echo $(KVER) | \
-sed -e 's/^[0-9][0-9]*\.\([0-9][0-9]*\)\.[0-9][0-9]*.*/\1/')
-KREV = $(shell echo $(KVER) | \
-sed -e 's/^[0-9][0-9]*\.[0-9][0-9]*\.\([0-9][0-9]*\).*/\1/')
+LSBRELEASE          := $(shell lsb_release -rs 2> /dev/null || cat /etc/*-release | grep '^VERSION_ID=' | head -n1 | cut -d '=' -f2 | xargs)
+LSBRELEASE_MAJOR    := $(shell var=$$(echo $(LSBRELEASE) | awk -F. '{x=$$1+0; print x}'); echo $${var:-0})
+LSBRELEASE_MINOR    := $(shell var=$$(echo $(LSBRELEASE) | awk -F. '{x=$$2+0; print x}'); echo $${var:-0})
+LSBRELEASE_NAME     := $(shell lsb_release -is 2> /dev/null || cat /etc/*-release | grep '^ID=' | head -n1 | cut -d '=' -f2 | xargs)
+LSBRELEASE_DEFINE   := $(shell var=$(LSBRELEASE_NAME); var=$$(echo $$var | sed 's/-/_/' | awk '{print toupper($$0)}'); echo RELEASE_$${var:-EMPTY})
 
-kver_ge = $(shell \
-echo test | awk '{if($(KMAJ) < $(1)) {print 0} else { \
-if($(KMAJ) > $(1)) {print 1} else { \
-if($(KMIN) < $(2)) {print 0} else { \
-if($(KMIN) > $(2)) {print 1} else { \
-if($(KREV) < $(3)) {print 0} else { print 1 } \
-}}}}}' \
-)
+version:
+$(info KERNELRELEASE=$(KERNELRELEASE))
+$(info KERNELVERSION=$(KERNELVERSION))
+$(info EXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR))
+$(info EXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR))
+$(info EXTRAVERSION_NAME=$(EXTRAVERSION_NAME))
+$(info EXTRAVERSION_DEFINE=$(EXTRAVERSION_DEFINE))
+$(info LSBRELEASE=$(LSBRELEASE))
+$(info LSBRELEASE_MAJOR=$(LSBRELEASE_MAJOR))
+$(info LSBRELEASE_MINOR=$(LSBRELEASE_MINOR))
+$(info LSBRELEASE_NAME=$(LSBRELEASE_NAME))
+$(info LSBRELEASE_DEFINE=$(LSBRELEASE_DEFINE))
 
 # ----------------------------------------------------------------------------
 # i915 module - copied from drivers/gpu/drm/i915/Makefile
@@ -33,7 +35,13 @@ EXTRA_CFLAGS += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
 				-DCONFIG_MMU_NOTIFIER -DCONFIG_DRM_I915_COMPRESS_ERROR \
 				-DCONFIG_COMPAT -DCONFIG_PERF_EVENTS -DCONFIG_PCI_IOV \
 				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
-				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP
+				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP \
+				-DEXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR) \
+				-DEXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR) \
+				-D$(DEFINE_EXTRAVERSION) \
+				-DLSBRELEASE_MAJOR=$(LSBRELEASE_MAJOR) \
+				-DLSBRELEASE_MINOR=$(LSBRELEASE_MINOR) \
+				-D$(LSBRELEASE_DEFINE)
 
 KBUILD_MODPOST_WARN = 1
 
@@ -390,7 +398,7 @@ obj-$(CONFIG_DRM_I915)           += i915.o
 CFLAGS_i915_trace_points.o := -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915
 
 
-i915-y := $(addprefix $(DRMD)i915/,$(i915-y))
+i915-y := $(addprefix drivers/gpu/drm/i915/,$(i915-y))
 
 # ----------------------------------------------------------------------------
 # common to all modules
@@ -401,8 +409,8 @@ i915-y := $(addprefix $(DRMD)i915/,$(i915-y))
 # structs and declarations and so forth that we need for the backport to build.
 
 LINUXINCLUDE := \
-    -I$(INC_INCPATH)/ \
-    -I$(INC_INCPATH)/trace \
+    -I$(KBUILD_EXTMOD)/include \
+    -I$(KBUILD_EXTMOD)/include/trace \
     -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915 \
     $(LINUXINCLUDE)
 
