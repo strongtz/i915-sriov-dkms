@@ -2,7 +2,7 @@
 
 _pkgbase=i915-sriov-dkms
 pkgname=i915-sriov-dkms-git
-pkgver=6.1.11
+pkgver=2024.07.16
 pkgrel=1
 pkgdesc="Linux i915 module patched with SR-IOV support"
 arch=('x86_64')
@@ -23,9 +23,4 @@ package() {
   echo "* Copying module into /usr/src..."
   install -dm755 "${pkgdir}/usr/src/${_pkgbase}-${pkgver}"
   cp -r ${srcdir}/$_pkgbase/* "${pkgdir}/usr/src/${_pkgbase}-${pkgver}"
-
-  # Set name and version
-  sed -e "s/@_PKGBASE@/${_pkgbase}/" \
-      -e "s/@PKGVER@/${pkgver}/" \
-      -i "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
 }
