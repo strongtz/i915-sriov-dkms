@@ -1,41 +1,14 @@
-KVER        ?= $(shell uname -r)
-KBASE       := /lib/modules/$(KVER)
-KSRC        := $(KBASE)/source
-KBUILD      := $(KBASE)/build
-MOD_DIR     := $(KBASE)/kernel
-
-INC_INCPATH := $(KBUILD_EXTMOD)/include
-DRMD        := drivers/gpu/drm/
-
-# Function for kernel version check
-KMAJ = $(shell echo $(KVER) | \
-sed -e 's/^\([0-9][0-9]*\)\.[0-9][0-9]*\.[0-9][0-9]*.*/\1/')
-KMIN = $(shell echo $(KVER) | \
-sed -e 's/^[0-9][0-9]*\.\([0-9][0-9]*\)\.[0-9][0-9]*.*/\1/')
-KREV = $(shell echo $(KVER) | \
-sed -e 's/^[0-9][0-9]*\.[0-9][0-9]*\.\([0-9][0-9]*\).*/\1/')
-
-kver_ge = $(shell \
-echo test | awk '{if($(KMAJ) < $(1)) {print 0} else { \
-if($(KMAJ) > $(1)) {print 1} else { \
-if($(KMIN) < $(2)) {print 0} else { \
-if($(KMIN) > $(2)) {print 1} else { \
-if($(KREV) < $(3)) {print 0} else { print 1 } \
-}}}}}' \
-)
-
-
-EXTRAVERSION        := $(shell var=$(KVER); echo $${var#*-})
+KERNELRELEASE       ?= $(shell uname -r)
+KERNELVERSION       := $(shell var=$(KERNELRELEASE); echo $${var%%-*})
+EXTRAVERSION        := $(shell var=$(KERNELRELEASE); echo $${var#*-})
 EXTRAVERSION_NAME   := $(shell var=$(EXTRAVERSION); echo $${var#*-})
 EXTRAVERSION_DEFINE := $(shell var=$(EXTRAVERSION_NAME); var=$$(echo $$var | awk '{print toupper($$0)}'); echo EXTRAVERSION_$${var:-EMPTY})
-EXTRAVERSION        := $(shell var=$(EXTRAVERSION); echo $${var%-*})
-EXTRAVERSION_MAJOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $$var | awk -F. '{print $$1}'); echo $${var:-0})
-EXTRAVERSION_MINOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $$var | awk -F. '{print $$2}'); echo $${var:-0})
+EXTRAVERSION_MAJOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $${var%-*} | awk -F. '{print $$1}'); echo $${var:-0})
+EXTRAVERSION_MINOR  := $(shell var=$(EXTRAVERSION); var=$$(echo $${var%-*} | awk -F. '{print $$2}'); echo $${var:-0})
 
 version:
-$(info VERSION_MAJOR=$(KMAJ))
-$(info VERSION_MINOR=$(KMIN))
-$(info VERSION_PATCH=$(KREV))
+$(info KERNELRELEASE=$(KERNELRELEASE))
+$(info KERNELVERSION=$(KERNELVERSION))
 $(info EXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR))
 $(info EXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR))
 $(info EXTRAVERSION_NAME=$(EXTRAVERSION_NAME))
@@ -410,7 +383,7 @@ obj-$(CONFIG_DRM_I915)           += i915.o
 CFLAGS_i915_trace_points.o := -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915
 
 
-i915-y := $(addprefix $(DRMD)i915/,$(i915-y))
+i915-y := $(addprefix drivers/gpu/drm/i915/,$(i915-y))
 
 # ----------------------------------------------------------------------------
 # common to all modules
@@ -421,8 +394,8 @@ i915-y := $(addprefix $(DRMD)i915/,$(i915-y))
 # structs and declarations and so forth that we need for the backport to build.
 
 LINUXINCLUDE := \
-    -I$(INC_INCPATH)/ \
-    -I$(INC_INCPATH)/trace \
+    -I$(KBUILD_EXTMOD)/include \
+    -I$(KBUILD_EXTMOD)/include/trace \
     -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915 \
     $(LINUXINCLUDE)
 
