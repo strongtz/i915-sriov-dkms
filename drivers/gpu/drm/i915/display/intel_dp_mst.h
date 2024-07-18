@@ -8,7 +8,7 @@
 
 #include <extraversion.h>
 
-#if defined EXTRAVERSION_PVE
+#if defined RELEASE_DEBIAN && defined EXTRAVERSION_PVE
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6,5,13)) \
  || (LINUX_VERSION_CODE == KERNEL_VERSION(6,5,13) && EXTRAVERSION_CODE < EXTRAVERSION(4,0))
@@ -17,8 +17,18 @@
 #define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp)
 #endif
 
+#elif defined RELEASE_UBUNTU
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,5,0)) \
+ || (LINUX_VERSION_CODE == KERNEL_VERSION(6,5,0) && EXTRAVERSION_CODE < EXTRAVERSION(41,0))
+#define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
+#else
+#define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp)
+#endif
+
 #else
 
+/* This is valid for Debian */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,14)
 #define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
 #else
