@@ -10,6 +10,9 @@
 
 #if defined RELEASE_DEBIAN && defined EXTRAVERSION_PVE
 
+/*
+ * Proxmox VE: Interface was changed from 6.5.13-3 to 6.5.13-4
+ */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6,5,13)) \
  || (LINUX_VERSION_CODE == KERNEL_VERSION(6,5,13) && EXTRAVERSION_CODE < EXTRAVERSION(4,0))
 #define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
@@ -19,8 +22,15 @@
 
 #elif defined RELEASE_UBUNTU
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,5,0)) \
- || (LINUX_VERSION_CODE == KERNEL_VERSION(6,5,0) && EXTRAVERSION_CODE < EXTRAVERSION(41,0))
+/*
+ * Ubuntu: Interface was changed from 6.5.0-35 to 6.5.0-41
+ *
+ * WARNING:
+ *   Kernel 6.2.0-* has LINUX_VERSION_CODE=393744 which corresponds to 6.2.16?
+ *   Kernel 6.5.0-* has LINUX_VERSION_CODE=394509 which corresponds to 6.5.13?
+ */
+#if (LINUX_VERSION_CODE < 394509) \
+ || (LINUX_VERSION_CODE == 394509 && EXTRAVERSION_CODE < EXTRAVERSION(41,0))
 #define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
 #else
 #define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp)
