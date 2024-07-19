@@ -26,8 +26,8 @@
  * Ubuntu: Interface was changed from 6.5.0-35 to 6.5.0-41
  *
  * WARNING:
- *   Kernel 6.2.0-* has LINUX_VERSION_CODE=393744 which corresponds to 6.2.16?
- *   Kernel 6.5.0-* has LINUX_VERSION_CODE=394509 which corresponds to 6.5.13?
+ *   Kernel 6.2.0-* has LINUX_VERSION_CODE=393744 which corresponds to 6.2.13?
+ *   Kernel 6.5.0-* has LINUX_VERSION_CODE=394509 which corresponds to 6.5.16?
  */
 #if (LINUX_VERSION_CODE < 394509) \
  || (LINUX_VERSION_CODE == 394509 && EXTRAVERSION_CODE < EXTRAVERSION(41,0))
