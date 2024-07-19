@@ -17,10 +17,10 @@ For Arch Linux users, it is available in AUR. [i915-sriov-dkms-git](https://aur.
 
 Tested kernel versions: 
 
-* Proxmox VE Host: `pve-kernel-6.1.0-1-pve`~`6.2.9-1-pve`, `proxmox-kernel-6.5.13-3-pve`~`6.8.8-2-pve`
-* Debian 12 VM Guest: `linux-image-6.5.0-0.deb12.4-amd64`~`6.7.12+bpo` (6.1 requires custom kernel, see below)
-* Ubuntu 22.04 VM Guest: `linux-image-6.2.0-39-generic`~`6.5.0-44-generic`
-* Gentoo VM Guest: `gentoo-sources-6.1.19-gentoo`~`6.2.11-gentoo`
+* Proxmox VE Host: `pve-kernel-6.1.0-1-pve ~ 6.2.9-1-pve`, `proxmox-kernel-6.5.13-3-pve ~ 6.8.8-2-pve`
+* Debian 12 VM Guest: `linux-image-6.5.0-0.deb12.4-amd64 ~ 6.7.12+bpo` (6.1 requires custom kernel, see below)
+* Ubuntu 22.04 VM Guest: `linux-image-6.2.0-39-generic ~ 6.5.0-44-generic`
+* Gentoo VM Guest: `gentoo-sources-6.1.19-gentoo ~ 6.2.11-gentoo`
 
 Tested usages:
 
