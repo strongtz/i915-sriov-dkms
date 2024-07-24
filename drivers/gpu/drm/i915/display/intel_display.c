@@ -5426,6 +5426,7 @@ pipe_config_dp_vsc_sdp_mismatch(struct drm_i915_private *dev_priv,
 				const struct drm_dp_vsc_sdp *a,
 				const struct drm_dp_vsc_sdp *b)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	if (fastset) {
 		if (!drm_debug_enabled(DRM_UT_KMS))
 			return;
@@ -5443,6 +5444,24 @@ pipe_config_dp_vsc_sdp_mismatch(struct drm_i915_private *dev_priv,
 		drm_err(&dev_priv->drm, "found:\n");
 		drm_dp_vsc_sdp_log(KERN_ERR, dev_priv->drm.dev, b);
 	}
+#else
+	struct drm_printer p;
+
+	if (fastset) {
+		p = drm_dbg_printer(&dev_priv->drm, DRM_UT_KMS, NULL);
+
+		drm_printf(&p, "fastset requirement not met in %s dp sdp\n", name);
+	} else {
+		p = drm_err_printer(&dev_priv->drm, NULL);
+
+		drm_printf(&p, "mismatch in %s dp sdp\n", name);
+	}
+
+	drm_printf(&p, "expected:\n");
+	drm_dp_vsc_sdp_log(&p, a);
+	drm_printf(&p, "found:\n");
+	drm_dp_vsc_sdp_log(&p, b);
+#endif
 }
 
 static void

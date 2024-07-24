@@ -96,7 +96,12 @@ static void heartbeat_commit(struct i915_request *rq,
 static void show_heartbeat(const struct i915_request *rq,
 			   struct intel_engine_cs *engine)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	struct drm_printer p = drm_debug_printer("heartbeat");
+#else
+	struct drm_printer p =
+		drm_dbg_printer(&engine->i915->drm, DRM_UT_DRIVER, "heartbeat");
+#endif
 
 	if (!rq) {
 		intel_engine_dump(engine, &p,

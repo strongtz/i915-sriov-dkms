@@ -1056,7 +1056,12 @@ void intel_gt_set_wedged(struct intel_gt *gt)
 	mutex_lock(&gt->reset.mutex);
 
 	if (GEM_SHOW_DEBUG()) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 		struct drm_printer p = drm_debug_printer(__func__);
+#else
+		struct drm_printer p = drm_dbg_printer(&gt->i915->drm,
+						       DRM_UT_DRIVER, __func__);
+#endif
 		struct intel_engine_cs *engine;
 		enum intel_engine_id id;
 
