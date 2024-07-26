@@ -242,8 +242,16 @@ static intel_wakeref_t __intel_runtime_pm_get_if_active(struct intel_runtime_pm 
 		 * function, since the power state is undefined. This applies
 		 * atm to the late/early system suspend/resume handlers.
 		 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 		if (pm_runtime_get_if_active(rpm->kdev, ignore_usecount) <= 0)
 			return 0;
+#else
+                if ((ignore_usecount &&
+		     pm_runtime_get_if_active(rpm->kdev) <= 0) ||
+		    (!ignore_usecount &&
+		     pm_runtime_get_if_in_use(rpm->kdev) <= 0))
+			return 0;
+#endif
 	}
 
 	intel_runtime_pm_acquire(rpm, true);

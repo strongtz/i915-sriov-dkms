@@ -2,7 +2,7 @@
 
 _pkgbase=i915-sriov-dkms
 pkgname=i915-sriov-dkms-git
-pkgver=2024.07.19
+pkgver=2024.07.24
 pkgrel=1
 pkgdesc="Linux i915 module patched with SR-IOV support"
 arch=('x86_64')

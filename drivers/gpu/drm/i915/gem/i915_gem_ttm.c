@@ -71,8 +71,10 @@ static const struct ttm_place sys_placement_flags = {
 static struct ttm_placement i915_sys_placement = {
 	.num_placement = 1,
 	.placement = &sys_placement_flags,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	.num_busy_placement = 1,
 	.busy_placement = &sys_placement_flags,
+#endif
 };
 
 /**
@@ -163,20 +165,32 @@ i915_ttm_place_from_region(const struct intel_memory_region *mr,
 
 static void
 i915_ttm_placement_from_obj(const struct drm_i915_gem_object *obj,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 			    struct ttm_place *requested,
 			    struct ttm_place *busy,
+#else
+                            struct ttm_place *places,
+#endif
 			    struct ttm_placement *placement)
 {
 	unsigned int num_allowed = obj->mm.n_placements;
 	unsigned int flags = obj->flags;
 	unsigned int i;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	placement->num_placement = 1;
+        i915_ttm_place_from_region(num_allowed ? obj->mm.placements[0] :
+                                   obj->mm.region, requested, obj->bo_offset,
+                                   obj->base.size, flags);
+#else
 	i915_ttm_place_from_region(num_allowed ? obj->mm.placements[0] :
-				   obj->mm.region, requested, obj->bo_offset,
+				   obj->mm.region, &places[0], obj->bo_offset,
 				   obj->base.size, flags);
+	places[0].flags |= TTM_PL_FLAG_DESIRED;
+#endif
 
 	/* Cache this on object? */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	placement->num_busy_placement = num_allowed;
 	for (i = 0; i < placement->num_busy_placement; ++i)
 		i915_ttm_place_from_region(obj->mm.placements[i], busy + i,
@@ -189,6 +203,17 @@ i915_ttm_placement_from_obj(const struct drm_i915_gem_object *obj,
 
 	placement->placement = requested;
 	placement->busy_placement = busy;
+#else
+	for (i = 0; i < num_allowed; ++i) {
+		i915_ttm_place_from_region(obj->mm.placements[i],
+					   &places[i + 1], obj->bo_offset,
+					   obj->base.size, flags);
+		places[i + 1].flags |= TTM_PL_FLAG_FALLBACK;
+	}
+
+	placement->num_placement = num_allowed + 1;
+	placement->placement = places;
+#endif
 }
 
 static int i915_ttm_tt_shmem_populate(struct ttm_device *bdev,
@@ -795,7 +820,12 @@ static int __i915_ttm_get_pages(struct drm_i915_gem_object *obj,
 	int ret;
 
 	/* First try only the requested placement. No eviction. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	real_num_busy = fetch_and_zero(&placement->num_busy_placement);
+#else
+	real_num_busy = placement->num_placement;
+	placement->num_placement = 1;
+#endif
 	ret = ttm_bo_validate(bo, placement, &ctx);
 	if (ret) {
 		ret = i915_ttm_err_to_gem(ret);
@@ -811,7 +841,11 @@ static int __i915_ttm_get_pages(struct drm_i915_gem_object *obj,
 		 * If the initial attempt fails, allow all accepted placements,
 		 * evicting if necessary.
 		 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 		placement->num_busy_placement = real_num_busy;
+#else
+		placement->num_placement = real_num_busy;
+#endif
 		ret = ttm_bo_validate(bo, placement, &ctx);
 		if (ret)
 			return i915_ttm_err_to_gem(ret);
@@ -855,7 +889,12 @@ static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 	GEM_BUG_ON(obj->mm.n_placements > I915_TTM_MAX_PLACEMENTS);
 
 	/* Move to the requested placement. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	i915_ttm_placement_from_obj(obj, &requested, busy, &placement);
+#else
+        struct ttm_place places[I915_TTM_MAX_PLACEMENTS + 1];
+        i915_ttm_placement_from_obj(obj, places, &placement);
+#endif
 
 	return __i915_ttm_get_pages(obj, &placement);
 }
@@ -885,9 +924,13 @@ static int __i915_ttm_migrate(struct drm_i915_gem_object *obj,
 	i915_ttm_place_from_region(mr, &requested, obj->bo_offset,
 				   obj->base.size, flags);
 	placement.num_placement = 1;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	placement.num_busy_placement = 1;
+#endif
 	placement.placement = &requested;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
 	placement.busy_placement = &requested;
+#endif
 
 	ret = __i915_ttm_get_pages(obj, &placement);
 	if (ret)
