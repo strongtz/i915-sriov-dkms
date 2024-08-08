@@ -8,6 +8,9 @@
 
 #include <extraversion.h>
 
+
+
+/* DRM_DP_CALC_PBN_MODE */
 #if defined RELEASE_DEBIAN && defined EXTRAVERSION_PVE
 
 /*
@@ -38,7 +41,6 @@
 
 #else
 
-/* This is valid for Debian */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,14)
 #define DRM_DP_CALC_PBN_MODE(clock,bpp,dsc) drm_dp_calc_pbn_mode(clock,bpp,dsc)
 #else
@@ -46,6 +48,36 @@
 #endif
 
 #endif
+
+
+
+/* DRM_DP_ADD_PAYLOAD_PART2 */
+#if defined RELEASE_DEBIAN && defined EXTRAVERSION_PVE
+
+/*
+ * Proxmox VE: Interface was changed from 6.8.8-4 to 6.8.12-1
+ */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,8,12))
+#define DRM_DP_ADD_PAYLOAD_PART2(intel_dp,state,mst_payload_state) \
+  drm_dp_add_payload_part2(&intel_dp->mst_mgr, &state->base, mst_payload_state);
+#else
+#define DRM_DP_ADD_PAYLOAD_PART2(intel_dp,state,mst_payload_state) \
+  drm_dp_add_payload_part2(&intel_dp->mst_mgr, mst_payload_state);
+#endif
+
+#else
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
+#define DRM_DP_ADD_PAYLOAD_PART2(intel_dp,state,mst_payload_state) \
+  drm_dp_add_payload_part2(&intel_dp->mst_mgr, &state->base, mst_payload_state);
+#else
+#define DRM_DP_ADD_PAYLOAD_PART2(intel_dp,state,mst_payload_state) \
+  drm_dp_add_payload_part2(&intel_dp->mst_mgr, mst_payload_state);
+#endif
+
+#endif
+
+
 
 #include <linux/types.h>
 
