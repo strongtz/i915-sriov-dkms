@@ -17,7 +17,7 @@ For Arch Linux users, it is available in AUR. [i915-sriov-dkms-git](https://aur.
 
 Tested kernel versions: 
 
-* Proxmox VE Host: `pve-kernel-6.1.0-1-pve ~ 6.2.9-1-pve`, `proxmox-kernel-6.5.13-3-pve ~ 6.8.8-2-pve`
+* Proxmox VE Host: `pve-kernel-6.1.0-1-pve ~ 6.2.9-1-pve`, `proxmox-kernel-6.5.13-3-pve ~ 6.8.12-1-pve`
 * Debian 12 VM Guest: `linux-image-6.5.0-0.deb12.4-amd64 ~ 6.7.12+bpo` (6.1 requires custom kernel, see below)
 * Ubuntu 22.04 VM Guest: `linux-image-6.2.0-39-generic ~ 6.5.0-44-generic`
 * Gentoo VM Guest: `gentoo-sources-6.1.19-gentoo ~ 6.2.11-gentoo`
@@ -45,7 +45,7 @@ You can create up to 7 VFs on Intel UHD Graphics
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8.8-2-pve proxmox-kernel-6.8.8-2-pve` (for unsigned kernel).
 1. Change into the root of the cloned repository and run `dkms add .`.
-1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.07.19 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
+1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.08.09 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
