@@ -3884,7 +3884,7 @@ intel_dp_mst_hpd_irq(struct intel_dp *intel_dp, u8 *esi, u8 *ack)
 {
 	bool handled = false;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,99)) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,999)) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	drm_dp_mst_hpd_irq_handle_event(&intel_dp->mst_mgr, esi, ack, &handled);
 #else
 	drm_dp_mst_hpd_irq(&intel_dp->mst_mgr, esi, &handled);
