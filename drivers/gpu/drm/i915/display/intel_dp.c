@@ -1489,9 +1489,9 @@ static int intel_dp_dsc_compute_params(struct intel_encoder *encoder,
 	line_buf_depth = drm_dp_dsc_sink_line_buf_depth(intel_dp->dsc_dpcd);
 	if (!line_buf_depth) {
 #else
-  vdsc_cfg->line_buf_depth = min(INTEL_DP_DSC_MAX_LINE_BUF_DEPTH,
-				       drm_dp_dsc_sink_line_buf_depth(intel_dp->dsc_dpcd));
-	if (!vdsc_cfg->line_buf_depth) {
+		vdsc_cfg->line_buf_depth = min(INTEL_DP_DSC_MAX_LINE_BUF_DEPTH,
+			 drm_dp_dsc_sink_line_buf_depth(intel_dp->dsc_dpcd));
+		if (!vdsc_cfg->line_buf_depth) {
 #endif
 		drm_dbg_kms(&i915->drm,
 			    "DSC Sink Line Buffer Depth invalid\n");

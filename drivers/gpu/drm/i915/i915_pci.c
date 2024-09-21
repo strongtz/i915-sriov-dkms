@@ -1242,7 +1242,7 @@ static const struct intel_device_info mtl_info = {
  */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
 static const struct pci_device_id pciidlist[] = {
-  INTEL_I830_IDS(INTEL_VGA_DEVICE, &i830_info),
+	INTEL_I830_IDS(INTEL_VGA_DEVICE, &i830_info),
 	INTEL_I845G_IDS(INTEL_VGA_DEVICE, &i845g_info),
 	INTEL_I85X_IDS(INTEL_VGA_DEVICE, &i85x_info),
 	INTEL_I865G_IDS(INTEL_VGA_DEVICE, &i865g_info),
@@ -1317,7 +1317,7 @@ static const struct pci_device_id pciidlist[] = {
 	INTEL_DG2_IDS(INTEL_VGA_DEVICE, &dg2_info),
 	INTEL_ATS_M_IDS(INTEL_VGA_DEVICE, &ats_m_info),
 	INTEL_MTL_IDS(INTEL_VGA_DEVICE, &mtl_info),
-  {}
+	{}
 };
 #else
 static const struct pci_device_id pciidlist[] = {

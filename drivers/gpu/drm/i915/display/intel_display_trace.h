@@ -37,7 +37,7 @@ TRACE_EVENT(intel_pipe_enable,
 			   struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 			   struct intel_crtc *it__;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -70,7 +70,7 @@ TRACE_EVENT(intel_pipe_disable,
 			   struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 			   struct intel_crtc *it__;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+				 __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -102,7 +102,7 @@ TRACE_EVENT(intel_pipe_crc,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -134,7 +134,7 @@ TRACE_EVENT(intel_cpu_fifo_underrun,
 	    TP_fast_assign(
 			    struct intel_crtc *crtc = intel_crtc_for_pipe(dev_priv, pipe);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -163,7 +163,7 @@ TRACE_EVENT(intel_pch_fifo_underrun,
 			   enum pipe pipe = pch_transcoder;
 			   struct intel_crtc *crtc = intel_crtc_for_pipe(dev_priv, pipe);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_i915(dev_priv));
 #endif
@@ -192,7 +192,7 @@ TRACE_EVENT(intel_memory_cxsr,
 	    TP_fast_assign(
 			   struct intel_crtc *crtc;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_i915(dev_priv));
 #endif
@@ -236,7 +236,7 @@ TRACE_EVENT(g4x_wm,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -287,7 +287,7 @@ TRACE_EVENT(vlv_wm,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -328,7 +328,7 @@ TRACE_EVENT(vlv_fifo_size,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -363,11 +363,11 @@ TRACE_EVENT(intel_plane_update_noarm,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
-         __assign_str(name);
+			   __assign_str(dev);
+			   __assign_str(name);
 #else
 			   __assign_str(dev, __dev_name_kms(plane));
-         __assign_str(name, plane->base.name);
+			   __assign_str(name, plane->base.name);
 #endif
 			   __entry->pipe = crtc->pipe;
 			   __entry->frame = intel_crtc_get_vblank_counter(crtc);
@@ -399,11 +399,11 @@ TRACE_EVENT(intel_plane_update_arm,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
-         __assign_str(name);
+			   __assign_str(dev);
+			   __assign_str(name);
 #else
 			   __assign_str(dev, __dev_name_kms(plane));
-         __assign_str(name, plane->base.name);
+			   __assign_str(name, plane->base.name);
 #endif
 			   __entry->pipe = crtc->pipe;
 			   __entry->frame = intel_crtc_get_vblank_counter(crtc);
@@ -433,11 +433,11 @@ TRACE_EVENT(intel_plane_disable_arm,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
-         __assign_str(name);
+			   __assign_str(dev);
+			   __assign_str(name);
 #else
 			   __assign_str(dev, __dev_name_kms(plane));
-         __assign_str(name, plane->base.name);
+			   __assign_str(name, plane->base.name);
 #endif
 			   __entry->pipe = crtc->pipe;
 			   __entry->frame = intel_crtc_get_vblank_counter(crtc);
@@ -547,11 +547,11 @@ TRACE_EVENT(intel_fbc_activate,
 			   struct intel_crtc *crtc = intel_crtc_for_pipe(to_i915(plane->base.dev),
 									 plane->pipe);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
-         __assign_str(name);
+			   __assign_str(dev);
+			   __assign_str(name);
 #else
 			   __assign_str(dev, __dev_name_kms(plane));
-         __assign_str(name, plane->base.name);
+			   __assign_str(name, plane->base.name);
 #endif
 			   __entry->pipe = crtc->pipe;
 			   __entry->frame = intel_crtc_get_vblank_counter(crtc);
@@ -579,11 +579,11 @@ TRACE_EVENT(intel_fbc_deactivate,
 			   struct intel_crtc *crtc = intel_crtc_for_pipe(to_i915(plane->base.dev),
 									 plane->pipe);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
-         __assign_str(name);
+			   __assign_str(dev);
+			   __assign_str(name);
 #else
 			   __assign_str(dev, __dev_name_kms(plane));
-         __assign_str(name, plane->base.name);
+			   __assign_str(name, plane->base.name);
 #endif
 			   __entry->pipe = crtc->pipe;
 			   __entry->frame = intel_crtc_get_vblank_counter(crtc);
@@ -611,11 +611,11 @@ TRACE_EVENT(intel_fbc_nuke,
 			   struct intel_crtc *crtc = intel_crtc_for_pipe(to_i915(plane->base.dev),
 									 plane->pipe);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
-         __assign_str(name);
+			   __assign_str(dev);
+			   __assign_str(name);
 #else
 			   __assign_str(dev, __dev_name_kms(plane));
-         __assign_str(name, plane->base.name);
+			   __assign_str(name, plane->base.name);
 #endif
 			   __entry->pipe = crtc->pipe;
 			   __entry->frame = intel_crtc_get_vblank_counter(crtc);
@@ -640,7 +640,7 @@ TRACE_EVENT(intel_crtc_vblank_work_start,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -667,7 +667,7 @@ TRACE_EVENT(intel_crtc_vblank_work_end,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -696,7 +696,7 @@ TRACE_EVENT(intel_pipe_update_start,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -728,7 +728,7 @@ TRACE_EVENT(intel_pipe_update_vblank_evaded,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -758,7 +758,7 @@ TRACE_EVENT(intel_pipe_update_end,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_kms(crtc));
 #endif
@@ -786,7 +786,7 @@ TRACE_EVENT(intel_frontbuffer_invalidate,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_i915(i915));
 #endif
@@ -811,7 +811,7 @@ TRACE_EVENT(intel_frontbuffer_flush,
 
 	    TP_fast_assign(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-         __assign_str(dev);
+			   __assign_str(dev);
 #else
 			   __assign_str(dev, __dev_name_i915(i915));
 #endif
