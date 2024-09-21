@@ -3,8 +3,15 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_managed.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/intel-gtt.h>
+#else
 #include <drm/intel-gtt.h>
+#endif
 
 #include "gem/i915_gem_internal.h"
 #include "gem/i915_gem_lmem.h"

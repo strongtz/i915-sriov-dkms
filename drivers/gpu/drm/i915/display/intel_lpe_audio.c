@@ -67,8 +67,14 @@
 #include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/version.h>
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/intel_lpe_audio.h>
+#else
 #include <drm/intel_lpe_audio.h>
+#endif
 
 #include "i915_drv.h"
 #include "i915_irq.h"

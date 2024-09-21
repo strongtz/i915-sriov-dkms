@@ -44,7 +44,9 @@
 #include <drm/drm_rect.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_vblank_work.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/i915_hdcp_interface.h>
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 #include <drm/i915_hdcp_interface.h>
 #else
 #include <drm/i915_mei_hdcp_interface.h>

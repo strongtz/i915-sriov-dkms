@@ -4,6 +4,7 @@
  */
 
 #include <linux/slab.h> /* fault-inject.h is not standalone! */
+#include <linux/version.h> /* fault-inject.h is not standalone! */
 
 #include <linux/fault-inject.h>
 #include <linux/sched/mm.h>
@@ -15,7 +16,13 @@
 #include "i915_reg.h"
 #include "i915_trace.h"
 #include "i915_utils.h"
-#include "intel_gt.h"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/intel-gtt.h>
+#else
+#include <drm/intel-gtt.h>
+#endif
+
 #include "intel_gt_mcr.h"
 #include "intel_gt_print.h"
 #include "intel_gt_regs.h"
