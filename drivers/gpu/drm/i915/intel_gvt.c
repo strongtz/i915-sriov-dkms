@@ -20,6 +20,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#include <linux/vmalloc.h>
 
 #include "i915_drv.h"
 #include "i915_vgpu.h"

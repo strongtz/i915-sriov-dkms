@@ -4,8 +4,15 @@
  */
 
 #include <linux/component.h>
+#include <linux/version.h>
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/i915_pxp_tee_interface.h>
+#else
 #include <drm/i915_pxp_tee_interface.h>
+#endif
+
 #include <drm/i915_component.h>
 
 #include "gem/i915_gem_lmem.h"

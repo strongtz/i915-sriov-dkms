@@ -6,11 +6,18 @@
 #include <asm/set_memory.h>
 #include <asm/smp.h>
 #include <linux/types.h>
+#include <linux/version.h>
 #include <linux/stop_machine.h>
 
 #include <drm/drm_managed.h>
-#include <drm/i915_drm.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/i915_drm.h>
+#include <drm/intel/intel-gtt.h>
+#else
 #include <drm/intel-gtt.h>
+#include <drm/i915_drm.h>
+#endif
 
 #include "display/intel_display.h"
 #include "gem/i915_gem_lmem.h"

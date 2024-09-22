@@ -39,7 +39,11 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+#include <drm/intel/intel_lpe_audio.h>
+#else
 #include <drm/intel_lpe_audio.h>
+#endif
 
 #include "i915_debugfs.h"
 #include "i915_drv.h"

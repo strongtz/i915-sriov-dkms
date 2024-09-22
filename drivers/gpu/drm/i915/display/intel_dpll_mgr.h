@@ -29,7 +29,7 @@
 
 #include "intel_wakeref.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,8,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,0)
 /*FIXME: Move this to a more appropriate place. */
 #define abs_diff(a, b) ({			\
 	typeof(a) __a = (a);			\

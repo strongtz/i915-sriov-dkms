@@ -4,6 +4,7 @@
  * Copyright © 2014-2016 Intel Corporation
  */
 
+#include <linux/vmalloc.h>
 #include <drm/drm_cache.h>
 
 #include "gt/intel_gt.h"

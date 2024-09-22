@@ -26,6 +26,7 @@
 #define _INTEL_OPREGION_H_
 
 #include <linux/workqueue.h>
+#include <linux/version.h>
 #include <linux/pci.h>
 
 struct drm_i915_private;

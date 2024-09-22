@@ -6,9 +6,14 @@
 
 #include <linux/errno.h>
 #include <linux/mutex.h>
-
+#include <linux/version.h>
 #include <drm/drm_mm.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drm/intel/i915_drm.h>
+#else
 #include <drm/i915_drm.h>
+#endif
 
 #include "gem/i915_gem_lmem.h"
 #include "gem/i915_gem_region.h"
