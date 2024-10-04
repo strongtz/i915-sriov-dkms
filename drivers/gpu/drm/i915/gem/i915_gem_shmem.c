@@ -107,8 +107,12 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 	unsigned int page_count; /* restricted by sg_alloc_table */
 	unsigned long i;
 	struct scatterlist *sg;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,5,0)
 	struct page *page;
 	unsigned long last_pfn = 0;	/* suppress gcc warning */
+#else /* >= 6.5 */
+	unsigned long next_pfn = 0;	/* suppress gcc warning */
+#endif
 	gfp_t noreclaim;
 	int ret;
 
@@ -139,6 +143,10 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 	sg = st->sgl;
 	st->nents = 0;
 	for (i = 0; i < page_count; i++) {
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,5,0)
+		struct folio *folio;
+		unsigned long nr_pages;
+#endif
 		const unsigned int shrink[] = {
 			I915_SHRINK_BOUND | I915_SHRINK_UNBOUND,
 			0,
@@ -147,6 +155,16 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 
 		do {
 			cond_resched();
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+			folio = shmem_read_folio_gfp(mapping, i, gfp);
+			if (!IS_ERR(folio))
+				break;
+
+			if (!*s) {
+				ret = PTR_ERR(folio);
+				goto err_sg;
+			}
+#else
 			page = shmem_read_mapping_page_gfp(mapping, i, gfp);
 			if (!IS_ERR(page))
 				break;
@@ -155,6 +173,7 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 				ret = PTR_ERR(page);
 				goto err_sg;
 			}
+#endif
 
 			i915_gem_shrink(NULL, i915, 2 * page_count, NULL, *s++);
 
@@ -189,6 +208,27 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 			}
 		} while (1);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
+		nr_pages = min_t(unsigned long,
+				folio_nr_pages(folio), page_count - i);
+		if (!i ||
+		    sg->length >= max_segment ||
+		    folio_pfn(folio) != next_pfn) {
+			if (i)
+				sg = sg_next(sg);
+
+			st->nents++;
+			sg_set_folio(sg, folio, nr_pages * PAGE_SIZE, 0);
+		} else {
+			/* XXX: could overflow? */
+			sg->length += nr_pages * PAGE_SIZE;
+		}
+		next_pfn = folio_pfn(folio) + nr_pages;
+		i += nr_pages - 1;
+
+		/* Check that the i965g/gm workaround works. */
+		GEM_BUG_ON(gfp & __GFP_DMA32 && next_pfn >= 0x00100000UL);
+#else
 		if (!i ||
 		    sg->length >= max_segment ||
 		    page_to_pfn(page) != last_pfn + 1) {
@@ -204,6 +244,7 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 
 		/* Check that the i965g/gm workaround works. */
 		GEM_BUG_ON(gfp & __GFP_DMA32 && last_pfn >= 0x00100000UL);
+#endif
 	}
 	if (sg) /* loop terminated early; short sg table */
 		sg_mark_end(sg);
