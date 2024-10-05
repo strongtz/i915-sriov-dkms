@@ -27,6 +27,7 @@
  */
 
 #include <linux/pm_runtime.h>
+#include <linux/version.h>
 
 #include <drm/drm_print.h>
 
@@ -52,37 +53,182 @@
 
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_RUNTIME_PM)
 
-static void init_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm)
+#include <linux/sort.h>
+
+#define STACKDEPTH 8
+
+static noinline depot_stack_handle_t __save_depot_stack(void)
 {
-	ref_tracker_dir_init(&rpm->debug, INTEL_REFTRACK_DEAD_COUNT, dev_name(rpm->kdev));
+	unsigned long entries[STACKDEPTH];
+	unsigned int n;
+
+	n = stack_trace_save(entries, ARRAY_SIZE(entries), 1);
+	return stack_depot_save(entries, n, GFP_NOWAIT | __GFP_NOWARN);
 }
 
-static intel_wakeref_t
+static void init_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm)
+{
+	spin_lock_init(&rpm->debug.lock);
+	stack_depot_init();
+}
+
+static noinline depot_stack_handle_t
 track_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm)
 {
-	if (!rpm->available || rpm->no_wakeref_tracking)
+	depot_stack_handle_t stack, *stacks;
+	unsigned long flags;
+
+	if (rpm->no_wakeref_tracking)
 		return -1;
 
-	return intel_ref_tracker_alloc(&rpm->debug);
+	stack = __save_depot_stack();
+	if (!stack)
+		return -1;
+
+	spin_lock_irqsave(&rpm->debug.lock, flags);
+
+	if (!rpm->debug.count)
+		rpm->debug.last_acquire = stack;
+
+	stacks = krealloc(rpm->debug.owners,
+			  (rpm->debug.count + 1) * sizeof(*stacks),
+			  GFP_NOWAIT | __GFP_NOWARN);
+	if (stacks) {
+		stacks[rpm->debug.count++] = stack;
+		rpm->debug.owners = stacks;
+	} else {
+		stack = -1;
+	}
+
+	spin_unlock_irqrestore(&rpm->debug.lock, flags);
+
+	return stack;
 }
 
 static void untrack_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm,
-					     intel_wakeref_t wakeref)
+					     depot_stack_handle_t stack)
 {
-	if (!rpm->available || rpm->no_wakeref_tracking)
+	struct drm_i915_private *i915 = container_of(rpm,
+						     struct drm_i915_private,
+						     runtime_pm);
+	unsigned long flags, n;
+	bool found = false;
+
+	if (unlikely(stack == -1))
 		return;
 
-	intel_ref_tracker_free(&rpm->debug, wakeref);
+	spin_lock_irqsave(&rpm->debug.lock, flags);
+	for (n = rpm->debug.count; n--; ) {
+		if (rpm->debug.owners[n] == stack) {
+			memmove(rpm->debug.owners + n,
+				rpm->debug.owners + n + 1,
+				(--rpm->debug.count - n) * sizeof(stack));
+			found = true;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&rpm->debug.lock, flags);
+
+	if (drm_WARN(&i915->drm, !found,
+		     "Unmatched wakeref (tracking %lu), count %u\n",
+		     rpm->debug.count, atomic_read(&rpm->wakeref_count))) {
+		char *buf;
+
+		buf = kmalloc(PAGE_SIZE, GFP_NOWAIT | __GFP_NOWARN);
+		if (!buf)
+			return;
+
+		stack_depot_snprint(stack, buf, PAGE_SIZE, 2);
+		DRM_DEBUG_DRIVER("wakeref %x from\n%s", stack, buf);
+
+		stack = READ_ONCE(rpm->debug.last_release);
+		if (stack) {
+			stack_depot_snprint(stack, buf, PAGE_SIZE, 2);
+			DRM_DEBUG_DRIVER("wakeref last released at\n%s", buf);
+		}
+
+		kfree(buf);
+	}
 }
 
-static void untrack_all_intel_runtime_pm_wakerefs(struct intel_runtime_pm *rpm)
+static int cmphandle(const void *_a, const void *_b)
 {
-	ref_tracker_dir_exit(&rpm->debug);
+	const depot_stack_handle_t * const a = _a, * const b = _b;
+
+	if (*a < *b)
+		return -1;
+	else if (*a > *b)
+		return 1;
+	else
+		return 0;
+}
+
+static void
+__print_intel_runtime_pm_wakeref(struct drm_printer *p,
+				 const struct intel_runtime_pm_debug *dbg)
+{
+	unsigned long i;
+	char *buf;
+
+	buf = kmalloc(PAGE_SIZE, GFP_NOWAIT | __GFP_NOWARN);
+	if (!buf)
+		return;
+
+	if (dbg->last_acquire) {
+		stack_depot_snprint(dbg->last_acquire, buf, PAGE_SIZE, 2);
+		drm_printf(p, "Wakeref last acquired:\n%s", buf);
+	}
+
+	if (dbg->last_release) {
+		stack_depot_snprint(dbg->last_release, buf, PAGE_SIZE, 2);
+		drm_printf(p, "Wakeref last released:\n%s", buf);
+	}
+
+	drm_printf(p, "Wakeref count: %lu\n", dbg->count);
+
+	sort(dbg->owners, dbg->count, sizeof(*dbg->owners), cmphandle, NULL);
+
+	for (i = 0; i < dbg->count; i++) {
+		depot_stack_handle_t stack = dbg->owners[i];
+		unsigned long rep;
+
+		rep = 1;
+		while (i + 1 < dbg->count && dbg->owners[i + 1] == stack)
+			rep++, i++;
+		stack_depot_snprint(stack, buf, PAGE_SIZE, 2);
+		drm_printf(p, "Wakeref x%lu taken at:\n%s", rep, buf);
+	}
+
+	kfree(buf);
+}
+
+static noinline void
+__untrack_all_wakerefs(struct intel_runtime_pm_debug *debug,
+		       struct intel_runtime_pm_debug *saved)
+{
+	*saved = *debug;
+
+	debug->owners = NULL;
+	debug->count = 0;
+	debug->last_release = __save_depot_stack();
+}
+
+static void
+dump_and_free_wakeref_tracking(struct intel_runtime_pm_debug *debug)
+{
+	if (debug->count) {
+		struct drm_printer p = drm_debug_printer("i915");
+
+		__print_intel_runtime_pm_wakeref(&p, debug);
+	}
+
+	kfree(debug->owners);
 }
 
 static noinline void
 __intel_wakeref_dec_and_check_tracking(struct intel_runtime_pm *rpm)
 {
+	struct intel_runtime_pm_debug dbg = {};
 	unsigned long flags;
 
 	if (!atomic_dec_and_lock_irqsave(&rpm->wakeref_count,
@@ -90,14 +236,60 @@ __intel_wakeref_dec_and_check_tracking(struct intel_runtime_pm *rpm)
 					 flags))
 		return;
 
-	__ref_tracker_dir_print(&rpm->debug, INTEL_REFTRACK_PRINT_LIMIT);
+	__untrack_all_wakerefs(&rpm->debug, &dbg);
 	spin_unlock_irqrestore(&rpm->debug.lock, flags);
+
+	dump_and_free_wakeref_tracking(&dbg);
+}
+
+static noinline void
+untrack_all_intel_runtime_pm_wakerefs(struct intel_runtime_pm *rpm)
+{
+	struct intel_runtime_pm_debug dbg = {};
+	unsigned long flags;
+
+	spin_lock_irqsave(&rpm->debug.lock, flags);
+	__untrack_all_wakerefs(&rpm->debug, &dbg);
+	spin_unlock_irqrestore(&rpm->debug.lock, flags);
+
+	dump_and_free_wakeref_tracking(&dbg);
 }
 
 void print_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm,
 				    struct drm_printer *p)
 {
-	intel_wakeref_tracker_show(&rpm->debug, p);
+	struct intel_runtime_pm_debug dbg = {};
+
+	do {
+		unsigned long alloc = dbg.count;
+		depot_stack_handle_t *s;
+
+		spin_lock_irq(&rpm->debug.lock);
+		dbg.count = rpm->debug.count;
+		if (dbg.count <= alloc) {
+			memcpy(dbg.owners,
+			       rpm->debug.owners,
+			       dbg.count * sizeof(*s));
+		}
+		dbg.last_acquire = rpm->debug.last_acquire;
+		dbg.last_release = rpm->debug.last_release;
+		spin_unlock_irq(&rpm->debug.lock);
+		if (dbg.count <= alloc)
+			break;
+
+		s = krealloc(dbg.owners,
+			     dbg.count * sizeof(*s),
+			     GFP_NOWAIT | __GFP_NOWARN);
+		if (!s)
+			goto out;
+
+		dbg.owners = s;
+	} while (1);
+
+	__print_intel_runtime_pm_wakeref(p, &dbg);
+
+out:
+	kfree(dbg.owners);
 }
 
 #else
@@ -106,14 +298,14 @@ static void init_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm)
 {
 }
 
-static intel_wakeref_t
+static depot_stack_handle_t
 track_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm)
 {
 	return -1;
 }
 
 static void untrack_intel_runtime_pm_wakeref(struct intel_runtime_pm *rpm,
-					     intel_wakeref_t wakeref)
+					     intel_wakeref_t wref)
 {
 }
 
@@ -158,8 +350,9 @@ intel_runtime_pm_release(struct intel_runtime_pm *rpm, int wakelock)
 static intel_wakeref_t __intel_runtime_pm_get(struct intel_runtime_pm *rpm,
 					      bool wakelock)
 {
-	struct drm_i915_private *i915 =
-		container_of(rpm, struct drm_i915_private, runtime_pm);
+	struct drm_i915_private *i915 = container_of(rpm,
+						     struct drm_i915_private,
+						     runtime_pm);
 	int ret;
 
 	ret = pm_runtime_get_sync(rpm->kdev);
@@ -242,16 +435,15 @@ static intel_wakeref_t __intel_runtime_pm_get_if_active(struct intel_runtime_pm 
 		 * function, since the power state is undefined. This applies
 		 * atm to the late/early system suspend/resume handlers.
 		 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9 ,0)
 		if (pm_runtime_get_if_active(rpm->kdev, ignore_usecount) <= 0)
-			return 0;
 #else
-                if ((ignore_usecount &&
+		if ((ignore_usecount &&
 		     pm_runtime_get_if_active(rpm->kdev) <= 0) ||
 		    (!ignore_usecount &&
 		     pm_runtime_get_if_in_use(rpm->kdev) <= 0))
-			return 0;
 #endif
+			return 0;
 	}
 
 	intel_runtime_pm_acquire(rpm, true);
@@ -372,8 +564,9 @@ void intel_runtime_pm_put(struct intel_runtime_pm *rpm, intel_wakeref_t wref)
  */
 void intel_runtime_pm_enable(struct intel_runtime_pm *rpm)
 {
-	struct drm_i915_private *i915 =
-		container_of(rpm, struct drm_i915_private, runtime_pm);
+	struct drm_i915_private *i915 = container_of(rpm,
+						     struct drm_i915_private,
+						     runtime_pm);
 	struct device *kdev = rpm->kdev;
 
 	/*
@@ -426,8 +619,9 @@ void intel_runtime_pm_enable(struct intel_runtime_pm *rpm)
 
 void intel_runtime_pm_disable(struct intel_runtime_pm *rpm)
 {
-	struct drm_i915_private *i915 =
-		container_of(rpm, struct drm_i915_private, runtime_pm);
+	struct drm_i915_private *i915 = container_of(rpm,
+						     struct drm_i915_private,
+						     runtime_pm);
 	struct device *kdev = rpm->kdev;
 
 	/* Transfer rpm ownership back to core */
@@ -442,8 +636,9 @@ void intel_runtime_pm_disable(struct intel_runtime_pm *rpm)
 
 void intel_runtime_pm_driver_release(struct intel_runtime_pm *rpm)
 {
-	struct drm_i915_private *i915 =
-		container_of(rpm, struct drm_i915_private, runtime_pm);
+	struct drm_i915_private *i915 = container_of(rpm,
+						     struct drm_i915_private,
+						     runtime_pm);
 	int count = atomic_read(&rpm->wakeref_count);
 
 	intel_wakeref_auto_fini(&rpm->userfault_wakeref);
@@ -452,26 +647,23 @@ void intel_runtime_pm_driver_release(struct intel_runtime_pm *rpm)
 		 "i915 raw-wakerefs=%d wakelocks=%d on cleanup\n",
 		 intel_rpm_raw_wakeref_count(count),
 		 intel_rpm_wakelock_count(count));
-}
 
-void intel_runtime_pm_driver_last_release(struct intel_runtime_pm *rpm)
-{
-	intel_runtime_pm_driver_release(rpm);
 	untrack_all_intel_runtime_pm_wakerefs(rpm);
 }
 
 void intel_runtime_pm_init_early(struct intel_runtime_pm *rpm)
 {
 	struct drm_i915_private *i915 =
-		container_of(rpm, struct drm_i915_private, runtime_pm);
+			container_of(rpm, struct drm_i915_private, runtime_pm);
 	struct pci_dev *pdev = to_pci_dev(i915->drm.dev);
 	struct device *kdev = &pdev->dev;
 
 	rpm->kdev = kdev;
 	rpm->available = HAS_RUNTIME_PM(i915);
+	atomic_set(&rpm->wakeref_count, 0);
 
 	init_intel_runtime_pm_wakeref(rpm);
 	INIT_LIST_HEAD(&rpm->lmem_userfault_list);
 	spin_lock_init(&rpm->lmem_userfault_lock);
-	intel_wakeref_auto_init(&rpm->userfault_wakeref, rpm);
+	intel_wakeref_auto_init(&rpm->userfault_wakeref, i915);
 }

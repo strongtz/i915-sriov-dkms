@@ -69,11 +69,10 @@
 #include <linux/pm_runtime.h>
 #include <linux/version.h>
 
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
-#include <drm/intel/intel_lpe_audio.h>
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 #include <drm/intel_lpe_audio.h>
+#else
+#include <drm/intel/intel_lpe_audio.h>
 #endif
 
 #include "i915_drv.h"
@@ -321,7 +320,7 @@ void intel_lpe_audio_teardown(struct drm_i915_private *dev_priv)
  * intel_lpe_audio_notify() - notify lpe audio event
  * audio driver and i915
  * @dev_priv: the i915 drm device private data
- * @pipe: pipe
+ * @cpu_transcoder: CPU transcoder
  * @port: port
  * @eld : ELD data
  * @ls_clock: Link symbol clock in kHz
@@ -330,7 +329,7 @@ void intel_lpe_audio_teardown(struct drm_i915_private *dev_priv)
  * Notify lpe audio driver of eld change.
  */
 void intel_lpe_audio_notify(struct drm_i915_private *dev_priv,
-			    enum pipe pipe, enum port port,
+			    enum transcoder cpu_transcoder, enum port port,
 			    const void *eld, int ls_clock, bool dp_output)
 {
 	unsigned long irqflags;
@@ -350,7 +349,7 @@ void intel_lpe_audio_notify(struct drm_i915_private *dev_priv,
 
 	if (eld != NULL) {
 		memcpy(ppdata->eld, eld, HDMI_MAX_ELD_BYTES);
-		ppdata->pipe = pipe;
+		ppdata->pipe = cpu_transcoder;
 		ppdata->ls_clock = ls_clock;
 		ppdata->dp_output = dp_output;
 

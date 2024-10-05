@@ -102,9 +102,11 @@ static int vf_handshake_with_guc(struct intel_iov *iov)
 	if (unlikely(err))
 		goto fail;
 
-	/* XXX we only support one version, there must be a match */
-	if (major != GUC_VF_VERSION_LATEST_MAJOR || minor != GUC_VF_VERSION_LATEST_MINOR)
+	/* we shouldn't get anything newer than requested */
+	if (major > GUC_VF_VERSION_LATEST_MAJOR) {
+		err = -EPROTO;
 		goto fail;
+	}
 
 	guc_info(iov_to_guc(iov), "interface version %u.%u.%u.%u\n",
 		 branch, major, minor, patch);
@@ -223,6 +225,65 @@ static int guc_action_query_single_klv64(struct intel_guc *guc, u32 key, u64 *va
 	return 0;
 }
 
+static bool abi_supports_gmd_klv(struct intel_iov *iov)
+{
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+
+	/* version 1.2+ is required to query GMD_ID KLV */
+	return iov->vf.config.guc_abi.major == 1 && iov->vf.config.guc_abi.minor >= 2;
+}
+
+static int vf_get_ipver(struct intel_iov *iov)
+{
+	struct drm_i915_private *i915 = iov_to_i915(iov);
+	struct intel_runtime_info *runtime = RUNTIME_INFO(i915);
+	struct intel_guc *guc = iov_to_guc(iov);
+	struct intel_gt *gt = iov_to_gt(iov);
+	bool is_media = gt->type == GT_MEDIA;
+	struct intel_ip_version *ip = is_media ? &runtime->media.ip : &runtime->graphics.ip;
+	u32 gmd_id;
+	int err;
+
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+
+	if (!HAS_GMD_ID(i915))
+		return 0;
+
+	if (!abi_supports_gmd_klv(iov)) {
+		err = -ENOPKG;
+		goto fallback;
+	}
+
+	err = guc_action_query_single_klv32(guc, GUC_KLV_GLOBAL_CFG_GMD_ID_KEY, &gmd_id);
+	if (unlikely(err))
+		goto fallback;
+
+	gt_info(gt, "GMD_ID %#x version %u.%u step %s\n", gmd_id,
+		REG_FIELD_GET(GMD_ID_ARCH_MASK, gmd_id),
+		REG_FIELD_GET(GMD_ID_RELEASE_MASK, gmd_id),
+		intel_step_name(STEP_A0 + REG_FIELD_GET(GMD_ID_STEP, gmd_id)));
+
+	ip->ver = REG_FIELD_GET(GMD_ID_ARCH_MASK, gmd_id);
+	ip->rel = REG_FIELD_GET(GMD_ID_RELEASE_MASK, gmd_id);
+	ip->step = REG_FIELD_GET(GMD_ID_STEP, gmd_id);
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
+	ip->preliminary = false;
+#endif
+
+	/* need to repeat step initialization, this time with real IP version */
+	intel_step_init(i915);
+	return 0;
+
+fallback:
+	IOV_ERROR(iov, "failed to query %s IP version (%pe) using hardcoded %u.%u\n",
+		  is_media ? "media" : "graphics", ERR_PTR(err), ip->ver, ip->rel);
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
+	ip->preliminary = false;
+#endif
+	return 0;
+
+}
+
 static int vf_get_ggtt_info(struct intel_iov *iov)
 {
 	struct intel_guc *guc = iov_to_guc(iov);
@@ -287,6 +348,10 @@ int intel_iov_query_config(struct intel_iov *iov)
 	int err;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
+
+	err = vf_get_ipver(iov);
+	if (unlikely(err))
+		return err;
 
 	err = vf_get_ggtt_info(iov);
 	if (unlikely(err))
@@ -401,6 +466,7 @@ static const i915_reg_t mtl_early_regs[] = {
 	XEHPC_GT_COMPUTE_DSS_ENABLE_EXT,/* _MMIO(0x9148) */
 	CTC_MODE,			/* _MMIO(0xA26C) */
 	GEN11_HUC_KERNEL_LOAD_INFO,	/* _MMIO(0xC1DC) */
+	_MMIO(MTL_GSC_HECI1_BASE + HECI_FWSTS5),/* _MMIO(0x116c68) */
 	MTL_GT_ACTIVITY_FACTOR,		/* _MMIO(0x138010) */
 };
 
@@ -539,6 +605,127 @@ failed:
 	IOV_PROBE_ERROR(iov, "Unable to confirm ABI version %u.%02u (%pe)\n",
 			major_wanted, minor_wanted, ERR_PTR(ret));
 	return -ECONNREFUSED;
+}
+
+static int intel_iov_query_update_ggtt_pte_mmio(struct intel_iov *iov, u32 pte_offset, u8 mode,
+						u16 num_copies, gen8_pte_t pte)
+{
+	u32 request[VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_MAX_LEN] = {
+		mmio_relay_header(IOV_OPCODE_VF2PF_MMIO_UPDATE_GGTT, 0xF),
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_MODE, mode) |
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES, num_copies) |
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_OFFSET, pte_offset),
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_2_PTE_LO, lower_32_bits(pte)),
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_3_PTE_HI, upper_32_bits(pte)),
+	};
+	u32 response[VF2PF_MMIO_UPDATE_GGTT_RESPONSE_MSG_LEN];
+	u16 expected = (num_copies) ? num_copies + 1 : 1;
+	u16 updated;
+	int ret;
+
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+	GEM_BUG_ON(FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_MODE) < mode);
+	GEM_BUG_ON(FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES) < num_copies);
+
+	ret = guc_send_mmio_relay(iov_to_guc(iov), request, ARRAY_SIZE(request),
+				  response, ARRAY_SIZE(response));
+	if (unlikely(ret < 0))
+		return ret;
+
+	updated = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_RESPONSE_MSG_1_NUM_PTES, response[0]);
+	WARN_ON(updated != expected);
+	return updated;
+}
+
+static int intel_iov_query_update_ggtt_pte_relay(struct intel_iov *iov, u32 pte_offset, u8 mode,
+						 u16 num_copies, gen8_pte_t *ptes, u16 count)
+{
+	struct drm_i915_private *i915 = iov_to_i915(iov);
+	u32 request[VF2PF_UPDATE_GGTT32_REQUEST_MSG_MAX_LEN];
+	u32 response[VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN];
+	u16 expected = num_copies + count;
+	u16 updated;
+	int i;
+	int ret;
+
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+	GEM_BUG_ON(FIELD_MAX(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE) < mode);
+	GEM_BUG_ON(FIELD_MAX(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES) < num_copies);
+	assert_rpm_wakelock_held(&i915->runtime_pm);
+
+	if (count < 1)
+		return -EINVAL;
+
+	request[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		     FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		     FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, IOV_ACTION_VF2PF_UPDATE_GGTT32);
+
+	request[1] = FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE, mode) |
+		     FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, num_copies) |
+		     FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET, pte_offset);
+
+	for (i = 0; i < count; i++) {
+		request[i * 2 + 2] = FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_LO,
+						lower_32_bits(ptes[i]));
+		request[i * 2 + 3] = FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_HI,
+						upper_32_bits(ptes[i]));
+	}
+
+	ret = intel_iov_relay_send_to_pf(&iov->relay,
+					 request, count * 2 + 2,
+					 response, ARRAY_SIZE(response));
+	if (unlikely(ret < 0))
+		return ret;
+
+	updated = FIELD_GET(VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES, response[0]);
+	WARN_ON(updated != expected);
+	return updated;
+}
+
+/**
+ * intel_iov_query_update_ggtt_ptes - Send buffered PTEs to PF to update GGTT
+ * @iov: the IOV struct
+ *
+ * This function is for VF use only.
+ *
+ * Return: Number of successfully updated PTEs on success or a negative error code on failure.
+ */
+int intel_iov_query_update_ggtt_ptes(struct intel_iov *iov)
+{
+	struct intel_iov_vf_ggtt_ptes *buffer = &iov->vf.ptes_buffer;
+	int ret;
+
+	BUILD_BUG_ON(MMIO_UPDATE_GGTT_MODE_DUPLICATE != VF2PF_UPDATE_GGTT32_MODE_DUPLICATE);
+	BUILD_BUG_ON(MMIO_UPDATE_GGTT_MODE_REPLICATE != VF2PF_UPDATE_GGTT32_MODE_REPLICATE);
+	BUILD_BUG_ON(MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST !=
+		     VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST);
+	BUILD_BUG_ON(MMIO_UPDATE_GGTT_MODE_REPLICATE_LAST !=
+		     VF2PF_UPDATE_GGTT32_MODE_REPLICATE_LAST);
+
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+	GEM_BUG_ON(buffer->mode == VF_RELAY_UPDATE_GGTT_MODE_INVALID && buffer->num_copies);
+
+	/*
+	 * If we don't have any PTEs to REPLICATE or DUPLICATE,
+	 * let's zero out the mode to be ABI compliant.
+	 * In this case, the value of the MODE field is irrelevant
+	 * to the operation of the ABI, as long as it has a value
+	 * within the allowed range
+	 */
+	if (buffer->mode == VF_RELAY_UPDATE_GGTT_MODE_INVALID && !buffer->num_copies)
+		buffer->mode = 0;
+
+	if (!intel_guc_ct_enabled(&iov_to_guc(iov)->ct))
+		ret = intel_iov_query_update_ggtt_pte_mmio(iov, buffer->offset, buffer->mode,
+							   buffer->num_copies, buffer->ptes[0]);
+	else
+		ret = intel_iov_query_update_ggtt_pte_relay(iov, buffer->offset, buffer->mode,
+							    buffer->num_copies, buffer->ptes,
+							    buffer->count);
+	if (unlikely(ret < 0))
+		IOV_ERROR(iov, "Failed to update VFs PTE by PF (%pe)\n", ERR_PTR(ret));
+
+	return ret;
 }
 
 static int vf_get_runtime_info_mmio(struct intel_iov *iov)

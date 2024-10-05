@@ -58,13 +58,6 @@ static inline const char *hxg_type_to_string(u32 type)
 #define GUC_MAX_CONTEXT_ID		65535
 #define	GUC_INVALID_CONTEXT_ID		GUC_MAX_CONTEXT_ID
 
-#define GUC_RENDER_ENGINE		0
-#define GUC_VIDEO_ENGINE		1
-#define GUC_BLITTER_ENGINE		2
-#define GUC_VIDEOENHANCE_ENGINE		3
-#define GUC_VIDEO_ENGINE2		4
-#define GUC_MAX_ENGINES_NUM		(GUC_VIDEO_ENGINE2 + 1)
-
 #define GUC_RENDER_CLASS		0
 #define GUC_VIDEO_CLASS			1
 #define GUC_VIDEOENHANCE_CLASS		2
@@ -125,11 +118,14 @@ static inline const char *hxg_type_to_string(u32 type)
 #define   GUC_WA_GAM_CREDITS		BIT(10)
 #define   GUC_WA_DUAL_QUEUE		BIT(11)
 #define   GUC_WA_RCS_RESET_BEFORE_RC6	BIT(13)
-#define   GUC_WA_CONTEXT_ISOLATION	BIT(15)
 #define   GUC_WA_PRE_PARSER		BIT(14)
+#define   GUC_WA_CONTEXT_ISOLATION	BIT(15)
+#define   GUC_WA_RCS_CCS_SWITCHOUT	BIT(16)
 #define   GUC_WA_HOLD_CCS_SWITCHOUT	BIT(17)
 #define   GUC_WA_POLLCS			BIT(18)
 #define   GUC_WA_RCS_REGS_IN_CCS_REGS_LIST	BIT(21)
+#define   GUC_WA_ENABLE_TSC_CHECK_ON_RC6	BIT(22)
+#define   GUC_WA_DISABLE_GSC_RESET_IN_VF	BIT(23)
 
 #define GUC_CTL_FEATURE			2
 #define   GUC_CTL_ENABLE_SLPC		BIT(2)
@@ -434,6 +430,15 @@ enum guc_capture_type {
 	GUC_CAPTURE_LIST_TYPE_MAX,
 };
 
+/* Class indecies for capture_class and capture_instance arrays */
+enum {
+	GUC_CAPTURE_LIST_CLASS_RENDER_COMPUTE = 0,
+	GUC_CAPTURE_LIST_CLASS_VIDEO = 1,
+	GUC_CAPTURE_LIST_CLASS_VIDEOENHANCE = 2,
+	GUC_CAPTURE_LIST_CLASS_BLITTER = 3,
+	GUC_CAPTURE_LIST_CLASS_GSC_OTHER = 4,
+};
+
 /* GuC Additional Data Struct */
 struct guc_ads {
 	struct guc_mmio_reg_set reg_state_list[GUC_MAX_ENGINE_CLASSES][GUC_MAX_INSTANCES_PER_CLASS];
@@ -449,7 +454,10 @@ struct guc_ads {
 	u32 capture_instance[GUC_CAPTURE_LIST_INDEX_MAX][GUC_MAX_ENGINE_CLASSES];
 	u32 capture_class[GUC_CAPTURE_LIST_INDEX_MAX][GUC_MAX_ENGINE_CLASSES];
 	u32 capture_global[GUC_CAPTURE_LIST_INDEX_MAX];
-	u32 reserved[14];
+	u32 wa_klv_addr_lo;
+	u32 wa_klv_addr_hi;
+	u32 wa_klv_size;
+	u32 reserved[11];
 } __packed;
 
 /* Engine usage stats */
@@ -474,7 +482,7 @@ enum guc_log_buffer_type {
 	GUC_MAX_LOG_BUFFER
 };
 
-/**
+/*
  * struct guc_log_buffer_state - GuC log buffer state
  *
  * Below state structure is used for coordination of retrieval of GuC firmware
@@ -513,44 +521,10 @@ struct guc_log_buffer_state {
 	u32 version;
 } __packed;
 
-struct guc_ctx_report {
-	u32 report_return_status;
-	u32 reserved1[64];
-	u32 affected_count;
-	u32 reserved2[2];
-} __packed;
-
-/* GuC Shared Context Data Struct */
-struct guc_shared_ctx_data {
-	u32 addr_of_last_preempted_data_low;
-	u32 addr_of_last_preempted_data_high;
-	u32 addr_of_last_preempted_data_high_tmp;
-	u32 padding;
-	u32 is_mapped_to_proxy;
-	u32 proxy_ctx_id;
-	u32 engine_reset_ctx_id;
-	u32 media_reset_count;
-	u32 reserved1[8];
-	u32 uk_last_ctx_switch_reason;
-	u32 was_reset;
-	u32 lrca_gpu_addr;
-	u64 execlist_ctx;
-	u32 reserved2[66];
-	struct guc_ctx_report preempt_ctx_report[GUC_MAX_ENGINES_NUM];
-} __packed;
-
 /* This action will be programmed in C1BC - SOFT_SCRATCH_15_REG */
 enum intel_guc_recv_message {
 	INTEL_GUC_RECV_MSG_CRASH_DUMP_POSTED = BIT(1),
 	INTEL_GUC_RECV_MSG_EXCEPTION = BIT(30),
 };
-
-#define INTEL_GUC_SUPPORTS_TLB_INVALIDATION(guc) \
-	((intel_guc_ct_enabled(&(guc)->ct)) && \
-	 (intel_guc_submission_is_used(guc)) && \
-	 (GRAPHICS_VER(guc_to_gt((guc))->i915) >= 12))
-#define INTEL_GUC_SUPPORTS_TLB_INVALIDATION_SELECTIVE(guc) \
-	(INTEL_GUC_SUPPORTS_TLB_INVALIDATION(guc) && \
-	HAS_SELECTIVE_TLB_INVALIDATION(guc_to_gt(guc)->i915))
 
 #endif

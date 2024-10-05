@@ -9,18 +9,19 @@
 #include <drm/drm_fourcc.h>
 
 #include "i915_drv.h"
-#include "i915_irq.h"
 #include "i915_reg.h"
 #include "intel_atomic_plane.h"
 #include "intel_de.h"
+#include "intel_display_irq.h"
 #include "intel_display_types.h"
 #include "intel_fb.h"
 #include "intel_fbc.h"
+#include "intel_frontbuffer.h"
 #include "intel_psr.h"
-#include "intel_sprite.h"
 #include "skl_scaler.h"
 #include "skl_universal_plane.h"
 #include "skl_watermark.h"
+#include "gt/intel_gt.h"
 #include "pxp/intel_pxp.h"
 
 static const u32 skl_plane_formats[] = {
@@ -1246,7 +1247,7 @@ icl_plane_update_noarm(struct intel_plane *plane,
 	}
 
 	/* FLAT CCS doesn't need to program AUX_DIST */
-	if (!HAS_FLAT_CCS(dev_priv))
+	if (!HAS_FLAT_CCS(dev_priv) && DISPLAY_VER(dev_priv) < 20)
 		intel_de_write_fw(dev_priv, PLANE_AUX_DIST(pipe, plane_id),
 				  skl_plane_aux_dist(plane_state, color_plane));
 
@@ -1945,7 +1946,7 @@ static enum intel_fbc_id skl_fbc_id_for_pipe(enum pipe pipe)
 static bool skl_plane_has_fbc(struct drm_i915_private *dev_priv,
 			      enum intel_fbc_id fbc_id, enum plane_id plane_id)
 {
-	if ((RUNTIME_INFO(dev_priv)->fbc_mask & BIT(fbc_id)) == 0)
+	if ((DISPLAY_RUNTIME_INFO(dev_priv)->fbc_mask & BIT(fbc_id)) == 0)
 		return false;
 
 	return plane_id == PLANE_PRIMARY;
@@ -2170,7 +2171,7 @@ static bool skl_plane_has_rc_ccs(struct drm_i915_private *i915,
 				 enum pipe pipe, enum plane_id plane_id)
 {
 	/* Wa_22011186057 */
-	if (IS_ADLP_DISPLAY_STEP(i915, STEP_A0, STEP_B0))
+	if (IS_ALDERLAKE_P(i915) && IS_DISPLAY_STEP(i915, STEP_A0, STEP_B0))
 		return false;
 
 	if (DISPLAY_VER(i915) >= 11)
@@ -2192,15 +2193,11 @@ static bool gen12_plane_has_mc_ccs(struct drm_i915_private *i915,
 
 	/* Wa_14010477008 */
 	if (IS_DG1(i915) || IS_ROCKETLAKE(i915) ||
-	    IS_TGL_DISPLAY_STEP(i915, STEP_A0, STEP_D0))
+		(IS_TIGERLAKE(i915) && IS_DISPLAY_STEP(i915, STEP_A0, STEP_D0)))
 		return false;
 
 	/* Wa_22011186057 */
-	if (IS_ADLP_DISPLAY_STEP(i915, STEP_A0, STEP_B0))
-		return false;
-
-	/* Wa_14013215631 */
-	if (IS_DG2_DISPLAY_STEP(i915, STEP_A0, STEP_C0))
+	if (IS_ALDERLAKE_P(i915) && IS_DISPLAY_STEP(i915, STEP_A0, STEP_B0))
 		return false;
 
 	return plane_id < PLANE_SPRITE4;
@@ -2489,6 +2486,12 @@ skl_get_initial_plane_config(struct intel_crtc *crtc,
 		goto error;
 	}
 
+	if (!dev_priv->params.enable_dpt &&
+	    intel_fb_modifier_uses_dpt(dev_priv, fb->modifier)) {
+		drm_dbg_kms(&dev_priv->drm, "DPT disabled, skipping initial FB\n");
+		goto error;
+	}
+
 	/*
 	 * DRM_MODE_ROTATE_ is counter clockwise to stay compatible with Xrandr
 	 * while i915 HW rotation is clockwise, thats why this swapping.
@@ -2519,6 +2522,7 @@ skl_get_initial_plane_config(struct intel_crtc *crtc,
 	plane_config->base = base;
 
 	offset = intel_de_read(dev_priv, PLANE_OFFSET(pipe, plane_id));
+	drm_WARN_ON(&dev_priv->drm, offset != 0);
 
 	val = intel_de_read(dev_priv, PLANE_SIZE(pipe, plane_id));
 	fb->height = REG_FIELD_GET(PLANE_HEIGHT_MASK, val) + 1;

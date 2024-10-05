@@ -1,11 +1,8 @@
-# Linux i915 driver (dkms module) with SR-IOV support for linux 6.1 ~ linux 6.11
+# Linux i915 driver (dkms module) with SR-IOV support for linux 6.8 ~ linux 6.11
 
-Originally from [linux-intel-lts](https://github.com/intel/linux-intel-lts/tree/lts-v5.15.49-adl-linux-220826T092047Z/drivers/gpu/drm/i915)
-Update to [6.1.12](https://github.com/intel/linux-intel-lts/tree/lts-v6.1.12-linux-230415T124447Z/drivers/gpu/drm/i915)
+Originally from [linux-intel-lts#lts-v6.6.50-linux-240925T091328Z](https://github.com/intel/linux-intel-lts/tree/lts-v6.6.50-linux-240925T091328Z/drivers/gpu/drm/i915)
 
-## Update Notice
 
-The i915 module parameter to enable SR-IOV functionality has changed since [commit #092d1cf](https://github.com/strongtz/i915-sriov-dkms/commit/092d1cf126f31eca3c1de4673e537c3c5f1e6ab4). If you are updating from previous version, please modify `i915.enable_guc=7` to **`i915.enable_guc=3 i915.max_vfs=7`** in your kernel command line or in the corresponding modprobe config file.
 
 ## Warning
 
@@ -45,7 +42,7 @@ You can create up to 7 VFs on Intel UHD Graphics
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8.8-2-pve proxmox-kernel-6.8.8-2-pve` (for unsigned kernel).
 1. Change into the root of the cloned repository and run `dkms add .`.
-1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.09.21 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
+1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.10.07 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.

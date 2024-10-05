@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 /*
- * Copyright © 2022 Intel Corporation
+ * Copyright © 2023 Intel Corporation
  */
 
 #ifndef _INTEL_GSC_PROXY_H_

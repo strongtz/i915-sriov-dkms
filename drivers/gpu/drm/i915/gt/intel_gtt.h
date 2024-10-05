@@ -35,9 +35,9 @@
 #define I915_GFP_ALLOW_FAIL (GFP_KERNEL | __GFP_RETRY_MAYFAIL | __GFP_NOWARN)
 
 #if IS_ENABLED(CONFIG_DRM_I915_TRACE_GTT)
-#define DBG(...) trace_printk(__VA_ARGS__)
+#define GTT_TRACE(...) trace_printk(__VA_ARGS__)
 #else
-#define DBG(...)
+#define GTT_TRACE(...)
 #endif
 
 #define NALLOC 3 /* 1 normal, 1 for concurrent threads, 1 for preallocation */
@@ -88,12 +88,11 @@ typedef u64 gen8_pte_t;
 #define BYT_PTE_SNOOPED_BY_CPU_CACHES	REG_BIT(2)
 #define BYT_PTE_WRITEABLE		REG_BIT(1)
 
-#define GEN12_PPGTT_PTE_PAT3    BIT_ULL(62)
+#define MTL_PPGTT_PTE_PAT3	BIT_ULL(62)
 #define GEN12_PPGTT_PTE_LM	BIT_ULL(11)
-#define GEN12_PPGTT_PTE_PAT2    BIT_ULL(7)
-#define GEN12_PPGTT_PTE_NC      BIT_ULL(5)
-#define GEN12_PPGTT_PTE_PAT1    BIT_ULL(4)
-#define GEN12_PPGTT_PTE_PAT0    BIT_ULL(3)
+#define GEN12_PPGTT_PTE_PAT2	BIT_ULL(7)
+#define GEN12_PPGTT_PTE_PAT1	BIT_ULL(4)
+#define GEN12_PPGTT_PTE_PAT0	BIT_ULL(3)
 
 /*
  *  DOC: GEN12 GGTT Table Entry format
@@ -183,7 +182,6 @@ typedef u64 gen8_pte_t;
 #define MTL_PPAT_L4_0_WB	REG_FIELD_PREP(MTL_PPAT_L4_CACHE_POLICY_MASK, 0)
 #define MTL_3_COH_2W	REG_FIELD_PREP(MTL_PAT_INDEX_COH_MODE_MASK, 3)
 #define MTL_2_COH_1W	REG_FIELD_PREP(MTL_PAT_INDEX_COH_MODE_MASK, 2)
-#define MTL_0_COH_NON	REG_FIELD_PREP(MTL_PAT_INDEX_COH_MODE_MASK, 0)
 
 struct drm_i915_gem_object;
 struct i915_fence_reg;
@@ -192,6 +190,9 @@ struct intel_gt;
 
 #define for_each_sgt_daddr(__dp, __iter, __sgt) \
 	__for_each_sgt_daddr(__dp, __iter, __sgt, I915_GTT_PAGE_SIZE)
+
+#define for_each_sgt_daddr_next(__dp, __iter) \
+	__for_each_daddr_next(__dp, __iter, I915_GTT_PAGE_SIZE)
 
 struct i915_page_table {
 	struct drm_i915_gem_object *base;
@@ -334,6 +335,8 @@ struct i915_address_space {
 				  u64 start, u64 length);
 	void (*clear_range)(struct i915_address_space *vm,
 			    u64 start, u64 length);
+	void (*scratch_range)(struct i915_address_space *vm,
+			      u64 start, u64 length);
 	void (*insert_page)(struct i915_address_space *vm,
 			    dma_addr_t addr,
 			    u64 offset,
@@ -527,7 +530,7 @@ static inline void i915_vm_put(struct i915_address_space *vm)
 
 /**
  * i915_vm_resv_put - Release a reference on the vm's reservation lock
- * @resv: Pointer to a reservation lock obtained from i915_vm_resv_get()
+ * @vm: The vm whose reservation lock reference we want to release
  */
 static inline void i915_vm_resv_put(struct i915_address_space *vm)
 {
@@ -619,8 +622,23 @@ int i915_ggtt_balloon(struct i915_ggtt *ggtt, u64 start, u64 end,
 		      struct drm_mm_node *node);
 void i915_ggtt_deballoon(struct i915_ggtt *ggtt, struct drm_mm_node *node);
 
+int i915_ggtt_sgtable_update_ptes(struct i915_ggtt *ggtt, unsigned int vfid, u64 ggtt_addr,
+				  struct sg_table *st, u32 num_entries,
+				  const gen8_pte_t pte_pattern);
+gen8_pte_t i915_ggtt_prepare_vf_pte(u16 vfid);
 void i915_ggtt_set_space_owner(struct i915_ggtt *ggtt, u16 vfid,
 			       const struct drm_mm_node *node);
+
+#define I915_GGTT_SAVE_PTES_NO_VFID BIT(31)
+
+int i915_ggtt_save_ptes(struct i915_ggtt *ggtt, const struct drm_mm_node *node, void *buf,
+			unsigned int size, unsigned int flags);
+
+#define I915_GGTT_RESTORE_PTES_NEW_VFID  BIT(31)
+#define I915_GGTT_RESTORE_PTES_VFID_MASK GENMASK(19, 0)
+
+int i915_ggtt_restore_ptes(struct i915_ggtt *ggtt, const struct drm_mm_node *node, const void *buf,
+			   unsigned int size, unsigned int flags);
 
 int i915_ppgtt_init_hw(struct intel_gt *gt);
 
@@ -658,14 +676,17 @@ void free_px(struct i915_address_space *vm,
 #define free_pt(vm, px) free_px(vm, px, 0)
 #define free_pd(vm, px) free_px(vm, px_pt(px), 1)
 
+unsigned int ggtt_size_to_ptes_size(u64 ggtt_size);
+void ggtt_pte_clear_vfid(void *buf, u64 size);
+
 void
 __set_pd_entry(struct i915_page_directory * const pd,
 	       const unsigned short idx,
 	       struct i915_page_table *pt,
-	       u64 (*encode)(const dma_addr_t, const unsigned int pat_index));
+	       u64 (*encode)(const dma_addr_t, const enum i915_cache_level));
 
 #define set_pd_entry(pd, idx, to) \
-	__set_pd_entry((pd), (idx), px_pt(to), gen8_pde_encode_shim)
+	__set_pd_entry((pd), (idx), px_pt(to), gen8_pde_encode)
 
 void
 clear_pd_entry(struct i915_page_directory * const pd,
@@ -714,5 +735,7 @@ static inline struct sgt_dma {
 
 	return (struct sgt_dma){ sg, addr, addr + sg_dma_len(sg) };
 }
+
+bool i915_ggtt_require_binder(struct drm_i915_private *i915);
 
 #endif

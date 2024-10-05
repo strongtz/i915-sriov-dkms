@@ -51,6 +51,7 @@
 #include "intel_lvds.h"
 #include "intel_lvds_regs.h"
 #include "intel_panel.h"
+#include "intel_pps_regs.h"
 
 /* Private structure for the integrated LVDS support */
 struct intel_lvds_pps {
@@ -149,7 +150,7 @@ static void intel_lvds_get_config(struct intel_encoder *encoder,
 	if (DISPLAY_VER(dev_priv) < 4) {
 		tmp = intel_de_read(dev_priv, PFIT_CONTROL);
 
-		crtc_state->gmch_pfit.control |= tmp & PANEL_8TO6_DITHER_ENABLE;
+		crtc_state->gmch_pfit.control |= tmp & PFIT_PANEL_8TO6_DITHER_ENABLE;
 	}
 
 	crtc_state->hw.adjusted_mode.crtc_clock = crtc_state->port_clock;
@@ -286,7 +287,7 @@ static void intel_pre_enable_lvds(struct intel_atomic_state *state,
 	/*
 	 * Set the dithering flag on LVDS as needed, note that there is no
 	 * special lvds dither control bit on pch-split platforms, dithering is
-	 * only controlled through the PIPECONF reg.
+	 * only controlled through the TRANSCONF reg.
 	 */
 	if (DISPLAY_VER(i915) == 4) {
 		/*
@@ -388,10 +389,15 @@ intel_lvds_mode_valid(struct drm_connector *_connector,
 		      struct drm_display_mode *mode)
 {
 	struct intel_connector *connector = to_intel_connector(_connector);
+	struct drm_i915_private *i915 = to_i915(connector->base.dev);
 	const struct drm_display_mode *fixed_mode =
 		intel_panel_fixed_mode(connector, mode);
 	int max_pixclk = to_i915(connector->base.dev)->max_dotclk_freq;
 	enum drm_mode_status status;
+
+	status = intel_cpu_transcoder_mode_valid(i915, mode);
+	if (status != MODE_OK)
+		return status;
 
 	if (mode->flags & DRM_MODE_FLAG_DBLSCAN)
 		return MODE_NO_DBLESCAN;
@@ -424,11 +430,18 @@ static int intel_lvds_compute_config(struct intel_encoder *encoder,
 		return -EINVAL;
 	}
 
+	if (HAS_PCH_SPLIT(i915)) {
+		crtc_state->has_pch_encoder = true;
+		if (!intel_fdi_compute_pipe_bpp(crtc_state))
+			return -EINVAL;
+	}
+
 	if (lvds_encoder->a3_power == LVDS_A3_POWER_UP)
 		lvds_bpp = 8*3;
 	else
 		lvds_bpp = 6*3;
 
+	/* TODO: Check crtc_state->max_link_bpp_x16 instead of bw_constrained */
 	if (lvds_bpp != crtc_state->pipe_bpp && !crtc_state->bw_constrained) {
 		drm_dbg_kms(&i915->drm,
 			    "forcing display bpp (was %d) to LVDS (%d)\n",
@@ -436,6 +449,7 @@ static int intel_lvds_compute_config(struct intel_encoder *encoder,
 		crtc_state->pipe_bpp = lvds_bpp;
 	}
 
+	crtc_state->sink_format = INTEL_OUTPUT_FORMAT_RGB;
 	crtc_state->output_format = INTEL_OUTPUT_FORMAT_RGB;
 
 	/*
@@ -450,9 +464,6 @@ static int intel_lvds_compute_config(struct intel_encoder *encoder,
 
 	if (adjusted_mode->flags & DRM_MODE_FLAG_DBLSCAN)
 		return -EINVAL;
-
-	if (HAS_PCH_SPLIT(i915))
-		crtc_state->has_pch_encoder = true;
 
 	ret = intel_panel_fitting(crtc_state, conn_state);
 	if (ret)
@@ -477,14 +488,9 @@ static int intel_lvds_get_modes(struct drm_connector *_connector)
 
 	/* Use panel fixed edid if we have one */
 	if (!IS_ERR_OR_NULL(fixed_edid)) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		drm_edid_connector_update(&connector->base, fixed_edid);
 
 		return drm_edid_connector_add_modes(&connector->base);
-#else
-		struct edid *edid = drm_edid_raw(fixed_edid);
-		return drm_add_edid_modes(&connector->base, edid);
-#endif
 	}
 
 	return intel_panel_get_modes(connector);
@@ -840,7 +846,7 @@ void intel_lvds_init(struct drm_i915_private *i915)
 	struct intel_encoder *encoder;
 	i915_reg_t lvds_reg;
 	u32 lvds;
-	u8 pin;
+	u8 ddc_pin;
 
 	/* Skip init on machines we know falsely report LVDS */
 	if (dmi_check_system(intel_no_lvds)) {
@@ -867,8 +873,8 @@ void intel_lvds_init(struct drm_i915_private *i915)
 			return;
 	}
 
-	pin = GMBUS_PIN_PANEL;
-	if (!intel_bios_is_lvds_present(i915, &pin)) {
+	ddc_pin = GMBUS_PIN_PANEL;
+	if (!intel_bios_is_lvds_present(i915, &ddc_pin)) {
 		if ((lvds & LVDS_PORT_EN) == 0) {
 			drm_dbg_kms(&i915->drm,
 				    "LVDS is not present in VBT\n");
@@ -891,8 +897,10 @@ void intel_lvds_init(struct drm_i915_private *i915)
 	lvds_encoder->attached_connector = connector;
 	encoder = &lvds_encoder->base;
 
-	drm_connector_init(&i915->drm, &connector->base, &intel_lvds_connector_funcs,
-			   DRM_MODE_CONNECTOR_LVDS);
+	drm_connector_init_with_ddc(&i915->drm, &connector->base,
+				    &intel_lvds_connector_funcs,
+				    DRM_MODE_CONNECTOR_LVDS,
+				    intel_gmbus_get_adapter(i915, ddc_pin));
 
 	drm_encoder_init(&i915->drm, &encoder->base, &intel_lvds_enc_funcs,
 			 DRM_MODE_ENCODER_LVDS, "LVDS");
@@ -946,39 +954,17 @@ void intel_lvds_init(struct drm_i915_private *i915)
 	 * preferred mode is the right one.
 	 */
 	mutex_lock(&i915->drm.mode_config.mutex);
-	if (vga_switcheroo_handler_flags() & VGA_SWITCHEROO_CAN_SWITCH_DDC) {
-		const struct edid *edid;
-
-		/* FIXME: Make drm_get_edid_switcheroo() return drm_edid */
-		edid = drm_get_edid_switcheroo(&connector->base,
-					       intel_gmbus_get_adapter(i915, pin));
-		if (edid) {
-			drm_edid = drm_edid_alloc(edid, (edid->extensions + 1) * EDID_LENGTH);
-			kfree(edid);
-		} else {
-			drm_edid = NULL;
-		}
-	} else {
-		drm_edid = drm_edid_read_ddc(&connector->base,
-					     intel_gmbus_get_adapter(i915, pin));
-	}
+	if (vga_switcheroo_handler_flags() & VGA_SWITCHEROO_CAN_SWITCH_DDC)
+		drm_edid = drm_edid_read_switcheroo(&connector->base, connector->base.ddc);
+	else
+		drm_edid = drm_edid_read_ddc(&connector->base, connector->base.ddc);
 	if (drm_edid) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		if (drm_edid_connector_update(&connector->base, drm_edid) ||
 		    !drm_edid_connector_add_modes(&connector->base)) {
 			drm_edid_connector_update(&connector->base, NULL);
 			drm_edid_free(drm_edid);
 			drm_edid = ERR_PTR(-EINVAL);
 		}
-#else
-		const struct edid *edid = drm_edid_raw(drm_edid);
-		if (drm_add_edid_modes(&connector->base, edid)) {
-			drm_connector_update_edid_property(&connector->base, edid);
-		} else {
-			drm_edid_free(drm_edid);
-			drm_edid = ERR_PTR(-EINVAL);
-		}
-#endif
 	} else {
 		drm_edid = ERR_PTR(-ENOENT);
 	}

@@ -111,29 +111,6 @@ bool i915_error_injected(void);
 #define range_overflows_end_t(type, start, size, max) \
 	range_overflows_end((type)(start), (type)(size), (type)(max))
 
-#ifndef overflows_type
-/* Note we don't consider signbits :| */
-#define overflows_type(x, T) \
-	(sizeof(x) > sizeof(T) && (x) >> BITS_PER_TYPE(T))
-#endif
-
-#ifndef __overflows_type_constexpr
-#define is_unsigned_type(type) (!is_signed_type(type))
-#define __overflows_type_constexpr(x, T) (			\
-	is_unsigned_type(typeof(x)) ?				\
-		(x) > type_max(typeof(T)) :			\
-	is_unsigned_type(typeof(T)) ?				\
-		(x) < 0 || (x) > type_max(typeof(T)) :		\
-	(x) < type_min(typeof(T)) || (x) > type_max(typeof(T)))
-#endif
-
-#ifndef castable_to_type
-#define castable_to_type(n, T)						\
-	__builtin_choose_expr(__is_constexpr(n),			\
-			      !__overflows_type_constexpr(n, T),	\
-			      __same_type(n, T))
-#endif
-
 #ifndef check_round_up_overflow
 #define check_round_up_overflow(a, b, d) __must_check_overflow(({		\
 	typeof(a) __a = (a);							\
@@ -284,7 +261,7 @@ wait_remaining_ms_from_jiffies(unsigned long timestamp_jiffies, int to_wait_ms)
 	}
 }
 
-/**
+/*
  * __wait_for - magic wait macro
  *
  * Macro to help avoid open coding check/wait/timeout patterns. Note that it's

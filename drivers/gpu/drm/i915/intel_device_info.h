@@ -29,8 +29,6 @@
 
 #include "intel_step.h"
 
-#include "display/intel_display_limits.h"
-
 #include "gt/intel_engine_types.h"
 #include "gt/intel_context_types.h"
 #include "gt/intel_sseu.h"
@@ -129,10 +127,7 @@ enum intel_platform {
  * bit set
  */
 #define INTEL_SUBPLATFORM_N    1
-
-/* MTL */
-#define INTEL_SUBPLATFORM_M	0
-#define INTEL_SUBPLATFORM_P	1
+#define INTEL_SUBPLATFORM_RPLU  2
 
 enum intel_ppgtt_type {
 	INTEL_PPGTT_NONE = I915_GEM_PPGTT_NONE,
@@ -151,8 +146,6 @@ enum intel_ppgtt_type {
 	func(gpu_reset_clobbers_display); \
 	func(has_reset_engine); \
 	func(has_3d_pipeline); \
-	func(has_4tile); \
-	func(has_asid_tlb_invalidation); \
 	func(has_flat_ccs); \
 	func(has_global_mocs); \
 	func(has_gmd_id); \
@@ -160,6 +153,7 @@ enum intel_ppgtt_type {
 	func(has_heci_pxp); \
 	func(has_heci_gscfi); \
 	func(has_guc_deprivilege); \
+	func(has_guc_tlb_invalidation); \
 	func(has_l3_ccs_read); \
 	func(has_l3_dpf); \
 	func(has_llc); \
@@ -170,13 +164,13 @@ enum intel_ppgtt_type {
 	func(has_mslice_steering); \
 	func(has_oa_bpc_reporting); \
 	func(has_oa_slice_contrib_limits); \
+	func(has_oam); \
 	func(has_one_eu_per_fuse_bit); \
 	func(has_pxp); \
 	func(has_rc6); \
 	func(has_rc6p); \
 	func(has_rps); \
 	func(has_runtime_pm); \
-	func(has_selective_tlb_invalidation); \
 	func(has_snoop); \
 	func(has_sriov); \
 	func(has_coherent_ggtt); \
@@ -184,30 +178,14 @@ enum intel_ppgtt_type {
 	func(unfenced_needs_alignment); \
 	func(hws_needs_physical);
 
-#define DEV_INFO_DISPLAY_FOR_EACH_FLAG(func) \
-	/* Keep in alphabetical order */ \
-	func(cursor_needs_physical); \
-	func(has_cdclk_crawl); \
-	func(has_cdclk_squash); \
-	func(has_ddi); \
-	func(has_dp_mst); \
-	func(has_dsb); \
-	func(has_fpga_dbg); \
-	func(has_gmch); \
-	func(has_hotplug); \
-	func(has_hti); \
-	func(has_ipc); \
-	func(has_modular_fia); \
-	func(has_overlay); \
-	func(has_psr); \
-	func(has_psr_hw_tracking); \
-	func(overlay_needs_physical); \
-	func(supports_tv);
-
 struct intel_ip_version {
 	u8 ver;
 	u8 rel;
 	u8 step;
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
+	/* @preliminary: indicates that IP values are not confirmed yet. */
+	bool preliminary;
+#endif
 };
 
 struct intel_runtime_info {
@@ -221,9 +199,6 @@ struct intel_runtime_info {
 	struct {
 		struct intel_ip_version ip;
 	} media;
-	struct {
-		struct intel_ip_version ip;
-	} display;
 
 	/*
 	 * Platform mask is used for optimizing or-ed IS_PLATFORM calls into
@@ -251,21 +226,6 @@ struct intel_runtime_info {
 	u32 memory_regions; /* regions supported by the HW */
 
 	bool has_pooled_eu;
-
-	/* display */
-	struct {
-		u8 pipe_mask;
-		u8 cpu_transcoder_mask;
-
-		u8 num_sprites[I915_MAX_PIPES];
-		u8 num_scalers[I915_MAX_PIPES];
-
-		u8 fbc_mask;
-
-		bool has_hdcp;
-		bool has_dmc;
-		bool has_dsc;
-	};
 };
 
 struct intel_device_info {
@@ -281,38 +241,11 @@ struct intel_device_info {
 	DEV_INFO_FOR_EACH_FLAG(DEFINE_FLAG);
 #undef DEFINE_FLAG
 
-	struct {
-		u8 abox_mask;
-
-		struct {
-			u16 size; /* in blocks */
-			u8 slice_mask;
-		} dbuf;
-
-#define DEFINE_FLAG(name) u8 name:1
-		DEV_INFO_DISPLAY_FOR_EACH_FLAG(DEFINE_FLAG);
-#undef DEFINE_FLAG
-
-		/* Global register offset for the display engine */
-		u32 mmio_offset;
-
-		/* Register offsets for the various display pipes and transcoders */
-		u32 pipe_offsets[I915_MAX_TRANSCODERS];
-		u32 trans_offsets[I915_MAX_TRANSCODERS];
-		u32 cursor_offsets[I915_MAX_PIPES];
-
-		struct {
-			u32 degamma_lut_size;
-			u32 gamma_lut_size;
-			u32 degamma_lut_tests;
-			u32 gamma_lut_tests;
-		} color;
-	} display;
-
 	/*
 	 * Initial runtime info. Do not access outside of i915_driver_create().
 	 */
 	const struct intel_runtime_info __runtime;
+
 	u32 cachelevel_to_pat[I915_MAX_CACHE_LEVEL];
 	u32 max_pat_index;
 };
@@ -324,6 +257,8 @@ struct intel_driver_caps {
 
 const char *intel_platform_name(enum intel_platform platform);
 
+void intel_device_info_driver_create(struct drm_i915_private *i915, u16 device_id,
+				     const struct intel_device_info *match_info);
 void intel_device_info_runtime_init_early(struct drm_i915_private *dev_priv);
 void intel_device_info_runtime_init(struct drm_i915_private *dev_priv);
 

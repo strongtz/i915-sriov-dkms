@@ -405,19 +405,22 @@ static int mock_prepares_pf2guc(void *arg)
 {
 	struct intel_iov *iov = arg;
 	u32 vfid = VFID(1);
-	u32 msg[PF2GUC_RELAY_TO_VF_REQUEST_MSG_NUM_RELAY_DATA] = {
-		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
-		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_EVENT) |
-		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, IOV_ACTION_SELFTEST_RELAY),
-		FIELD_PREP(GUC_HXG_REQUEST_MSG_n_DATAn, SELFTEST_RELAY_DATA),
-		FIELD_PREP(GUC_HXG_REQUEST_MSG_n_DATAn, ~SELFTEST_RELAY_DATA),
-	};
-	u32 buf[PF2GUC_RELAY_TO_VF_REQUEST_MSG_NUM_RELAY_DATA];
+	u32 *buf, *msg;
 	struct payload_params params;
 	unsigned int n;
 	int err = 0;
 
-	for (n = GUC_HXG_MSG_MIN_LEN; n <= ARRAY_SIZE(msg); n++) {
+	/* can't be local due to size and frame limit of 2048 */
+	msg = kcalloc(VF2PF_MSG_MAX_LEN, sizeof(u32), GFP_KERNEL);
+	buf = kcalloc(VF2PF_MSG_MAX_LEN, sizeof(u32), GFP_KERNEL);
+
+	msg[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		 FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_EVENT) |
+		 FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, IOV_ACTION_SELFTEST_RELAY);
+	msg[1] = FIELD_PREP(GUC_HXG_REQUEST_MSG_n_DATAn, SELFTEST_RELAY_DATA);
+	msg[2] = FIELD_PREP(GUC_HXG_REQUEST_MSG_n_DATAn, ~SELFTEST_RELAY_DATA);
+
+	for (n = GUC_HXG_MSG_MIN_LEN; n <= VF2PF_MSG_MAX_LEN; n++) {
 
 		params.relayid = 0; /* don't check */
 		params.vfid = vfid;
@@ -429,8 +432,7 @@ static int mock_prepares_pf2guc(void *arg)
 		iov->relay.selftest.data = &params;
 		iov->relay.selftest.host2guc = pf2guc_payload_checker;
 
-		err = intel_iov_relay_send_to_vf(&iov->relay, vfid, msg, n,
-						 buf, ARRAY_SIZE(buf));
+		err = intel_iov_relay_send_to_vf(&iov->relay, vfid, msg, n, buf, VF2PF_MSG_MAX_LEN);
 
 		if (err < 0) {
 			IOV_SELFTEST_ERROR(iov, "failed to send msg len=%u, %d\n", n, err);
@@ -455,6 +457,8 @@ static int mock_prepares_pf2guc(void *arg)
 	iov->relay.selftest.host2guc = NULL;
 	iov->relay.selftest.data = NULL;
 
+	kfree(msg);
+	kfree(buf);
 	return err;
 }
 

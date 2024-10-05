@@ -36,6 +36,8 @@
 
  */
 
+#include <linux/vmalloc.h>
+
 #include "i915_drv.h"
 #include "i915_reg.h"
 #include "gvt.h"
@@ -43,8 +45,13 @@
 #include "intel_mchbar_regs.h"
 #include "display/intel_display_types.h"
 #include "display/intel_dmc_regs.h"
+#include "display/intel_dp_aux_regs.h"
 #include "display/intel_dpio_phy.h"
 #include "display/intel_fbc.h"
+#include "display/intel_fdi_regs.h"
+#include "display/intel_pps_regs.h"
+#include "display/intel_psr_regs.h"
+#include "display/skl_watermark_regs.h"
 #include "display/vlv_dsi_pll_regs.h"
 #include "gt/intel_gt_regs.h"
 
@@ -666,8 +673,8 @@ static void vgpu_update_refresh_rate(struct intel_vgpu *vgpu)
 	link_n = vgpu_vreg_t(vgpu, PIPE_LINK_N1(TRANSCODER_A));
 
 	/* Get H/V total from transcoder timing */
-	htotal = (vgpu_vreg_t(vgpu, HTOTAL(TRANSCODER_A)) >> TRANS_HTOTAL_SHIFT);
-	vtotal = (vgpu_vreg_t(vgpu, VTOTAL(TRANSCODER_A)) >> TRANS_VTOTAL_SHIFT);
+	htotal = (vgpu_vreg_t(vgpu, TRANS_HTOTAL(TRANSCODER_A)) >> TRANS_HTOTAL_SHIFT);
+	vtotal = (vgpu_vreg_t(vgpu, TRANS_VTOTAL(TRANSCODER_A)) >> TRANS_VTOTAL_SHIFT);
 
 	if (dp_br && link_n && htotal && vtotal) {
 		u64 pixel_clk = 0;
@@ -697,12 +704,12 @@ static int pipeconf_mmio_write(struct intel_vgpu *vgpu, unsigned int offset,
 	write_vreg(vgpu, offset, p_data, bytes);
 	data = vgpu_vreg(vgpu, offset);
 
-	if (data & PIPECONF_ENABLE) {
-		vgpu_vreg(vgpu, offset) |= PIPECONF_STATE_ENABLE;
+	if (data & TRANSCONF_ENABLE) {
+		vgpu_vreg(vgpu, offset) |= TRANSCONF_STATE_ENABLE;
 		vgpu_update_refresh_rate(vgpu);
 		vgpu_update_vblank_emulation(vgpu, true);
 	} else {
-		vgpu_vreg(vgpu, offset) &= ~PIPECONF_STATE_ENABLE;
+		vgpu_vreg(vgpu, offset) &= ~TRANSCONF_STATE_ENABLE;
 		vgpu_update_vblank_emulation(vgpu, false);
 	}
 	return 0;
@@ -1557,7 +1564,7 @@ static int pf_write(struct intel_vgpu *vgpu,
 
 	if ((offset == _PS_1A_CTRL || offset == _PS_2A_CTRL ||
 	   offset == _PS_1B_CTRL || offset == _PS_2B_CTRL ||
-	   offset == _PS_1C_CTRL) && (val & PS_PLANE_SEL_MASK) != 0) {
+	   offset == _PS_1C_CTRL) && (val & PS_BINDING_MASK) != PS_BINDING_PIPE) {
 		drm_WARN_ONCE(&i915->drm, true,
 			      "VM(%d): guest is trying to scaling a plane\n",
 			      vgpu->id);
@@ -2262,10 +2269,10 @@ static int init_generic_mmio_info(struct intel_gvt *gvt)
 	MMIO_DFH(GEN7_HALF_SLICE_CHICKEN1, D_ALL, F_MODE_MASK | F_CMD_ACCESS, NULL, NULL);
 
 	/* display */
-	MMIO_DH(PIPECONF(PIPE_A), D_ALL, NULL, pipeconf_mmio_write);
-	MMIO_DH(PIPECONF(PIPE_B), D_ALL, NULL, pipeconf_mmio_write);
-	MMIO_DH(PIPECONF(PIPE_C), D_ALL, NULL, pipeconf_mmio_write);
-	MMIO_DH(PIPECONF(_PIPE_EDP), D_ALL, NULL, pipeconf_mmio_write);
+	MMIO_DH(TRANSCONF(TRANSCODER_A), D_ALL, NULL, pipeconf_mmio_write);
+	MMIO_DH(TRANSCONF(TRANSCODER_B), D_ALL, NULL, pipeconf_mmio_write);
+	MMIO_DH(TRANSCONF(TRANSCODER_C), D_ALL, NULL, pipeconf_mmio_write);
+	MMIO_DH(TRANSCONF(TRANSCODER_EDP), D_ALL, NULL, pipeconf_mmio_write);
 	MMIO_DH(DSPSURF(PIPE_A), D_ALL, NULL, pri_surf_mmio_write);
 	MMIO_DH(REG_50080(PIPE_A, PLANE_PRIMARY), D_ALL, NULL,
 		reg50080_mmio_write);
@@ -2845,8 +2852,7 @@ static int handle_mmio(struct intel_gvt_mmio_table_iter *iter, u32 offset,
 	for (i = start; i < end; i += 4) {
 		p = intel_gvt_find_mmio_info(gvt, i);
 		if (p) {
-			WARN(1, "dup mmio definition offset %x\n",
-				info->offset);
+			WARN(1, "dup mmio definition offset %x\n", i);
 
 			/* We return -EEXIST here to make GVT-g load fail.
 			 * So duplicated MMIO can be found as soon as

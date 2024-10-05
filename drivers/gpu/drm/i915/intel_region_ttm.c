@@ -2,8 +2,6 @@
 /*
  * Copyright © 2021 Intel Corporation
  */
-#include <linux/version.h>
-
 #include <drm/ttm/ttm_device.h>
 #include <drm/ttm/ttm_range_manager.h>
 
@@ -133,11 +131,7 @@ int intel_region_ttm_fini(struct intel_memory_region *mem)
 			break;
 
 		msleep(20);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 		drain_workqueue(mem->i915->bdev.wq);
-#else
-		flush_delayed_work(&mem->i915->bdev.wq);
-#endif
 	}
 
 	/* If we leaked objects, Don't free the region causing use after free */
@@ -187,6 +181,7 @@ intel_region_ttm_resource_to_rsgt(struct intel_memory_region *mem,
 /**
  * intel_region_ttm_resource_alloc - Allocate memory resources from a region
  * @mem: The memory region,
+ * @offset: BO offset
  * @size: The requested size in bytes
  * @flags: Allocation flags
  *
@@ -263,11 +258,7 @@ void intel_region_ttm_resource_free(struct intel_memory_region *mem,
 	struct ttm_resource_manager *man = mem->region_private;
 	struct ttm_buffer_object mock_bo = {};
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	mock_bo.base.size = res->size;
-#else
-	mock_bo.base.size = res->num_pages << PAGE_SHIFT;
-#endif
 	mock_bo.bdev = &mem->i915->bdev;
 	res->bo = &mock_bo;
 

@@ -30,6 +30,7 @@
 #include <linux/export.h>
 #include <linux/i2c-algo-bit.h>
 #include <linux/i2c.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_hdcp_helper.h>
 
@@ -40,10 +41,6 @@
 #include "intel_display_types.h"
 #include "intel_gmbus.h"
 #include "intel_gmbus_regs.h"
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
-#include "intel_i2c.h"
-#endif
-
 
 struct intel_gmbus {
 	struct i2c_adapter adapter;
@@ -159,7 +156,10 @@ static const struct gmbus_pin *get_gmbus_pin(struct drm_i915_private *i915,
 	const struct gmbus_pin *pins;
 	size_t size;
 
-	if (INTEL_PCH_TYPE(i915) >= PCH_DG2) {
+	if (INTEL_PCH_TYPE(i915) >= PCH_LNL) {
+		pins = gmbus_pins_mtp;
+		size = ARRAY_SIZE(gmbus_pins_mtp);
+	} else if (INTEL_PCH_TYPE(i915) >= PCH_DG2) {
 		pins = gmbus_pins_dg2;
 		size = ARRAY_SIZE(gmbus_pins_dg2);
 	} else if (INTEL_PCH_TYPE(i915) >= PCH_DG1) {
@@ -219,41 +219,23 @@ intel_gmbus_reset(struct drm_i915_private *i915)
 static void pnv_gmbus_clock_gating(struct drm_i915_private *i915,
 				   bool enable)
 {
-	u32 val;
-
 	/* When using bit bashing for I2C, this bit needs to be set to 1 */
-	val = intel_de_read(i915, DSPCLK_GATE_D(i915));
-	if (!enable)
-		val |= PNV_GMBUSUNIT_CLOCK_GATE_DISABLE;
-	else
-		val &= ~PNV_GMBUSUNIT_CLOCK_GATE_DISABLE;
-	intel_de_write(i915, DSPCLK_GATE_D(i915), val);
+	intel_de_rmw(i915, DSPCLK_GATE_D(i915), PNV_GMBUSUNIT_CLOCK_GATE_DISABLE,
+		     !enable ? PNV_GMBUSUNIT_CLOCK_GATE_DISABLE : 0);
 }
 
 static void pch_gmbus_clock_gating(struct drm_i915_private *i915,
 				   bool enable)
 {
-	u32 val;
-
-	val = intel_de_read(i915, SOUTH_DSPCLK_GATE_D);
-	if (!enable)
-		val |= PCH_GMBUSUNIT_CLOCK_GATE_DISABLE;
-	else
-		val &= ~PCH_GMBUSUNIT_CLOCK_GATE_DISABLE;
-	intel_de_write(i915, SOUTH_DSPCLK_GATE_D, val);
+	intel_de_rmw(i915, SOUTH_DSPCLK_GATE_D, PCH_GMBUSUNIT_CLOCK_GATE_DISABLE,
+		     !enable ? PCH_GMBUSUNIT_CLOCK_GATE_DISABLE : 0);
 }
 
 static void bxt_gmbus_clock_gating(struct drm_i915_private *i915,
 				   bool enable)
 {
-	u32 val;
-
-	val = intel_de_read(i915, GEN9_CLKGATE_DIS_4);
-	if (!enable)
-		val |= BXT_GMBUS_GATING_DIS;
-	else
-		val &= ~BXT_GMBUS_GATING_DIS;
-	intel_de_write(i915, GEN9_CLKGATE_DIS_4, val);
+	intel_de_rmw(i915, GEN9_CLKGATE_DIS_4, BXT_GMBUS_GATING_DIS,
+		     !enable ? BXT_GMBUS_GATING_DIS : 0);
 }
 
 static u32 get_reserved(struct intel_gmbus *bus)
@@ -918,7 +900,6 @@ int intel_gmbus_setup(struct drm_i915_private *i915)
 		}
 
 		bus->adapter.owner = THIS_MODULE;
-		bus->adapter.class = I2C_CLASS_DDC;
 		snprintf(bus->adapter.name,
 			 sizeof(bus->adapter.name),
 			 "i915 gmbus %s", gmbus_pin->name);
@@ -1012,4 +993,9 @@ void intel_gmbus_teardown(struct drm_i915_private *i915)
 		kfree(bus);
 		i915->display.gmbus.bus[pin] = NULL;
 	}
+}
+
+void intel_gmbus_irq_handler(struct drm_i915_private *i915)
+{
+	wake_up_all(&i915->display.gmbus.wait_queue);
 }

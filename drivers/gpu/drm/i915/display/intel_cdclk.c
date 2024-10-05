@@ -32,11 +32,13 @@
 #include "intel_cdclk.h"
 #include "intel_crtc.h"
 #include "intel_de.h"
+#include "intel_dp.h"
 #include "intel_display_types.h"
 #include "intel_mchbar_regs.h"
 #include "intel_pci_config.h"
 #include "intel_pcode.h"
 #include "intel_psr.h"
+#include "intel_vdsc.h"
 #include "vlv_sideband.h"
 
 /**
@@ -469,7 +471,7 @@ static void hsw_get_cdclk(struct drm_i915_private *dev_priv,
 		cdclk_config->cdclk = 450000;
 	else if (freq == LCPLL_CLK_FREQ_450)
 		cdclk_config->cdclk = 450000;
-	else if (IS_HSW_ULT(dev_priv))
+	else if (IS_HASWELL_ULT(dev_priv))
 		cdclk_config->cdclk = 337500;
 	else
 		cdclk_config->cdclk = 540000;
@@ -1300,7 +1302,7 @@ static const struct intel_cdclk_vals adlp_a_step_cdclk_table[] = {
 
 	{ .refclk = 24000, .cdclk = 312000, .divider = 2, .ratio = 26 },
 	{ .refclk = 24000, .cdclk = 552000, .divider = 2, .ratio = 46 },
-	{ .refclk = 24000, .cdclk = 648000, .divider = 2, .ratio = 54 },
+	{ .refclk = 24400, .cdclk = 648000, .divider = 2, .ratio = 54 },
 
 	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
 	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
@@ -1324,6 +1326,30 @@ static const struct intel_cdclk_vals adlp_cdclk_table[] = {
 	{ .refclk = 38400, .cdclk = 179200, .divider = 3, .ratio = 14 },
 	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 10 },
 	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
+	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
+	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34 },
+	{}
+};
+
+static const struct intel_cdclk_vals rplu_cdclk_table[] = {
+	{ .refclk = 19200, .cdclk = 172800, .divider = 3, .ratio = 27 },
+	{ .refclk = 19200, .cdclk = 192000, .divider = 2, .ratio = 20 },
+	{ .refclk = 19200, .cdclk = 307200, .divider = 2, .ratio = 32 },
+	{ .refclk = 19200, .cdclk = 480000, .divider = 2, .ratio = 50 },
+	{ .refclk = 19200, .cdclk = 556800, .divider = 2, .ratio = 58 },
+	{ .refclk = 19200, .cdclk = 652800, .divider = 2, .ratio = 68 },
+
+	{ .refclk = 24000, .cdclk = 176000, .divider = 3, .ratio = 22 },
+	{ .refclk = 24000, .cdclk = 192000, .divider = 2, .ratio = 16 },
+	{ .refclk = 24000, .cdclk = 312000, .divider = 2, .ratio = 26 },
+	{ .refclk = 24000, .cdclk = 480000, .divider = 2, .ratio = 40 },
+	{ .refclk = 24000, .cdclk = 552000, .divider = 2, .ratio = 46 },
+	{ .refclk = 24000, .cdclk = 648000, .divider = 2, .ratio = 54 },
+
+	{ .refclk = 38400, .cdclk = 179200, .divider = 3, .ratio = 14 },
+	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 10 },
+	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
+	{ .refclk = 38400, .cdclk = 480000, .divider = 2, .ratio = 25 },
 	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
 	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34 },
 	{}
@@ -1353,6 +1379,31 @@ static const struct intel_cdclk_vals mtl_cdclk_table[] = {
 	{ .refclk = 38400, .cdclk = 480000, .divider = 2, .ratio = 25, .waveform = 0x0000 },
 	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29, .waveform = 0x0000 },
 	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34, .waveform = 0x0000 },
+	{}
+};
+
+static const struct intel_cdclk_vals lnl_cdclk_table[] = {
+	{ .refclk = 38400, .cdclk = 153600, .divider = 2, .ratio = 16, .waveform = 0xaaaa },
+	{ .refclk = 38400, .cdclk = 172800, .divider = 2, .ratio = 16, .waveform = 0xad5a },
+	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 16, .waveform = 0xb6b6 },
+	{ .refclk = 38400, .cdclk = 211200, .divider = 2, .ratio = 16, .waveform = 0xdbb6 },
+	{ .refclk = 38400, .cdclk = 230400, .divider = 2, .ratio = 16, .waveform = 0xeeee },
+	{ .refclk = 38400, .cdclk = 249600, .divider = 2, .ratio = 16, .waveform = 0xf7de },
+	{ .refclk = 38400, .cdclk = 268800, .divider = 2, .ratio = 16, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 288000, .divider = 2, .ratio = 16, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 330000, .divider = 2, .ratio = 25, .waveform = 0xdbb6 },
+	{ .refclk = 38400, .cdclk = 360000, .divider = 2, .ratio = 25, .waveform = 0xeeee },
+	{ .refclk = 38400, .cdclk = 390000, .divider = 2, .ratio = 25, .waveform = 0xf7de },
+	{ .refclk = 38400, .cdclk = 420000, .divider = 2, .ratio = 25, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 450000, .divider = 2, .ratio = 25, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 480000, .divider = 2, .ratio = 25, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 487200, .divider = 2, .ratio = 29, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 522000, .divider = 2, .ratio = 29, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 571200, .divider = 2, .ratio = 34, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 612000, .divider = 2, .ratio = 34, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34, .waveform = 0xffff },
 	{}
 };
 
@@ -1422,6 +1473,18 @@ static u8 tgl_calc_voltage_level(int cdclk)
 	if (cdclk > 556800)
 		return 3;
 	else if (cdclk > 326400)
+		return 2;
+	else if (cdclk > 312000)
+		return 1;
+	else
+		return 0;
+}
+
+static u8 rplu_calc_voltage_level(int cdclk)
+{
+	if (cdclk > 556800)
+		return 3;
+	else if (cdclk > 480000)
 		return 2;
 	else if (cdclk > 312000)
 		return 1;
@@ -1803,9 +1866,10 @@ static bool cdclk_compute_crawl_and_squash_midpoint(struct drm_i915_private *i91
 
 static bool pll_enable_wa_needed(struct drm_i915_private *dev_priv)
 {
-	return ((IS_DG2(dev_priv) || IS_METEORLAKE(dev_priv)) &&
-		dev_priv->display.cdclk.hw.vco > 0 &&
-		HAS_CDCLK_SQUASH(dev_priv));
+	return (DISPLAY_VER_FULL(dev_priv) == IP_VER(20, 0) ||
+		DISPLAY_VER_FULL(dev_priv) == IP_VER(14, 0) ||
+		IS_DG2(dev_priv)) &&
+		dev_priv->display.cdclk.hw.vco > 0;
 }
 
 static void _bxt_set_cdclk(struct drm_i915_private *dev_priv,
@@ -1842,8 +1906,7 @@ static void _bxt_set_cdclk(struct drm_i915_private *dev_priv,
 		dg2_cdclk_squash_program(dev_priv, waveform);
 
 	val = bxt_cdclk_cd2x_div_sel(dev_priv, clock, vco) |
-		bxt_cdclk_cd2x_pipe(dev_priv, pipe) |
-		skl_cdclk_decimal(cdclk);
+		bxt_cdclk_cd2x_pipe(dev_priv, pipe);
 
 	/*
 	 * Disable SSA Precharge when CD clock frequency < 500 MHz,
@@ -1852,6 +1915,12 @@ static void _bxt_set_cdclk(struct drm_i915_private *dev_priv,
 	if ((IS_GEMINILAKE(dev_priv) || IS_BROXTON(dev_priv)) &&
 	    cdclk >= 500000)
 		val |= BXT_CDCLK_SSA_PRECHARGE_ENABLE;
+
+	if (DISPLAY_VER(dev_priv) >= 20)
+		val |= MDCLK_SOURCE_SEL_CDCLK_PLL;
+	else
+		val |= skl_cdclk_decimal(cdclk);
+
 	intel_de_write(dev_priv, CDCLK_CTL, val);
 
 	if (pipe != INVALID_PIPE)
@@ -1872,7 +1941,7 @@ static void bxt_set_cdclk(struct drm_i915_private *dev_priv,
 	 * mailbox communication, skip
 	 * this step.
 	 */
-	if (DISPLAY_VER(dev_priv) >= 14)
+	if (DISPLAY_VER(dev_priv) >= 14 || IS_DG2(dev_priv))
 		/* NOOP */;
 	else if (DISPLAY_VER(dev_priv) >= 11)
 		ret = skl_pcode_request(&dev_priv->uncore, SKL_PCODE_CDCLK_CONTROL,
@@ -1908,10 +1977,10 @@ static void bxt_set_cdclk(struct drm_i915_private *dev_priv,
 		 * NOOP - No Pcode communication needed for
 		 * Display versions 14 and beyond
 		 */;
-	else if (DISPLAY_VER(dev_priv) >= 11)
+	else if (DISPLAY_VER(dev_priv) >= 11 && !IS_DG2(dev_priv))
 		ret = snb_pcode_write(&dev_priv->uncore, SKL_PCODE_CDCLK_CONTROL,
 				      cdclk_config->voltage_level);
-	else
+	if (DISPLAY_VER(dev_priv) < 11) {
 		/*
 		 * The timeout isn't specified, the 2ms used here is based on
 		 * experiment.
@@ -1922,7 +1991,7 @@ static void bxt_set_cdclk(struct drm_i915_private *dev_priv,
 					      HSW_PCODE_DE_WRITE_FREQ_REQ,
 					      cdclk_config->voltage_level,
 					      150, 2);
-
+	}
 	if (ret) {
 		drm_err(&dev_priv->drm,
 			"PCode CDCLK freq set failed, (err %d, freq %d)\n",
@@ -2218,6 +2287,38 @@ void intel_cdclk_dump_config(struct drm_i915_private *i915,
 		    cdclk_config->voltage_level);
 }
 
+static void intel_pcode_notify(struct drm_i915_private *i915,
+			       u8 voltage_level,
+			       u8 active_pipe_count,
+			       u16 cdclk,
+			       bool cdclk_update_valid,
+			       bool pipe_count_update_valid)
+{
+	int ret;
+	u32 update_mask = 0;
+
+	if (!IS_DG2(i915))
+		return;
+
+	update_mask = DISPLAY_TO_PCODE_UPDATE_MASK(cdclk, active_pipe_count, voltage_level);
+
+	if (cdclk_update_valid)
+		update_mask |= DISPLAY_TO_PCODE_CDCLK_VALID;
+
+	if (pipe_count_update_valid)
+		update_mask |= DISPLAY_TO_PCODE_PIPE_COUNT_VALID;
+
+	ret = skl_pcode_request(&i915->uncore, SKL_PCODE_CDCLK_CONTROL,
+				SKL_CDCLK_PREPARE_FOR_CHANGE |
+				update_mask,
+				SKL_CDCLK_READY_FOR_CHANGE,
+				SKL_CDCLK_READY_FOR_CHANGE, 3);
+	if (ret)
+		drm_err(&i915->drm,
+			"Failed to inform PCU about display config (err %d)\n",
+			ret);
+}
+
 /**
  * intel_set_cdclk - Push the CDCLK configuration to the hardware
  * @dev_priv: i915 device
@@ -2287,6 +2388,88 @@ static void intel_set_cdclk(struct drm_i915_private *dev_priv,
 	}
 }
 
+static void intel_cdclk_pcode_pre_notify(struct intel_atomic_state *state)
+{
+	struct drm_i915_private *i915 = to_i915(state->base.dev);
+	const struct intel_cdclk_state *old_cdclk_state =
+		intel_atomic_get_old_cdclk_state(state);
+	const struct intel_cdclk_state *new_cdclk_state =
+		intel_atomic_get_new_cdclk_state(state);
+	unsigned int cdclk = 0; u8 voltage_level, num_active_pipes = 0;
+	bool change_cdclk, update_pipe_count;
+
+	if (!intel_cdclk_changed(&old_cdclk_state->actual,
+				 &new_cdclk_state->actual) &&
+				 new_cdclk_state->active_pipes ==
+				 old_cdclk_state->active_pipes)
+		return;
+
+	/* According to "Sequence Before Frequency Change", voltage level set to 0x3 */
+	voltage_level = DISPLAY_TO_PCODE_VOLTAGE_MAX;
+
+	change_cdclk = new_cdclk_state->actual.cdclk != old_cdclk_state->actual.cdclk;
+	update_pipe_count = hweight8(new_cdclk_state->active_pipes) >
+			    hweight8(old_cdclk_state->active_pipes);
+
+	/*
+	 * According to "Sequence Before Frequency Change",
+	 * if CDCLK is increasing, set bits 25:16 to upcoming CDCLK,
+	 * if CDCLK is decreasing or not changing, set bits 25:16 to current CDCLK,
+	 * which basically means we choose the maximum of old and new CDCLK, if we know both
+	 */
+	if (change_cdclk)
+		cdclk = max(new_cdclk_state->actual.cdclk, old_cdclk_state->actual.cdclk);
+
+	/*
+	 * According to "Sequence For Pipe Count Change",
+	 * if pipe count is increasing, set bits 25:16 to upcoming pipe count
+	 * (power well is enabled)
+	 * no action if it is decreasing, before the change
+	 */
+	if (update_pipe_count)
+		num_active_pipes = hweight8(new_cdclk_state->active_pipes);
+
+	intel_pcode_notify(i915, voltage_level, num_active_pipes, cdclk,
+			   change_cdclk, update_pipe_count);
+}
+
+static void intel_cdclk_pcode_post_notify(struct intel_atomic_state *state)
+{
+	struct drm_i915_private *i915 = to_i915(state->base.dev);
+	const struct intel_cdclk_state *new_cdclk_state =
+		intel_atomic_get_new_cdclk_state(state);
+	const struct intel_cdclk_state *old_cdclk_state =
+		intel_atomic_get_old_cdclk_state(state);
+	unsigned int cdclk = 0; u8 voltage_level, num_active_pipes = 0;
+	bool update_cdclk, update_pipe_count;
+
+	/* According to "Sequence After Frequency Change", set voltage to used level */
+	voltage_level = new_cdclk_state->actual.voltage_level;
+
+	update_cdclk = new_cdclk_state->actual.cdclk != old_cdclk_state->actual.cdclk;
+	update_pipe_count = hweight8(new_cdclk_state->active_pipes) <
+			    hweight8(old_cdclk_state->active_pipes);
+
+	/*
+	 * According to "Sequence After Frequency Change",
+	 * set bits 25:16 to current CDCLK
+	 */
+	if (update_cdclk)
+		cdclk = new_cdclk_state->actual.cdclk;
+
+	/*
+	 * According to "Sequence For Pipe Count Change",
+	 * if pipe count is decreasing, set bits 25:16 to current pipe count,
+	 * after the change(power well is disabled)
+	 * no action if it is increasing, after the change
+	 */
+	if (update_pipe_count)
+		num_active_pipes = hweight8(new_cdclk_state->active_pipes);
+
+	intel_pcode_notify(i915, voltage_level, num_active_pipes, cdclk,
+			   update_cdclk, update_pipe_count);
+}
+
 /**
  * intel_set_cdclk_pre_plane_update - Push the CDCLK state to the hardware
  * @state: intel atomic state
@@ -2297,23 +2480,40 @@ static void intel_set_cdclk(struct drm_i915_private *dev_priv,
 void
 intel_set_cdclk_pre_plane_update(struct intel_atomic_state *state)
 {
-	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
+	struct drm_i915_private *i915 = to_i915(state->base.dev);
 	const struct intel_cdclk_state *old_cdclk_state =
 		intel_atomic_get_old_cdclk_state(state);
 	const struct intel_cdclk_state *new_cdclk_state =
 		intel_atomic_get_new_cdclk_state(state);
-	enum pipe pipe = new_cdclk_state->pipe;
+	struct intel_cdclk_config cdclk_config;
+	enum pipe pipe;
 
 	if (!intel_cdclk_changed(&old_cdclk_state->actual,
 				 &new_cdclk_state->actual))
 		return;
 
-	if (pipe == INVALID_PIPE ||
-	    old_cdclk_state->actual.cdclk <= new_cdclk_state->actual.cdclk) {
-		drm_WARN_ON(&dev_priv->drm, !new_cdclk_state->base.changed);
+	if (IS_DG2(i915))
+		intel_cdclk_pcode_pre_notify(state);
 
-		intel_set_cdclk(dev_priv, &new_cdclk_state->actual, pipe);
+	if (new_cdclk_state->disable_pipes) {
+		cdclk_config = new_cdclk_state->actual;
+		pipe = INVALID_PIPE;
+	} else {
+		if (new_cdclk_state->actual.cdclk >= old_cdclk_state->actual.cdclk) {
+			cdclk_config = new_cdclk_state->actual;
+			pipe = new_cdclk_state->pipe;
+		} else {
+			cdclk_config = old_cdclk_state->actual;
+			pipe = INVALID_PIPE;
+		}
+
+		cdclk_config.voltage_level = max(new_cdclk_state->actual.voltage_level,
+						 old_cdclk_state->actual.voltage_level);
 	}
+
+	drm_WARN_ON(&i915->drm, !new_cdclk_state->base.changed);
+
+	intel_set_cdclk(i915, &cdclk_config, pipe);
 }
 
 /**
@@ -2326,23 +2526,29 @@ intel_set_cdclk_pre_plane_update(struct intel_atomic_state *state)
 void
 intel_set_cdclk_post_plane_update(struct intel_atomic_state *state)
 {
-	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
+	struct drm_i915_private *i915 = to_i915(state->base.dev);
 	const struct intel_cdclk_state *old_cdclk_state =
 		intel_atomic_get_old_cdclk_state(state);
 	const struct intel_cdclk_state *new_cdclk_state =
 		intel_atomic_get_new_cdclk_state(state);
-	enum pipe pipe = new_cdclk_state->pipe;
+	enum pipe pipe;
 
 	if (!intel_cdclk_changed(&old_cdclk_state->actual,
 				 &new_cdclk_state->actual))
 		return;
 
-	if (pipe != INVALID_PIPE &&
-	    old_cdclk_state->actual.cdclk > new_cdclk_state->actual.cdclk) {
-		drm_WARN_ON(&dev_priv->drm, !new_cdclk_state->base.changed);
+	if (IS_DG2(i915))
+		intel_cdclk_pcode_post_notify(state);
 
-		intel_set_cdclk(dev_priv, &new_cdclk_state->actual, pipe);
-	}
+	if (!new_cdclk_state->disable_pipes &&
+	    new_cdclk_state->actual.cdclk < old_cdclk_state->actual.cdclk)
+		pipe = new_cdclk_state->pipe;
+	else
+		pipe = INVALID_PIPE;
+
+	drm_WARN_ON(&i915->drm, !new_cdclk_state->base.changed);
+
+	intel_set_cdclk(i915, &new_cdclk_state->actual, pipe);
 }
 
 static int intel_pixel_rate_to_cdclk(const struct intel_crtc_state *crtc_state)
@@ -2372,6 +2578,49 @@ static int intel_planes_min_cdclk(const struct intel_crtc_state *crtc_state)
 
 	for_each_intel_plane_on_crtc(&dev_priv->drm, crtc, plane)
 		min_cdclk = max(crtc_state->min_cdclk[plane->id], min_cdclk);
+
+	return min_cdclk;
+}
+
+static int intel_vdsc_min_cdclk(const struct intel_crtc_state *crtc_state)
+{
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
+	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
+	int num_vdsc_instances = intel_dsc_get_num_vdsc_instances(crtc_state);
+	int min_cdclk = 0;
+
+	/*
+	 * When we decide to use only one VDSC engine, since
+	 * each VDSC operates with 1 ppc throughput, pixel clock
+	 * cannot be higher than the VDSC clock (cdclk)
+	 * If there 2 VDSC engines, then pixel clock can't be higher than
+	 * VDSC clock(cdclk) * 2 and so on.
+	 */
+	min_cdclk = max_t(int, min_cdclk,
+			  DIV_ROUND_UP(crtc_state->pixel_rate, num_vdsc_instances));
+
+	if (crtc_state->bigjoiner_pipes) {
+		int pixel_clock = intel_dp_mode_to_fec_clock(crtc_state->hw.adjusted_mode.clock);
+
+		/*
+		 * According to Bigjoiner bw check:
+		 * compressed_bpp <= PPC * CDCLK * Big joiner Interface bits / Pixel clock
+		 *
+		 * We have already computed compressed_bpp, so now compute the min CDCLK that
+		 * is required to support this compressed_bpp.
+		 *
+		 * => CDCLK >= compressed_bpp * Pixel clock / (PPC * Bigjoiner Interface bits)
+		 *
+		 * Since PPC = 2 with bigjoiner
+		 * => CDCLK >= compressed_bpp * Pixel clock  / 2 * Bigjoiner Interface bits
+		 */
+		int bigjoiner_interface_bits = DISPLAY_VER(i915) > 13 ? 36 : 24;
+		int min_cdclk_bj =
+			(to_bpp_int_roundup(crtc_state->dsc.compressed_bpp_x16) *
+			 pixel_clock) / (2 * bigjoiner_interface_bits);
+
+		min_cdclk = max(min_cdclk, min_cdclk_bj);
+	}
 
 	return min_cdclk;
 }
@@ -2447,13 +2696,8 @@ int intel_crtc_compute_min_cdclk(const struct intel_crtc_state *crtc_state)
 	/* Account for additional needs from the planes */
 	min_cdclk = max(intel_planes_min_cdclk(crtc_state), min_cdclk);
 
-	/*
-	 * When we decide to use only one VDSC engine, since
-	 * each VDSC operates with 1 ppc throughput, pixel clock
-	 * cannot be higher than the VDSC clock (cdclk)
-	 */
-	if (crtc_state->dsc.compression_enable && !crtc_state->dsc.dsc_split)
-		min_cdclk = max(min_cdclk, (int)crtc_state->pixel_rate);
+	if (crtc_state->dsc.compression_enable)
+		min_cdclk = max(min_cdclk, intel_vdsc_min_cdclk(crtc_state));
 
 	/*
 	 * HACK. Currently for TGL/DG2 platforms we calculate
@@ -2523,6 +2767,18 @@ static int intel_compute_min_cdclk(struct intel_cdclk_state *cdclk_state)
 			cdclk_state->bw_min_cdclk);
 	for_each_pipe(dev_priv, pipe)
 		min_cdclk = max(cdclk_state->min_cdclk[pipe], min_cdclk);
+
+	/*
+	 * Avoid glk_force_audio_cdclk() causing excessive screen
+	 * blinking when multiple pipes are active by making sure
+	 * CDCLK frequency is always high enough for audio. With a
+	 * single active pipe we can always change CDCLK frequency
+	 * by changing the cd2x divider (see glk_cdclk_table[]) and
+	 * thus a full modeset won't be needed then.
+	 */
+	if (IS_GEMINILAKE(dev_priv) && cdclk_state->active_pipes &&
+	    !is_power_of_2(cdclk_state->active_pipes))
+		min_cdclk = max(2 * 96000, min_cdclk);
 
 	if (min_cdclk > dev_priv->display.cdclk.max_cdclk_freq) {
 		drm_dbg_kms(&dev_priv->drm,
@@ -2770,6 +3026,7 @@ static struct intel_global_state *intel_cdclk_duplicate_state(struct intel_globa
 		return NULL;
 
 	cdclk_state->pipe = INVALID_PIPE;
+	cdclk_state->disable_pipes = false;
 
 	return &cdclk_state->base;
 }
@@ -2803,7 +3060,7 @@ int intel_cdclk_atomic_check(struct intel_atomic_state *state,
 {
 	const struct intel_cdclk_state *old_cdclk_state;
 	const struct intel_cdclk_state *new_cdclk_state;
-	struct intel_plane_state *plane_state;
+	struct intel_plane_state __maybe_unused *plane_state;
 	struct intel_plane *plane;
 	int ret;
 	int i;
@@ -2847,6 +3104,21 @@ int intel_cdclk_init(struct drm_i915_private *dev_priv)
 	return 0;
 }
 
+static bool intel_cdclk_need_serialize(struct drm_i915_private *i915,
+				       const struct intel_cdclk_state *old_cdclk_state,
+				       const struct intel_cdclk_state *new_cdclk_state)
+{
+	bool power_well_cnt_changed = hweight8(old_cdclk_state->active_pipes) !=
+				      hweight8(new_cdclk_state->active_pipes);
+	bool cdclk_changed = intel_cdclk_changed(&old_cdclk_state->actual,
+						 &new_cdclk_state->actual);
+	/*
+	 * We need to poke hw for gen >= 12, because we notify PCode if
+	 * pipe power well count changes.
+	 */
+	return cdclk_changed || (IS_DG2(i915) && power_well_cnt_changed);
+}
+
 int intel_modeset_calc_cdclk(struct intel_atomic_state *state)
 {
 	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
@@ -2868,8 +3140,7 @@ int intel_modeset_calc_cdclk(struct intel_atomic_state *state)
 	if (ret)
 		return ret;
 
-	if (intel_cdclk_changed(&old_cdclk_state->actual,
-				&new_cdclk_state->actual)) {
+	if (intel_cdclk_need_serialize(dev_priv, old_cdclk_state, new_cdclk_state)) {
 		/*
 		 * Also serialize commits across all crtcs
 		 * if the actual hw needs to be poked.
@@ -2930,9 +3201,11 @@ int intel_modeset_calc_cdclk(struct intel_atomic_state *state)
 	} else if (intel_cdclk_needs_modeset(&old_cdclk_state->actual,
 					     &new_cdclk_state->actual)) {
 		/* All pipes must be switched off while we change the cdclk. */
-		ret = intel_modeset_all_pipes(state, "CDCLK change");
+		ret = intel_modeset_all_pipes_late(state, "CDCLK change");
 		if (ret)
 			return ret;
+
+		new_cdclk_state->disable_pipes = true;
 
 		drm_dbg_kms(&dev_priv->drm,
 			    "Modeset required for cdclk change\n");
@@ -2977,7 +3250,7 @@ static int intel_compute_max_dotclk(struct drm_i915_private *dev_priv)
  */
 void intel_update_max_cdclk(struct drm_i915_private *dev_priv)
 {
-	if (IS_JSL_EHL(dev_priv)) {
+	if (IS_JASPERLAKE(dev_priv) || IS_ELKHARTLAKE(dev_priv)) {
 		if (dev_priv->display.cdclk.hw.ref == 24000)
 			dev_priv->display.cdclk.max_cdclk_freq = 552000;
 		else
@@ -3022,9 +3295,9 @@ void intel_update_max_cdclk(struct drm_i915_private *dev_priv)
 		 */
 		if (intel_de_read(dev_priv, FUSE_STRAP) & HSW_CDCLK_LIMIT)
 			dev_priv->display.cdclk.max_cdclk_freq = 450000;
-		else if (IS_BDW_ULX(dev_priv))
+		else if (IS_BROADWELL_ULX(dev_priv))
 			dev_priv->display.cdclk.max_cdclk_freq = 450000;
-		else if (IS_BDW_ULT(dev_priv))
+		else if (IS_BROADWELL_ULT(dev_priv))
 			dev_priv->display.cdclk.max_cdclk_freq = 540000;
 		else
 			dev_priv->display.cdclk.max_cdclk_freq = 675000;
@@ -3211,11 +3484,39 @@ u32 intel_read_rawclk(struct drm_i915_private *dev_priv)
 	return freq;
 }
 
+static int i915_cdclk_info_show(struct seq_file *m, void *unused)
+{
+	struct drm_i915_private *i915 = m->private;
+
+	seq_printf(m, "Current CD clock frequency: %d kHz\n", i915->display.cdclk.hw.cdclk);
+	seq_printf(m, "Max CD clock frequency: %d kHz\n", i915->display.cdclk.max_cdclk_freq);
+	seq_printf(m, "Max pixel clock frequency: %d kHz\n", i915->max_dotclk_freq);
+
+	return 0;
+}
+
+DEFINE_SHOW_ATTRIBUTE(i915_cdclk_info);
+
+void intel_cdclk_debugfs_register(struct drm_i915_private *i915)
+{
+	struct drm_minor *minor = i915->drm.primary;
+
+	debugfs_create_file("i915_cdclk_info", 0444, minor->debugfs_root,
+			    i915, &i915_cdclk_info_fops);
+}
+
 static const struct intel_cdclk_funcs mtl_cdclk_funcs = {
 	.get_cdclk = bxt_get_cdclk,
 	.set_cdclk = bxt_set_cdclk,
 	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
 	.calc_voltage_level = tgl_calc_voltage_level,
+};
+
+static const struct intel_cdclk_funcs rplu_cdclk_funcs = {
+	.get_cdclk = bxt_get_cdclk,
+	.set_cdclk = bxt_set_cdclk,
+	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
+	.calc_voltage_level = rplu_calc_voltage_level,
 };
 
 static const struct intel_cdclk_funcs tgl_cdclk_funcs = {
@@ -3353,26 +3654,34 @@ static const struct intel_cdclk_funcs i830_cdclk_funcs = {
  */
 void intel_init_cdclk_hooks(struct drm_i915_private *dev_priv)
 {
-	if (IS_METEORLAKE(dev_priv)) {
+	if (DISPLAY_VER(dev_priv) >= 20) {
+		dev_priv->display.funcs.cdclk = &mtl_cdclk_funcs;
+		dev_priv->display.cdclk.table = lnl_cdclk_table;
+	} else if (DISPLAY_VER(dev_priv) >= 14) {
 		dev_priv->display.funcs.cdclk = &mtl_cdclk_funcs;
 		dev_priv->display.cdclk.table = mtl_cdclk_table;
 	} else if (IS_DG2(dev_priv)) {
 		dev_priv->display.funcs.cdclk = &tgl_cdclk_funcs;
 		dev_priv->display.cdclk.table = dg2_cdclk_table;
 	} else if (IS_ALDERLAKE_P(dev_priv)) {
-		dev_priv->display.funcs.cdclk = &tgl_cdclk_funcs;
 		/* Wa_22011320316:adl-p[a0] */
-		if (IS_ADLP_DISPLAY_STEP(dev_priv, STEP_A0, STEP_B0))
+		if (IS_ALDERLAKE_P(dev_priv) && IS_DISPLAY_STEP(dev_priv, STEP_A0, STEP_B0)) {
 			dev_priv->display.cdclk.table = adlp_a_step_cdclk_table;
-		else
+			dev_priv->display.funcs.cdclk = &tgl_cdclk_funcs;
+		} else if (IS_RAPTORLAKE_U(dev_priv)) {
+			dev_priv->display.cdclk.table = rplu_cdclk_table;
+			dev_priv->display.funcs.cdclk = &rplu_cdclk_funcs;
+		} else {
 			dev_priv->display.cdclk.table = adlp_cdclk_table;
+			dev_priv->display.funcs.cdclk = &tgl_cdclk_funcs;
+		}
 	} else if (IS_ROCKETLAKE(dev_priv)) {
 		dev_priv->display.funcs.cdclk = &tgl_cdclk_funcs;
 		dev_priv->display.cdclk.table = rkl_cdclk_table;
 	} else if (DISPLAY_VER(dev_priv) >= 12) {
 		dev_priv->display.funcs.cdclk = &tgl_cdclk_funcs;
 		dev_priv->display.cdclk.table = icl_cdclk_table;
-	} else if (IS_JSL_EHL(dev_priv)) {
+	} else if (IS_JASPERLAKE(dev_priv) || IS_ELKHARTLAKE(dev_priv)) {
 		dev_priv->display.funcs.cdclk = &ehl_cdclk_funcs;
 		dev_priv->display.cdclk.table = icl_cdclk_table;
 	} else if (DISPLAY_VER(dev_priv) >= 11) {

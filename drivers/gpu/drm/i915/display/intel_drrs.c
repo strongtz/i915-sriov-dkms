@@ -9,6 +9,7 @@
 #include "intel_de.h"
 #include "intel_display_types.h"
 #include "intel_drrs.h"
+#include "intel_frontbuffer.h"
 #include "intel_panel.h"
 
 /**
@@ -68,21 +69,15 @@ intel_drrs_set_refresh_rate_pipeconf(struct intel_crtc *crtc,
 {
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 	enum transcoder cpu_transcoder = crtc->drrs.cpu_transcoder;
-	u32 val, bit;
+	u32 bit;
 
 	if (IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv))
-		bit = PIPECONF_REFRESH_RATE_ALT_VLV;
+		bit = TRANSCONF_REFRESH_RATE_ALT_VLV;
 	else
-		bit = PIPECONF_REFRESH_RATE_ALT_ILK;
+		bit = TRANSCONF_REFRESH_RATE_ALT_ILK;
 
-	val = intel_de_read(dev_priv, PIPECONF(cpu_transcoder));
-
-	if (refresh_rate == DRRS_REFRESH_RATE_LOW)
-		val |= bit;
-	else
-		val &= ~bit;
-
-	intel_de_write(dev_priv, PIPECONF(cpu_transcoder), val);
+	intel_de_rmw(dev_priv, TRANSCONF(cpu_transcoder),
+		     bit, refresh_rate == DRRS_REFRESH_RATE_LOW ? bit : 0);
 }
 
 static void
@@ -117,7 +112,9 @@ static void intel_drrs_set_state(struct intel_crtc *crtc,
 
 static void intel_drrs_schedule_work(struct intel_crtc *crtc)
 {
-	mod_delayed_work(system_wq, &crtc->drrs.work, msecs_to_jiffies(1000));
+	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
+
+	mod_delayed_work(i915->unordered_wq, &crtc->drrs.work, msecs_to_jiffies(1000));
 }
 
 static unsigned int intel_drrs_frontbuffer_bits(const struct intel_crtc_state *crtc_state)
@@ -302,6 +299,7 @@ void intel_drrs_crtc_init(struct intel_crtc *crtc)
 static int intel_drrs_debugfs_status_show(struct seq_file *m, void *unused)
 {
 	struct intel_crtc *crtc = m->private;
+	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
 	const struct intel_crtc_state *crtc_state;
 	int ret;
 
@@ -312,6 +310,11 @@ static int intel_drrs_debugfs_status_show(struct seq_file *m, void *unused)
 	crtc_state = to_intel_crtc_state(crtc->base.state);
 
 	mutex_lock(&crtc->drrs.mutex);
+
+	seq_printf(m, "DRRS capable: %s\n",
+		   str_yes_no(crtc_state->has_drrs ||
+			      HAS_DOUBLE_BUFFERED_M_N(i915) ||
+			      intel_cpu_transcoder_has_m2_n2(i915, crtc_state->cpu_transcoder)));
 
 	seq_printf(m, "DRRS enabled: %s\n",
 		   str_yes_no(crtc_state->has_drrs));

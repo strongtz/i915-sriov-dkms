@@ -6,13 +6,8 @@
 #include <linux/slab.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_bo.h>
-#else
-#include <drm/ttm/ttm_bo_driver.h>
-#include <drm/ttm/ttm_placement.h>
-#endif
 
 #include <drm/drm_buddy.h>
 
@@ -64,17 +59,13 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 
 	if (place->flags & TTM_PL_FLAG_TOPDOWN)
 		bman_res->flags |= DRM_BUDDY_TOPDOWN_ALLOCATION;
-
+	if (place->flags & TTM_PL_FLAG_CONTIGUOUS)
+		bman_res->flags |= DRM_BUDDY_CONTIGUOUS_ALLOCATION;
 	if (place->fpfn || lpfn != man->size)
 		bman_res->flags |= DRM_BUDDY_RANGE_ALLOCATION;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	GEM_BUG_ON(!bman_res->base.size);
 	size = bman_res->base.size;
-#else
-	GEM_BUG_ON(!bman_res->base.num_pages);
-	size = bman_res->base.num_pages << PAGE_SHIFT;
-#endif
 
 	min_page_size = bman->default_page_size;
 	if (bo->page_alignment)
@@ -82,22 +73,6 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 
 	GEM_BUG_ON(min_page_size < mm->chunk_size);
 	GEM_BUG_ON(!IS_ALIGNED(size, min_page_size));
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
-	if (place->fpfn + PFN_UP(bman_res->base.size) != place->lpfn &&
-#else
-	if (place->fpfn + bman_res->base.num_pages != place->lpfn &&
-#endif
-	    place->flags & TTM_PL_FLAG_CONTIGUOUS) {
-		unsigned long pages;
-
-		size = roundup_pow_of_two(size);
-		min_page_size = size;
-
-		pages = size >> ilog2(mm->chunk_size);
-		if (pages > lpfn)
-			lpfn = pages;
-	}
 
 	if (size > lpfn << PAGE_SHIFT) {
 		err = -E2BIG;
@@ -122,30 +97,8 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 	if (unlikely(err))
 		goto err_free_blocks;
 
-	if (place->flags & TTM_PL_FLAG_CONTIGUOUS) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
-		u64 original_size = (u64)bman_res->base.size;
-#else
-		u64 original_size = (u64)bman_res->base.num_pages << PAGE_SHIFT;
-#endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
-		drm_buddy_block_trim(mm,
-				     NULL,
-				     original_size,
-				     &bman_res->blocks);
-#else
-		drm_buddy_block_trim(mm,
-				     original_size,
-				     &bman_res->blocks);
-#endif
-	}
-
 	if (lpfn <= bman->visible_size) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 		bman_res->used_visible_size = PFN_UP(bman_res->base.size);
-#else
-		bman_res->used_visible_size = bman_res->base.num_pages;
-#endif
 	} else {
 		struct drm_buddy_block *block;
 
@@ -168,21 +121,14 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 
 	mutex_unlock(&bman->lock);
 
-	if (place->lpfn - place->fpfn == n_pages)
-		bman_res->base.start = place->fpfn;
-	else if (lpfn <= bman->visible_size)
-		bman_res->base.start = 0;
-	else
-		bman_res->base.start = bman->visible_size;
-
 	*res = &bman_res->base;
 	return 0;
 
 err_free_blocks:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-	drm_buddy_free_list(mm, &bman_res->blocks,0);
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	drm_buddy_free_list(mm, &bman_res->blocks);
+#else
+	drm_buddy_free_list(mm, &bman_res->blocks, 0);
 #endif
 	mutex_unlock(&bman->lock);
 err_free_res:
@@ -198,10 +144,10 @@ static void i915_ttm_buddy_man_free(struct ttm_resource_manager *man,
 	struct i915_ttm_buddy_manager *bman = to_buddy_manager(man);
 
 	mutex_lock(&bman->lock);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-	drm_buddy_free_list(&bman->mm, &bman_res->blocks, 0);
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	drm_buddy_free_list(&bman->mm, &bman_res->blocks);
+#else
+	drm_buddy_free_list(&bman->mm, &bman_res->blocks, 0);
 #endif
 	bman->visible_avail += bman_res->used_visible_size;
 	mutex_unlock(&bman->lock);
@@ -265,11 +211,7 @@ static bool i915_ttm_buddy_man_compatible(struct ttm_resource_manager *man,
 
 	if (!place->fpfn &&
 	    place->lpfn == i915_ttm_buddy_man_visible_size(man))
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 		return bman_res->used_visible_size == PFN_UP(res->size);
-#else
-		return bman_res->used_visible_size == res->num_pages;
-#endif
 
 	/* Check each drm buddy block individually */
 	list_for_each_entry(block, &bman_res->blocks, link) {
@@ -410,10 +352,10 @@ int i915_ttm_buddy_man_fini(struct ttm_device *bdev, unsigned int type)
 	ttm_set_driver_manager(bdev, type, NULL);
 
 	mutex_lock(&bman->lock);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-	drm_buddy_free_list(mm, &bman->reserved, 0);
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	drm_buddy_free_list(mm, &bman->reserved);
+#else
+	drm_buddy_free_list(mm, &bman->reserved, 0);
 #endif
 	drm_buddy_fini(mm);
 	bman->visible_avail += bman->visible_reserved;

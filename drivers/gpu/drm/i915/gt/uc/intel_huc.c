@@ -11,6 +11,7 @@
 #include "intel_huc_print.h"
 #include "i915_drv.h"
 #include "i915_reg.h"
+#include "pxp/intel_pxp_cmd_interface_43.h"
 
 #include <linux/device/bus.h>
 #include <linux/mei_aux.h>
@@ -23,15 +24,25 @@
  * capabilities by adding HuC specific commands to batch buffers.
  *
  * The kernel driver is only responsible for loading the HuC firmware and
- * triggering its security authentication, which is performed by the GuC on
- * older platforms and by the GSC on newer ones. For the GuC to correctly
- * perform the authentication, the HuC binary must be loaded before the GuC one.
+ * triggering its security authentication. This is done differently depending
+ * on the platform:
+ *
+ * - older platforms (from Gen9 to most Gen12s): the load is performed via DMA
+ *   and the authentication via GuC
+ * - DG2: load and authentication are both performed via GSC.
+ * - MTL and newer platforms: the load is performed via DMA (same as with
+ *   not-DG2 older platforms), while the authentication is done in 2-steps,
+ *   a first auth for clear-media workloads via GuC and a second one for all
+ *   workloads via GSC.
+ *
+ * On platforms where the GuC does the authentication, to correctly do so the
+ * HuC binary must be loaded before the GuC one.
  * Loading the HuC is optional; however, not using the HuC might negatively
  * impact power usage and/or performance of media workloads, depending on the
  * use-cases.
  * HuC must be reloaded on events that cause the WOPCM to lose its contents
- * (S3/S4, FLR); GuC-authenticated HuC must also be reloaded on GuC/GT reset,
- * while GSC-managed HuC will survive that.
+ * (S3/S4, FLR); on older platforms the HuC must also be reloaded on GuC/GT
+ * reset, while on newer ones it will survive that.
  *
  * See https://github.com/intel/media-driver for the latest details on HuC
  * functionality.
@@ -182,7 +193,7 @@ static int gsc_notifier(struct notifier_block *nb, unsigned long action, void *d
 	return 0;
 }
 
-void intel_huc_register_gsc_notifier(struct intel_huc *huc, struct bus_type *bus)
+void intel_huc_register_gsc_notifier(struct intel_huc *huc, const struct bus_type *bus)
 {
 	int ret;
 
@@ -198,7 +209,7 @@ void intel_huc_register_gsc_notifier(struct intel_huc *huc, struct bus_type *bus
 	}
 }
 
-void intel_huc_unregister_gsc_notifier(struct intel_huc *huc, struct bus_type *bus)
+void intel_huc_unregister_gsc_notifier(struct intel_huc *huc, const struct bus_type *bus)
 {
 	if (!huc->delayed_load.nb.notifier_call)
 		return;
@@ -231,6 +242,13 @@ static void delayed_huc_load_fini(struct intel_huc *huc)
 	 */
 	delayed_huc_load_complete(huc);
 	i915_sw_fence_fini(&huc->delayed_load.fence);
+}
+
+int intel_huc_sanitize(struct intel_huc *huc)
+{
+	delayed_huc_load_complete(huc);
+	intel_uc_fw_sanitize(&huc->fw);
+	return 0;
 }
 
 static bool vcs_supported(struct intel_gt *gt)
@@ -292,9 +310,9 @@ void intel_huc_init_early(struct intel_huc *huc)
 		huc->status[INTEL_HUC_AUTH_BY_GSC].mask = HUC_LOAD_SUCCESSFUL;
 		huc->status[INTEL_HUC_AUTH_BY_GSC].value = HUC_LOAD_SUCCESSFUL;
 	} else {
-		huc->status[INTEL_HUC_AUTH_BY_GSC].reg = HECI_FWSTS5(MTL_GSC_HECI1_BASE);
-		huc->status[INTEL_HUC_AUTH_BY_GSC].mask = HECI_FWSTS5_HUC_AUTH_DONE;
-		huc->status[INTEL_HUC_AUTH_BY_GSC].value = HECI_FWSTS5_HUC_AUTH_DONE;
+		huc->status[INTEL_HUC_AUTH_BY_GSC].reg = HECI_FWSTS(MTL_GSC_HECI1_BASE, 5);
+		huc->status[INTEL_HUC_AUTH_BY_GSC].mask = HECI1_FWSTS5_HUC_AUTH_DONE;
+		huc->status[INTEL_HUC_AUTH_BY_GSC].value = HECI1_FWSTS5_HUC_AUTH_DONE;
 	}
 }
 
@@ -302,7 +320,7 @@ void intel_huc_init_early(struct intel_huc *huc)
 static int check_huc_loading_mode(struct intel_huc *huc)
 {
 	struct intel_gt *gt = huc_to_gt(huc);
-	bool fw_is_meu = huc->fw.is_meu_binary;
+	bool gsc_enabled = huc->fw.has_gsc_headers;
 
 	/*
 	 * The fuse for HuC load via GSC is only valid on platforms that have
@@ -312,25 +330,41 @@ static int check_huc_loading_mode(struct intel_huc *huc)
 		huc->loaded_via_gsc = intel_uncore_read(gt->uncore, GUC_SHIM_CONTROL2) &
 				      GSC_LOADS_HUC;
 
-	if (huc->loaded_via_gsc && !fw_is_meu) {
-		huc_err(huc, "HW requires a MEU blob, but we found a legacy one\n");
+	if (huc->loaded_via_gsc && !gsc_enabled) {
+		huc_err(huc, "HW requires a GSC-enabled blob, but we found a legacy one\n");
 		return -ENOEXEC;
 	}
 
 	/*
-	 * Newer meu blobs contain the old FW structure inside. If we found
-	 * that, we can use it to load the legacy way.
+	 * On newer platforms we have GSC-enabled binaries but we load the HuC
+	 * via DMA. To do so we need to find the location of the legacy-style
+	 * binary inside the GSC-enabled one, which we do at fetch time. Make
+	 * sure that we were able to do so if the fuse says we need to load via
+	 * DMA and the binary is GSC-enabled.
 	 */
-	if (!huc->loaded_via_gsc && fw_is_meu && !huc->fw.dma_start_offset) {
-		huc_err(huc, " HW in legacy mode, but we have an incompatible meu blob\n");
+	if (!huc->loaded_via_gsc && gsc_enabled && !huc->fw.dma_start_offset) {
+		huc_err(huc, "HW in DMA mode, but we have an incompatible GSC-enabled blob\n");
 		return -ENOEXEC;
 	}
 
-	/* make sure we can access the GSC if we need it */
-	if (!(IS_ENABLED(CONFIG_INTEL_MEI_PXP) && IS_ENABLED(CONFIG_INTEL_MEI_GSC)) &&
-	    !HAS_ENGINE(gt, GSC0) && huc->loaded_via_gsc) {
-		huc_info(huc, "can't load due to missing MEI modules\n");
-		return -EIO;
+	/*
+	 * If the HuC is loaded via GSC, we need to be able to access the GSC.
+	 * On DG2 this is done via the mei components, while on newer platforms
+	 * it is done via the GSCCS,
+	 */
+	if (huc->loaded_via_gsc) {
+		if (IS_DG2(gt->i915)) {
+			if (!IS_ENABLED(CONFIG_INTEL_MEI_PXP) ||
+			    !IS_ENABLED(CONFIG_INTEL_MEI_GSC)) {
+				huc_info(huc, "can't load due to missing mei modules\n");
+				return -EIO;
+			}
+		} else {
+			if (!HAS_ENGINE(gt, GSC0)) {
+				huc_info(huc, "can't load due to missing GSCCS\n");
+				return -EIO;
+			}
+		}
 	}
 
 	huc_dbg(huc, "loaded by GSC = %s\n", str_yes_no(huc->loaded_via_gsc));
@@ -348,8 +382,11 @@ int intel_huc_init(struct intel_huc *huc)
 		goto out;
 
 	if (HAS_ENGINE(gt, GSC0)) {
-		struct i915_vma *vma = intel_guc_allocate_vma(&gt->uc.guc, SZ_8K);
+		struct i915_vma *vma;
+
+		vma = intel_guc_allocate_vma(&gt->uc.guc, PXP43_HUC_AUTH_INOUT_SIZE * 2);
 		if (IS_ERR(vma)) {
+			err = PTR_ERR(vma);
 			huc_info(huc, "Failed to allocate heci pkt\n");
 			goto out;
 		}
@@ -405,8 +442,7 @@ void intel_huc_suspend(struct intel_huc *huc)
 static const char *auth_mode_string(struct intel_huc *huc,
 				    enum intel_huc_authentication_type type)
 {
-	bool partial = !huc->loaded_via_gsc && huc->fw.is_meu_binary &&
-		       type == INTEL_HUC_AUTH_BY_GUC;
+	bool partial = huc->fw.has_gsc_headers && type == INTEL_HUC_AUTH_BY_GUC;
 
 	return partial ? "clear media" : "all workloads";
 }
@@ -416,8 +452,6 @@ int intel_huc_wait_for_auth_complete(struct intel_huc *huc,
 {
 	struct intel_gt *gt = huc_to_gt(huc);
 	int ret;
-
-
 
 	ret = __intel_wait_for_register(gt->uncore,
 					huc->status[type].reg,
@@ -436,13 +470,14 @@ int intel_huc_wait_for_auth_complete(struct intel_huc *huc,
 	}
 
 	intel_uc_fw_change_status(&huc->fw, INTEL_UC_FIRMWARE_RUNNING);
-	huc_info(huc, "authenticated for %s!\n", auth_mode_string(huc, type));
+	huc_info(huc, "authenticated for %s\n", auth_mode_string(huc, type));
 	return 0;
 }
 
 /**
  * intel_huc_auth() - Authenticate HuC uCode
  * @huc: intel_huc structure
+ * @type: authentication type (via GuC or via GSC)
  *
  * Called after HuC and GuC firmware loading during intel_uc_init_hw().
  *
@@ -522,12 +557,18 @@ static bool huc_is_fully_authenticated(struct intel_huc *huc)
 	if (IS_METEORLAKE(huc_to_gt(huc)->i915) && huc->loaded_via_gsc)
 		return intel_huc_is_authenticated(huc, INTEL_HUC_AUTH_BY_GUC);
 
-	if (!huc_fw->is_meu_binary)
+	if (!huc_fw->has_gsc_headers)
 		return intel_huc_is_authenticated(huc, INTEL_HUC_AUTH_BY_GUC);
-	else
+	else if (intel_huc_is_loaded_by_gsc(huc) || HAS_ENGINE(huc_to_gt(huc), GSC0))
 		return intel_huc_is_authenticated(huc, INTEL_HUC_AUTH_BY_GSC);
+	else
+		return false;
 }
 
+bool intel_huc_is_fully_authenticated(struct intel_huc *huc)
+{
+	return huc_is_fully_authenticated(huc);
+}
 /**
  * intel_huc_check_status() - check HuC status
  * @huc: intel_huc structure
@@ -560,12 +601,12 @@ int intel_huc_check_status(struct intel_huc *huc)
 	}
 
 	/*
-	 * meu binaries loaded by GuC are first partially authenticated by GuC
-	 * and then fully authenticated by GSC
+	 * GSC-enabled binaries loaded via DMA are first partially
+	 * authenticated by GuC and then fully authenticated by GSC
 	 */
 	if (huc_is_fully_authenticated(huc))
 		return 1; /* full auth */
-	else if (huc_fw->is_meu_binary && !huc->loaded_via_gsc &&
+	else if (huc_fw->has_gsc_headers && !intel_huc_is_loaded_by_gsc(huc) &&
 		 intel_huc_is_authenticated(huc, INTEL_HUC_AUTH_BY_GUC))
 		return 2; /* clear media only */
 	else
@@ -583,7 +624,7 @@ void intel_huc_update_auth_status(struct intel_huc *huc)
 	if (!intel_uc_fw_is_loadable(&huc->fw))
 		return;
 
-	if (!huc->fw.is_meu_binary)
+	if (!huc->fw.has_gsc_headers)
 		return;
 
 	if (huc_is_fully_authenticated(huc))

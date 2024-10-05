@@ -26,14 +26,14 @@
 #include <drm/drm_color_mgmt.h>
 #include <drm/drm_drv.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
-#include <drm/intel/i915_pciids.h>
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 #include <drm/i915_pciids.h>
+#else
+#include <drm/intel/i915_pciids.h>
 #endif
 
-
 #include "display/intel_display.h"
+#include "display/intel_display_driver.h"
 #include "gt/intel_gt_regs.h"
 #include "gt/intel_sa_media.h"
 #include "gem/i915_gem_object_types.h"
@@ -47,129 +47,7 @@
 #define PLATFORM(x) .platform = (x)
 #define GEN(x) \
 	.__runtime.graphics.ip.ver = (x), \
-	.__runtime.media.ip.ver = (x), \
-	.__runtime.display.ip.ver = (x)
-
-#define NO_DISPLAY .__runtime.pipe_mask = 0
-
-#define I845_PIPE_OFFSETS \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET,	\
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-	}
-
-#define I9XX_PIPE_OFFSETS \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET,	\
-		[TRANSCODER_B] = PIPE_B_OFFSET, \
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET, \
-	}
-
-#define IVB_PIPE_OFFSETS \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET,	\
-		[TRANSCODER_B] = PIPE_B_OFFSET, \
-		[TRANSCODER_C] = PIPE_C_OFFSET, \
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET, \
-		[TRANSCODER_C] = TRANSCODER_C_OFFSET, \
-	}
-
-#define HSW_PIPE_OFFSETS \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET,	\
-		[TRANSCODER_B] = PIPE_B_OFFSET, \
-		[TRANSCODER_C] = PIPE_C_OFFSET, \
-		[TRANSCODER_EDP] = PIPE_EDP_OFFSET, \
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET, \
-		[TRANSCODER_C] = TRANSCODER_C_OFFSET, \
-		[TRANSCODER_EDP] = TRANSCODER_EDP_OFFSET, \
-	}
-
-#define CHV_PIPE_OFFSETS \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET, \
-		[TRANSCODER_B] = PIPE_B_OFFSET, \
-		[TRANSCODER_C] = CHV_PIPE_C_OFFSET, \
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET, \
-		[TRANSCODER_C] = CHV_TRANSCODER_C_OFFSET, \
-	}
-
-#define I845_CURSOR_OFFSETS \
-	.display.cursor_offsets = { \
-		[PIPE_A] = CURSOR_A_OFFSET, \
-	}
-
-#define I9XX_CURSOR_OFFSETS \
-	.display.cursor_offsets = { \
-		[PIPE_A] = CURSOR_A_OFFSET, \
-		[PIPE_B] = CURSOR_B_OFFSET, \
-	}
-
-#define CHV_CURSOR_OFFSETS \
-	.display.cursor_offsets = { \
-		[PIPE_A] = CURSOR_A_OFFSET, \
-		[PIPE_B] = CURSOR_B_OFFSET, \
-		[PIPE_C] = CHV_CURSOR_C_OFFSET, \
-	}
-
-#define IVB_CURSOR_OFFSETS \
-	.display.cursor_offsets = { \
-		[PIPE_A] = CURSOR_A_OFFSET, \
-		[PIPE_B] = IVB_CURSOR_B_OFFSET, \
-		[PIPE_C] = IVB_CURSOR_C_OFFSET, \
-	}
-
-#define TGL_CURSOR_OFFSETS \
-	.display.cursor_offsets = { \
-		[PIPE_A] = CURSOR_A_OFFSET, \
-		[PIPE_B] = IVB_CURSOR_B_OFFSET, \
-		[PIPE_C] = IVB_CURSOR_C_OFFSET, \
-		[PIPE_D] = TGL_CURSOR_D_OFFSET, \
-	}
-
-#define I845_COLORS \
-	.display.color = { .gamma_lut_size = 256 }
-#define I9XX_COLORS \
-	.display.color = { .gamma_lut_size = 129, \
-		   .gamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING, \
-	}
-#define ILK_COLORS \
-	.display.color = { .gamma_lut_size = 1024 }
-#define IVB_COLORS \
-	.display.color = { .degamma_lut_size = 1024, .gamma_lut_size = 1024 }
-#define CHV_COLORS \
-	.display.color = { \
-		.degamma_lut_size = 65, .gamma_lut_size = 257, \
-		.degamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING, \
-		.gamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING, \
-	}
-#define GLK_COLORS \
-	.display.color = { \
-		.degamma_lut_size = 33, .gamma_lut_size = 1024, \
-		.degamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING | \
-				     DRM_COLOR_LUT_EQUAL_CHANNELS, \
-	}
-#define ICL_COLORS \
-	.display.color = { \
-		.degamma_lut_size = 33, .gamma_lut_size = 262145, \
-		.degamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING | \
-				     DRM_COLOR_LUT_EQUAL_CHANNELS, \
-		.gamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING, \
-	}
+	.__runtime.media.ip.ver = (x)
 
 #define LEGACY_CACHELEVEL \
 	.cachelevel_to_pat = { \
@@ -214,12 +92,6 @@
 #define I830_FEATURES \
 	GEN(2), \
 	.is_mobile = 1, \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B), \
-	.display.has_overlay = 1, \
-	.display.cursor_needs_physical = 1, \
-	.display.overlay_needs_physical = 1, \
-	.display.has_gmch = 1, \
 	.gpu_reset_clobbers_display = true, \
 	.has_3d_pipeline = 1, \
 	.hws_needs_physical = 1, \
@@ -229,20 +101,12 @@
 	.has_coherent_ggtt = false, \
 	.dma_mask_size = 32, \
 	.max_pat_index = 3, \
-	I9XX_PIPE_OFFSETS, \
-	I9XX_CURSOR_OFFSETS, \
-	I9XX_COLORS, \
 	GEN_DEFAULT_PAGE_SIZES, \
 	GEN_DEFAULT_REGIONS, \
 	LEGACY_CACHELEVEL
 
 #define I845_FEATURES \
 	GEN(2), \
-	.__runtime.pipe_mask = BIT(PIPE_A), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A), \
-	.display.has_overlay = 1, \
-	.display.overlay_needs_physical = 1, \
-	.display.has_gmch = 1, \
 	.has_3d_pipeline = 1, \
 	.gpu_reset_clobbers_display = true, \
 	.hws_needs_physical = 1, \
@@ -252,9 +116,6 @@
 	.has_coherent_ggtt = false, \
 	.dma_mask_size = 32, \
 	.max_pat_index = 3, \
-	I845_PIPE_OFFSETS, \
-	I845_CURSOR_OFFSETS, \
-	I845_COLORS, \
 	GEN_DEFAULT_PAGE_SIZES, \
 	GEN_DEFAULT_REGIONS, \
 	LEGACY_CACHELEVEL
@@ -272,39 +133,30 @@ static const struct intel_device_info i845g_info = {
 static const struct intel_device_info i85x_info = {
 	I830_FEATURES,
 	PLATFORM(INTEL_I85X),
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
 };
 
 static const struct intel_device_info i865g_info = {
 	I845_FEATURES,
 	PLATFORM(INTEL_I865G),
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
 };
 
 #define GEN3_FEATURES \
 	GEN(3), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B), \
-	.display.has_gmch = 1, \
 	.gpu_reset_clobbers_display = true, \
 	.__runtime.platform_engine_mask = BIT(RCS0), \
 	.has_3d_pipeline = 1, \
 	.has_snoop = true, \
 	.has_coherent_ggtt = true, \
 	.dma_mask_size = 32, \
-	I9XX_PIPE_OFFSETS, \
-	I9XX_CURSOR_OFFSETS, \
-	I9XX_COLORS, \
+	.max_pat_index = 3, \
 	GEN_DEFAULT_PAGE_SIZES, \
-	GEN_DEFAULT_REGIONS
+	GEN_DEFAULT_REGIONS, \
+	LEGACY_CACHELEVEL
 
 static const struct intel_device_info i915g_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_I915G),
 	.has_coherent_ggtt = false,
-	.display.cursor_needs_physical = 1,
-	.display.has_overlay = 1,
-	.display.overlay_needs_physical = 1,
 	.hws_needs_physical = 1,
 	.unfenced_needs_alignment = 1,
 };
@@ -313,11 +165,6 @@ static const struct intel_device_info i915gm_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_I915GM),
 	.is_mobile = 1,
-	.display.cursor_needs_physical = 1,
-	.display.has_overlay = 1,
-	.display.overlay_needs_physical = 1,
-	.display.supports_tv = 1,
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
 	.hws_needs_physical = 1,
 	.unfenced_needs_alignment = 1,
 };
@@ -325,10 +172,6 @@ static const struct intel_device_info i915gm_info = {
 static const struct intel_device_info i945g_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_I945G),
-	.display.has_hotplug = 1,
-	.display.cursor_needs_physical = 1,
-	.display.has_overlay = 1,
-	.display.overlay_needs_physical = 1,
 	.hws_needs_physical = 1,
 	.unfenced_needs_alignment = 1,
 };
@@ -337,12 +180,6 @@ static const struct intel_device_info i945gm_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_I945GM),
 	.is_mobile = 1,
-	.display.has_hotplug = 1,
-	.display.cursor_needs_physical = 1,
-	.display.has_overlay = 1,
-	.display.overlay_needs_physical = 1,
-	.display.supports_tv = 1,
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
 	.hws_needs_physical = 1,
 	.unfenced_needs_alignment = 1,
 };
@@ -350,16 +187,12 @@ static const struct intel_device_info i945gm_info = {
 static const struct intel_device_info g33_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_G33),
-	.display.has_hotplug = 1,
-	.display.has_overlay = 1,
 	.dma_mask_size = 36,
 };
 
 static const struct intel_device_info pnv_g_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_PINEVIEW),
-	.display.has_hotplug = 1,
-	.display.has_overlay = 1,
 	.dma_mask_size = 36,
 };
 
@@ -367,36 +200,25 @@ static const struct intel_device_info pnv_m_info = {
 	GEN3_FEATURES,
 	PLATFORM(INTEL_PINEVIEW),
 	.is_mobile = 1,
-	.display.has_hotplug = 1,
-	.display.has_overlay = 1,
 	.dma_mask_size = 36,
-	.max_pat_index = 3,
-	GEN_DEFAULT_REGIONS,
-	LEGACY_CACHELEVEL
 };
 
 #define GEN4_FEATURES \
 	GEN(4), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B), \
-	.display.has_hotplug = 1, \
-	.display.has_gmch = 1, \
 	.gpu_reset_clobbers_display = true, \
 	.__runtime.platform_engine_mask = BIT(RCS0), \
 	.has_3d_pipeline = 1, \
 	.has_snoop = true, \
 	.has_coherent_ggtt = true, \
 	.dma_mask_size = 36, \
-	I9XX_PIPE_OFFSETS, \
-	I9XX_CURSOR_OFFSETS, \
-	I9XX_COLORS, \
+	.max_pat_index = 3, \
 	GEN_DEFAULT_PAGE_SIZES, \
-	GEN_DEFAULT_REGIONS
+	GEN_DEFAULT_REGIONS, \
+	LEGACY_CACHELEVEL
 
 static const struct intel_device_info i965g_info = {
 	GEN4_FEATURES,
 	PLATFORM(INTEL_I965G),
-	.display.has_overlay = 1,
 	.hws_needs_physical = 1,
 	.has_snoop = false,
 };
@@ -405,9 +227,6 @@ static const struct intel_device_info i965gm_info = {
 	GEN4_FEATURES,
 	PLATFORM(INTEL_I965GM),
 	.is_mobile = 1,
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
-	.display.has_overlay = 1,
-	.display.supports_tv = 1,
 	.hws_needs_physical = 1,
 	.has_snoop = false,
 };
@@ -423,20 +242,12 @@ static const struct intel_device_info gm45_info = {
 	GEN4_FEATURES,
 	PLATFORM(INTEL_GM45),
 	.is_mobile = 1,
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
-	.display.supports_tv = 1,
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0),
 	.gpu_reset_clobbers_display = false,
-	.max_pat_index = 3,
-	GEN_DEFAULT_REGIONS,
-	LEGACY_CACHELEVEL
 };
 
 #define GEN5_FEATURES \
 	GEN(5), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B), \
-	.display.has_hotplug = 1, \
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0), \
 	.has_3d_pipeline = 1, \
 	.has_snoop = true, \
@@ -444,11 +255,10 @@ static const struct intel_device_info gm45_info = {
 	/* ilk does support rc6, but we do not implement [power] contexts */ \
 	.has_rc6 = 0, \
 	.dma_mask_size = 36, \
-	I9XX_PIPE_OFFSETS, \
-	I9XX_CURSOR_OFFSETS, \
-	ILK_COLORS, \
+	.max_pat_index = 3, \
 	GEN_DEFAULT_PAGE_SIZES, \
-	GEN_DEFAULT_REGIONS
+	GEN_DEFAULT_REGIONS, \
+	LEGACY_CACHELEVEL
 
 static const struct intel_device_info ilk_d_info = {
 	GEN5_FEATURES,
@@ -460,18 +270,10 @@ static const struct intel_device_info ilk_m_info = {
 	PLATFORM(INTEL_IRONLAKE),
 	.is_mobile = 1,
 	.has_rps = true,
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),
-	.max_pat_index = 3,
-	GEN_DEFAULT_REGIONS,
-	LEGACY_CACHELEVEL
 };
 
 #define GEN6_FEATURES \
 	GEN(6), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B), \
-	.display.has_hotplug = 1, \
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A), \
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0), \
 	.has_3d_pipeline = 1, \
 	.has_coherent_ggtt = true, \
@@ -481,13 +283,12 @@ static const struct intel_device_info ilk_m_info = {
 	.has_rc6p = 0, \
 	.has_rps = true, \
 	.dma_mask_size = 40, \
+	.max_pat_index = 3, \
 	.__runtime.ppgtt_type = INTEL_PPGTT_ALIASING, \
 	.__runtime.ppgtt_size = 31, \
-	I9XX_PIPE_OFFSETS, \
-	I9XX_CURSOR_OFFSETS, \
-	ILK_COLORS, \
 	GEN_DEFAULT_PAGE_SIZES, \
-	GEN_DEFAULT_REGIONS
+	GEN_DEFAULT_REGIONS, \
+	LEGACY_CACHELEVEL
 
 #define SNB_D_PLATFORM \
 	GEN6_FEATURES, \
@@ -517,17 +318,10 @@ static const struct intel_device_info snb_m_gt1_info = {
 static const struct intel_device_info snb_m_gt2_info = {
 	SNB_M_PLATFORM,
 	.gt = 2,
-	.max_pat_index = 3,
-	GEN_DEFAULT_REGIONS,
-	LEGACY_CACHELEVEL
 };
 
 #define GEN7_FEATURES  \
 	GEN(7), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | BIT(TRANSCODER_C), \
-	.display.has_hotplug = 1, \
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A), \
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0), \
 	.has_3d_pipeline = 1, \
 	.has_coherent_ggtt = true, \
@@ -537,13 +331,12 @@ static const struct intel_device_info snb_m_gt2_info = {
 	.has_reset_engine = true, \
 	.has_rps = true, \
 	.dma_mask_size = 40, \
+	.max_pat_index = 3, \
 	.__runtime.ppgtt_type = INTEL_PPGTT_ALIASING, \
 	.__runtime.ppgtt_size = 31, \
-	IVB_PIPE_OFFSETS, \
-	IVB_CURSOR_OFFSETS, \
-	IVB_COLORS, \
 	GEN_DEFAULT_PAGE_SIZES, \
-	GEN_DEFAULT_REGIONS
+	GEN_DEFAULT_REGIONS, \
+	LEGACY_CACHELEVEL
 
 #define IVB_D_PLATFORM \
 	GEN7_FEATURES, \
@@ -579,7 +372,6 @@ static const struct intel_device_info ivb_m_gt2_info = {
 static const struct intel_device_info ivb_q_info = {
 	GEN7_FEATURES,
 	PLATFORM(INTEL_IVYBRIDGE),
-	NO_DISPLAY,
 	.gt = 2,
 	.has_l3_dpf = 1,
 };
@@ -588,14 +380,10 @@ static const struct intel_device_info vlv_info = {
 	PLATFORM(INTEL_VALLEYVIEW),
 	GEN(7),
 	.is_lp = 1,
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B),
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B),
 	.has_runtime_pm = 1,
 	.has_rc6 = 1,
 	.has_reset_engine = true,
 	.has_rps = true,
-	.display.has_gmch = 1,
-	.display.has_hotplug = 1,
 	.dma_mask_size = 40,
 	.max_pat_index = 3,
 	.__runtime.ppgtt_type = INTEL_PPGTT_ALIASING,
@@ -603,10 +391,6 @@ static const struct intel_device_info vlv_info = {
 	.has_snoop = true,
 	.has_coherent_ggtt = false,
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0),
-	.display.mmio_offset = VLV_DISPLAY_BASE,
-	I9XX_PIPE_OFFSETS,
-	I9XX_CURSOR_OFFSETS,
-	I9XX_COLORS,
 	GEN_DEFAULT_PAGE_SIZES,
 	GEN_DEFAULT_REGIONS,
 	LEGACY_CACHELEVEL,
@@ -615,13 +399,7 @@ static const struct intel_device_info vlv_info = {
 #define G75_FEATURES  \
 	GEN7_FEATURES, \
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | \
-		BIT(TRANSCODER_C) | BIT(TRANSCODER_EDP), \
-	.display.has_ddi = 1, \
-	.display.has_fpga_dbg = 1, \
-	.display.has_dp_mst = 1, \
 	.has_rc6p = 0 /* RC6p removed-by HSW */, \
-	HSW_PIPE_OFFSETS, \
 	.has_runtime_pm = 1
 
 #define HSW_PLATFORM \
@@ -685,9 +463,6 @@ static const struct intel_device_info bdw_gt3_info = {
 static const struct intel_device_info chv_info = {
 	PLATFORM(INTEL_CHERRYVIEW),
 	GEN(8),
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C),
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | BIT(TRANSCODER_C),
-	.display.has_hotplug = 1,
 	.is_lp = 1,
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0),
 	.has_64bit_reloc = 1,
@@ -695,7 +470,6 @@ static const struct intel_device_info chv_info = {
 	.has_rc6 = 1,
 	.has_rps = true,
 	.has_logical_ring_contexts = 1,
-	.display.has_gmch = 1,
 	.dma_mask_size = 39,
 	.max_pat_index = 3,
 	.__runtime.ppgtt_type = INTEL_PPGTT_FULL,
@@ -703,10 +477,6 @@ static const struct intel_device_info chv_info = {
 	.has_reset_engine = 1,
 	.has_snoop = true,
 	.has_coherent_ggtt = false,
-	.display.mmio_offset = VLV_DISPLAY_BASE,
-	CHV_PIPE_OFFSETS,
-	CHV_CURSOR_OFFSETS,
-	CHV_COLORS,
 	GEN_DEFAULT_PAGE_SIZES,
 	GEN_DEFAULT_REGIONS,
 	LEGACY_CACHELEVEL,
@@ -720,14 +490,7 @@ static const struct intel_device_info chv_info = {
 	GEN8_FEATURES, \
 	GEN(9), \
 	GEN9_DEFAULT_PAGE_SIZES, \
-	.__runtime.has_dmc = 1, \
-	.has_gt_uc = 1, \
-	.__runtime.has_hdcp = 1, \
-	.display.has_ipc = 1, \
-	.display.has_psr = 1, \
-	.display.has_psr_hw_tracking = 1, \
-	.display.dbuf.size = 896 - 4, /* 4 blocks for bypass path allocation */ \
-	.display.dbuf.slice_mask = BIT(DBUF_S1)
+	.has_gt_uc = 1
 
 #define SKL_PLATFORM \
 	GEN9_FEATURES, \
@@ -762,26 +525,12 @@ static const struct intel_device_info skl_gt4_info = {
 #define GEN9_LP_FEATURES \
 	GEN(9), \
 	.is_lp = 1, \
-	.display.dbuf.slice_mask = BIT(DBUF_S1), \
-	.display.has_hotplug = 1, \
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | \
-		BIT(TRANSCODER_C) | BIT(TRANSCODER_EDP) | \
-		BIT(TRANSCODER_DSI_A) | BIT(TRANSCODER_DSI_C), \
 	.has_3d_pipeline = 1, \
 	.has_64bit_reloc = 1, \
-	.display.has_ddi = 1, \
-	.display.has_fpga_dbg = 1, \
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A), \
-	.__runtime.has_hdcp = 1, \
-	.display.has_psr = 1, \
-	.display.has_psr_hw_tracking = 1, \
 	.has_runtime_pm = 1, \
-	.__runtime.has_dmc = 1, \
 	.has_rc6 = 1, \
 	.has_rps = true, \
-	.display.has_dp_mst = 1, \
 	.has_logical_ring_contexts = 1, \
 	.has_gt_uc = 1, \
 	.dma_mask_size = 39, \
@@ -790,25 +539,19 @@ static const struct intel_device_info skl_gt4_info = {
 	.has_reset_engine = 1, \
 	.has_snoop = true, \
 	.has_coherent_ggtt = false, \
-	.display.has_ipc = 1, \
-	HSW_PIPE_OFFSETS, \
-	IVB_CURSOR_OFFSETS, \
-	IVB_COLORS, \
+	.max_pat_index = 3, \
 	GEN9_DEFAULT_PAGE_SIZES, \
-	GEN_DEFAULT_REGIONS
+	GEN_DEFAULT_REGIONS, \
+	LEGACY_CACHELEVEL
 
 static const struct intel_device_info bxt_info = {
 	GEN9_LP_FEATURES,
 	PLATFORM(INTEL_BROXTON),
-	.display.dbuf.size = 512 - 4, /* 4 blocks for bypass path allocation */
 };
 
 static const struct intel_device_info glk_info = {
 	GEN9_LP_FEATURES,
 	PLATFORM(INTEL_GEMINILAKE),
-	.__runtime.display.ip.ver = 10,
-	.display.dbuf.size = 1024 - 4, /* 4 blocks for bypass path allocation */
-	GLK_COLORS,
 };
 
 #define KBL_PLATFORM \
@@ -875,31 +618,7 @@ static const struct intel_device_info cml_gt2_info = {
 #define GEN11_FEATURES \
 	GEN9_FEATURES, \
 	GEN11_DEFAULT_PAGE_SIZES, \
-	.display.abox_mask = BIT(0), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | \
-		BIT(TRANSCODER_C) | BIT(TRANSCODER_EDP) | \
-		BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1), \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET, \
-		[TRANSCODER_B] = PIPE_B_OFFSET, \
-		[TRANSCODER_C] = PIPE_C_OFFSET, \
-		[TRANSCODER_EDP] = PIPE_EDP_OFFSET, \
-		[TRANSCODER_DSI_0] = PIPE_DSI0_OFFSET, \
-		[TRANSCODER_DSI_1] = PIPE_DSI1_OFFSET, \
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET, \
-		[TRANSCODER_C] = TRANSCODER_C_OFFSET, \
-		[TRANSCODER_EDP] = TRANSCODER_EDP_OFFSET, \
-		[TRANSCODER_DSI_0] = TRANSCODER_DSI0_OFFSET, \
-		[TRANSCODER_DSI_1] = TRANSCODER_DSI1_OFFSET, \
-	}, \
 	GEN(11), \
-	ICL_COLORS, \
-	.display.dbuf.size = 2048, \
-	.display.dbuf.slice_mask = BIT(DBUF_S1) | BIT(DBUF_S2), \
-	.__runtime.has_dsc = 1, \
 	.has_coherent_ggtt = false, \
 	.has_logical_ring_elsq = 1
 
@@ -922,57 +641,28 @@ static const struct intel_device_info jsl_info = {
 	PLATFORM(INTEL_JASPERLAKE),
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(VCS0) | BIT(VECS0),
 	.__runtime.ppgtt_size = 36,
-	TGL_CACHELEVEL,
-	.max_pat_index = 3,
 };
 
 #define GEN12_FEATURES \
 	GEN11_FEATURES, \
 	GEN(12), \
-	.display.abox_mask = GENMASK(2, 1), \
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C) | BIT(PIPE_D), \
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | \
-		BIT(TRANSCODER_C) | BIT(TRANSCODER_D) | \
-		BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1), \
-	.display.pipe_offsets = { \
-		[TRANSCODER_A] = PIPE_A_OFFSET, \
-		[TRANSCODER_B] = PIPE_B_OFFSET, \
-		[TRANSCODER_C] = PIPE_C_OFFSET, \
-		[TRANSCODER_D] = PIPE_D_OFFSET, \
-		[TRANSCODER_DSI_0] = PIPE_DSI0_OFFSET, \
-		[TRANSCODER_DSI_1] = PIPE_DSI1_OFFSET, \
-	}, \
-	.display.trans_offsets = { \
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET, \
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET, \
-		[TRANSCODER_C] = TRANSCODER_C_OFFSET, \
-		[TRANSCODER_D] = TRANSCODER_D_OFFSET, \
-		[TRANSCODER_DSI_0] = TRANSCODER_DSI0_OFFSET, \
-		[TRANSCODER_DSI_1] = TRANSCODER_DSI1_OFFSET, \
-	}, \
-	TGL_CURSOR_OFFSETS, \
+	TGL_CACHELEVEL, \
 	.has_global_mocs = 1, \
 	.has_pxp = 1, \
-	.display.has_dsb = 1
+	.max_pat_index = 3
 
 static const struct intel_device_info tgl_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_TIGERLAKE),
-	.display.has_modular_fia = 1,
 	.__runtime.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
+	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
 };
 
 static const struct intel_device_info rkl_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ROCKETLAKE),
-	.display.abox_mask = BIT(0),
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C),
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) |
-		BIT(TRANSCODER_C),
-	.display.has_hti = 1,
-	.display.has_psr_hw_tracking = 0,
 	.__runtime.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0),
 };
@@ -990,7 +680,6 @@ static const struct intel_device_info dg1_info = {
 	DGFX_FEATURES,
 	.__runtime.graphics.ip.rel = 10,
 	PLATFORM(INTEL_DG1),
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C) | BIT(PIPE_D),
 	.require_force_probe = 1,
 	.__runtime.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) |
@@ -1002,73 +691,22 @@ static const struct intel_device_info dg1_info = {
 static const struct intel_device_info adl_s_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ALDERLAKE_S),
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C) | BIT(PIPE_D),
-	.display.has_hti = 1,
-	.display.has_psr_hw_tracking = 0,
 	.__runtime.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
 	.dma_mask_size = 39,
+	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
 };
 
-#define XE_LPD_FEATURES \
-	.display.abox_mask = GENMASK(1, 0),					\
-	.display.color = {							\
-		.degamma_lut_size = 129, .gamma_lut_size = 1024,		\
-		.degamma_lut_tests = DRM_COLOR_LUT_NON_DECREASING |		\
-				     DRM_COLOR_LUT_EQUAL_CHANNELS,		\
-	},									\
-	.display.dbuf.size = 4096,						\
-	.display.dbuf.slice_mask = BIT(DBUF_S1) | BIT(DBUF_S2) | BIT(DBUF_S3) |	\
-		BIT(DBUF_S4),							\
-	.display.has_ddi = 1,							\
-	.__runtime.has_dmc = 1,							\
-	.display.has_dp_mst = 1,						\
-	.display.has_dsb = 1,							\
-	.__runtime.has_dsc = 1,							\
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A),					\
-	.display.has_fpga_dbg = 1,						\
-	.__runtime.has_hdcp = 1,						\
-	.display.has_hotplug = 1,						\
-	.display.has_ipc = 1,							\
-	.display.has_psr = 1,							\
-	.__runtime.display.ip.ver = 13,							\
-	.__runtime.pipe_mask = BIT(PIPE_A) | BIT(PIPE_B) | BIT(PIPE_C) | BIT(PIPE_D),	\
-	.display.pipe_offsets = {						\
-		[TRANSCODER_A] = PIPE_A_OFFSET,					\
-		[TRANSCODER_B] = PIPE_B_OFFSET,					\
-		[TRANSCODER_C] = PIPE_C_OFFSET,					\
-		[TRANSCODER_D] = PIPE_D_OFFSET,					\
-		[TRANSCODER_DSI_0] = PIPE_DSI0_OFFSET,				\
-		[TRANSCODER_DSI_1] = PIPE_DSI1_OFFSET,				\
-	},									\
-	.display.trans_offsets = {						\
-		[TRANSCODER_A] = TRANSCODER_A_OFFSET,				\
-		[TRANSCODER_B] = TRANSCODER_B_OFFSET,				\
-		[TRANSCODER_C] = TRANSCODER_C_OFFSET,				\
-		[TRANSCODER_D] = TRANSCODER_D_OFFSET,				\
-		[TRANSCODER_DSI_0] = TRANSCODER_DSI0_OFFSET,			\
-		[TRANSCODER_DSI_1] = TRANSCODER_DSI1_OFFSET,			\
-	},									\
-	TGL_CURSOR_OFFSETS
-
 static const struct intel_device_info adl_p_info = {
 	GEN12_FEATURES,
-	XE_LPD_FEATURES,
 	PLATFORM(INTEL_ALDERLAKE_P),
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) |
-			       BIT(TRANSCODER_C) | BIT(TRANSCODER_D) |
-			       BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1),
-	.display.has_cdclk_crawl = 1,
-	.display.has_modular_fia = 1,
-	.display.has_psr_hw_tracking = 0,
 	.__runtime.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
 	.__runtime.ppgtt_size = 48,
 	.dma_mask_size = 39,
+	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
-	TGL_CACHELEVEL,
-	.max_pat_index = 3,
 };
 
 #undef GEN
@@ -1082,11 +720,11 @@ static const struct intel_device_info adl_p_info = {
 	.__runtime.graphics.ip.ver = 12, \
 	.__runtime.graphics.ip.rel = 50, \
 	XE_HP_PAGE_SIZES, \
+	TGL_CACHELEVEL, \
 	.dma_mask_size = 46, \
 	.has_3d_pipeline = 1, \
 	.has_64bit_reloc = 1, \
 	.has_flat_ccs = 1, \
-	.has_4tile = 1, \
 	.has_global_mocs = 1, \
 	.has_gt_uc = 1, \
 	.has_llc = 1, \
@@ -1095,11 +733,12 @@ static const struct intel_device_info adl_p_info = {
 	.has_mslice_steering = 1, \
 	.has_oa_bpc_reporting = 1, \
 	.has_oa_slice_contrib_limits = 1, \
+	.has_oam = 1, \
 	.has_rc6 = 1, \
 	.has_reset_engine = 1, \
 	.has_rps = 1, \
 	.has_runtime_pm = 1, \
-	.has_selective_tlb_invalidation = 1, \
+	.max_pat_index = 3, \
 	.__runtime.ppgtt_size = 48, \
 	.__runtime.ppgtt_type = INTEL_PPGTT_FULL
 
@@ -1113,7 +752,6 @@ static const struct intel_device_info xehpsdv_info = {
 	XE_HPM_FEATURES,
 	DGFX_FEATURES,
 	PLATFORM(INTEL_XEHPSDV),
-	NO_DISPLAY,
 	.has_64k_pages = 1,
 	.has_media_ratio_mode = 1,
 	.__runtime.platform_engine_mask =
@@ -1136,7 +774,6 @@ static const struct intel_device_info xehpsdv_info = {
 	.has_guc_deprivilege = 1, \
 	.has_heci_pxp = 1, \
 	.has_media_ratio_mode = 1, \
-	.display.has_cdclk_squash = 1, \
 	.__runtime.platform_engine_mask = \
 		BIT(RCS0) | BIT(BCS0) | \
 		BIT(VECS0) | BIT(VECS1) | \
@@ -1145,14 +782,10 @@ static const struct intel_device_info xehpsdv_info = {
 
 static const struct intel_device_info dg2_info = {
 	DG2_FEATURES,
-	XE_LPD_FEATURES,
-	.__runtime.cpu_transcoder_mask = BIT(TRANSCODER_A) | BIT(TRANSCODER_B) |
-			       BIT(TRANSCODER_C) | BIT(TRANSCODER_D),
 };
 
 static const struct intel_device_info ats_m_info = {
 	DG2_FEATURES,
-	NO_DISPLAY,
 	.require_force_probe = 1,
 	.tuning_thread_rr_after_dep = 1,
 };
@@ -1161,7 +794,6 @@ static const struct intel_device_info ats_m_info = {
 	XE_HP_FEATURES, \
 	.dma_mask_size = 52, \
 	.has_3d_pipeline = 0, \
-	.has_asid_tlb_invalidation = 1, \
 	.has_guc_deprivilege = 1, \
 	.has_l3_ccs_read = 1, \
 	.has_mslice_steering = 0, \
@@ -1175,7 +807,6 @@ static const struct intel_device_info pvc_info = {
 	.__runtime.graphics.ip.rel = 60,
 	.__runtime.media.ip.rel = 60,
 	PLATFORM(INTEL_PONTEVECCHIO),
-	NO_DISPLAY,
 	.has_flat_ccs = 0,
 	.max_pat_index = 7,
 	.__runtime.platform_engine_mask =
@@ -1185,13 +816,6 @@ static const struct intel_device_info pvc_info = {
 	.require_force_probe = 1,
 	PVC_CACHELEVEL,
 };
-
-#define XE_LPDP_FEATURES	\
-	XE_LPD_FEATURES,	\
-	.__runtime.display.ip.ver = 14,	\
-	.display.has_cdclk_crawl = 1, \
-	.display.has_cdclk_squash = 1, \
-	.__runtime.fbc_mask = BIT(INTEL_FBC_A) | BIT(INTEL_FBC_B)
 
 static const struct intel_gt_definition xelpmp_extra_gt[] = {
 	{
@@ -1205,7 +829,6 @@ static const struct intel_gt_definition xelpmp_extra_gt[] = {
 
 static const struct intel_device_info mtl_info = {
 	XE_HP_FEATURES,
-	XE_LPDP_FEATURES,
 	/*
 	 * Real graphics IP version will be obtained from hardware GMD_ID
 	 * register.  Value provided here is just for sanity checking.
@@ -1214,17 +837,17 @@ static const struct intel_device_info mtl_info = {
 	.__runtime.graphics.ip.rel = 70,
 	.__runtime.media.ip.ver = 13,
 	PLATFORM(INTEL_METEORLAKE),
-	.display.has_modular_fia = 1,
 	.extra_gt_list = xelpmp_extra_gt,
 	.has_flat_ccs = 0,
 	.has_gmd_id = 1,
 	.has_guc_deprivilege = 1,
+	.has_guc_tlb_invalidation = 1,
 	.has_llc = 0,
 	.has_memirq = 1,
 	.has_mslice_steering = 0,
 	.has_snoop = 1,
-	.max_pat_index = 4,
 	.has_sriov = 1,
+	.max_pat_index = 4,
 	.has_pxp = 1,
 	.__runtime.memory_regions = REGION_SMEM | REGION_STOLEN_LMEM,
 	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(CCS0),
@@ -1240,8 +863,83 @@ static const struct intel_device_info mtl_info = {
  * and subvendor IDs, we need it to come before the more general IVB
  * PCI ID matches, otherwise we'll use the wrong info struct above.
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
 static const struct pci_device_id pciidlist[] = {
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+	INTEL_I830_IDS(&i830_info),
+	INTEL_I845G_IDS(&i845g_info),
+	INTEL_I85X_IDS(&i85x_info),
+	INTEL_I865G_IDS(&i865g_info),
+	INTEL_I915G_IDS(&i915g_info),
+	INTEL_I915GM_IDS(&i915gm_info),
+	INTEL_I945G_IDS(&i945g_info),
+	INTEL_I945GM_IDS(&i945gm_info),
+	INTEL_I965G_IDS(&i965g_info),
+	INTEL_G33_IDS(&g33_info),
+	INTEL_I965GM_IDS(&i965gm_info),
+	INTEL_GM45_IDS(&gm45_info),
+	INTEL_G45_IDS(&g45_info),
+	INTEL_PINEVIEW_G_IDS(&pnv_g_info),
+	INTEL_PINEVIEW_M_IDS(&pnv_m_info),
+	INTEL_IRONLAKE_D_IDS(&ilk_d_info),
+	INTEL_IRONLAKE_M_IDS(&ilk_m_info),
+	INTEL_SNB_D_GT1_IDS(&snb_d_gt1_info),
+	INTEL_SNB_D_GT2_IDS(&snb_d_gt2_info),
+	INTEL_SNB_M_GT1_IDS(&snb_m_gt1_info),
+	INTEL_SNB_M_GT2_IDS(&snb_m_gt2_info),
+	INTEL_IVB_Q_IDS(&ivb_q_info), /* must be first IVB */
+	INTEL_IVB_M_GT1_IDS(&ivb_m_gt1_info),
+	INTEL_IVB_M_GT2_IDS(&ivb_m_gt2_info),
+	INTEL_IVB_D_GT1_IDS(&ivb_d_gt1_info),
+	INTEL_IVB_D_GT2_IDS(&ivb_d_gt2_info),
+	INTEL_HSW_GT1_IDS(&hsw_gt1_info),
+	INTEL_HSW_GT2_IDS(&hsw_gt2_info),
+	INTEL_HSW_GT3_IDS(&hsw_gt3_info),
+	INTEL_VLV_IDS(&vlv_info),
+	INTEL_BDW_GT1_IDS(&bdw_gt1_info),
+	INTEL_BDW_GT2_IDS(&bdw_gt2_info),
+	INTEL_BDW_GT3_IDS(&bdw_gt3_info),
+	INTEL_BDW_RSVD_IDS(&bdw_rsvd_info),
+	INTEL_CHV_IDS(&chv_info),
+	INTEL_SKL_GT1_IDS(&skl_gt1_info),
+	INTEL_SKL_GT2_IDS(&skl_gt2_info),
+	INTEL_SKL_GT3_IDS(&skl_gt3_info),
+	INTEL_SKL_GT4_IDS(&skl_gt4_info),
+	INTEL_BXT_IDS(&bxt_info),
+	INTEL_GLK_IDS(&glk_info),
+	INTEL_KBL_GT1_IDS(&kbl_gt1_info),
+	INTEL_KBL_GT2_IDS(&kbl_gt2_info),
+	INTEL_KBL_GT3_IDS(&kbl_gt3_info),
+	INTEL_KBL_GT4_IDS(&kbl_gt3_info),
+	INTEL_AML_KBL_GT2_IDS(&kbl_gt2_info),
+	INTEL_CFL_S_GT1_IDS(&cfl_gt1_info),
+	INTEL_CFL_S_GT2_IDS(&cfl_gt2_info),
+	INTEL_CFL_H_GT1_IDS(&cfl_gt1_info),
+	INTEL_CFL_H_GT2_IDS(&cfl_gt2_info),
+	INTEL_CFL_U_GT2_IDS(&cfl_gt2_info),
+	INTEL_CFL_U_GT3_IDS(&cfl_gt3_info),
+	INTEL_WHL_U_GT1_IDS(&cfl_gt1_info),
+	INTEL_WHL_U_GT2_IDS(&cfl_gt2_info),
+	INTEL_AML_CFL_GT2_IDS(&cfl_gt2_info),
+	INTEL_WHL_U_GT3_IDS(&cfl_gt3_info),
+	INTEL_CML_GT1_IDS(&cml_gt1_info),
+	INTEL_CML_GT2_IDS(&cml_gt2_info),
+	INTEL_CML_U_GT1_IDS(&cml_gt1_info),
+	INTEL_CML_U_GT2_IDS(&cml_gt2_info),
+	INTEL_ICL_11_IDS(&icl_info),
+	INTEL_EHL_IDS(&ehl_info),
+	INTEL_JSL_IDS(&jsl_info),
+	INTEL_TGL_12_IDS(&tgl_info),
+	INTEL_RKL_IDS(&rkl_info),
+	INTEL_ADLS_IDS(&adl_s_info),
+	INTEL_ADLP_IDS(&adl_p_info),
+	INTEL_ADLN_IDS(&adl_p_info),
+	INTEL_DG1_IDS(&dg1_info),
+	INTEL_RPLS_IDS(&adl_s_info),
+	INTEL_RPLP_IDS(&adl_p_info),
+	INTEL_DG2_IDS(&dg2_info),
+	INTEL_ATS_M_IDS(&ats_m_info),
+	INTEL_MTL_IDS(&mtl_info),
+#else
 	INTEL_I830_IDS(INTEL_VGA_DEVICE, &i830_info),
 	INTEL_I845G_IDS(INTEL_VGA_DEVICE, &i845g_info),
 	INTEL_I85X_IDS(INTEL_VGA_DEVICE, &i85x_info),
@@ -1317,87 +1015,9 @@ static const struct pci_device_id pciidlist[] = {
 	INTEL_DG2_IDS(INTEL_VGA_DEVICE, &dg2_info),
 	INTEL_ATS_M_IDS(INTEL_VGA_DEVICE, &ats_m_info),
 	INTEL_MTL_IDS(INTEL_VGA_DEVICE, &mtl_info),
+#endif
 	{}
 };
-#else
-static const struct pci_device_id pciidlist[] = {
-	INTEL_I830_IDS(&i830_info),
-	INTEL_I845G_IDS(&i845g_info),
-	INTEL_I85X_IDS(&i85x_info),
-	INTEL_I865G_IDS(&i865g_info),
-	INTEL_I915G_IDS(&i915g_info),
-	INTEL_I915GM_IDS(&i915gm_info),
-	INTEL_I945G_IDS(&i945g_info),
-	INTEL_I945GM_IDS(&i945gm_info),
-	INTEL_I965G_IDS(&i965g_info),
-	INTEL_G33_IDS(&g33_info),
-	INTEL_I965GM_IDS(&i965gm_info),
-	INTEL_GM45_IDS(&gm45_info),
-	INTEL_G45_IDS(&g45_info),
-	INTEL_PINEVIEW_G_IDS(&pnv_g_info),
-	INTEL_PINEVIEW_M_IDS(&pnv_m_info),
-	INTEL_IRONLAKE_D_IDS(&ilk_d_info),
-	INTEL_IRONLAKE_M_IDS(&ilk_m_info),
-	INTEL_SNB_D_GT1_IDS(&snb_d_gt1_info),
-	INTEL_SNB_D_GT2_IDS(&snb_d_gt2_info),
-	INTEL_SNB_M_GT1_IDS(&snb_m_gt1_info),
-	INTEL_SNB_M_GT2_IDS(&snb_m_gt2_info),
-	INTEL_IVB_Q_IDS(&ivb_q_info), /* must be first IVB */
-	INTEL_IVB_M_GT1_IDS(&ivb_m_gt1_info),
-	INTEL_IVB_M_GT2_IDS(&ivb_m_gt2_info),
-	INTEL_IVB_D_GT1_IDS(&ivb_d_gt1_info),
-	INTEL_IVB_D_GT2_IDS(&ivb_d_gt2_info),
-	INTEL_HSW_GT1_IDS(&hsw_gt1_info),
-	INTEL_HSW_GT2_IDS(&hsw_gt2_info),
-	INTEL_HSW_GT3_IDS(&hsw_gt3_info),
-	INTEL_VLV_IDS(&vlv_info),
-	INTEL_BDW_GT1_IDS(&bdw_gt1_info),
-	INTEL_BDW_GT2_IDS(&bdw_gt2_info),
-	INTEL_BDW_GT3_IDS(&bdw_gt3_info),
-	INTEL_BDW_RSVD_IDS(&bdw_rsvd_info),
-	INTEL_CHV_IDS(&chv_info),
-	INTEL_SKL_GT1_IDS(&skl_gt1_info),
-	INTEL_SKL_GT2_IDS(&skl_gt2_info),
-	INTEL_SKL_GT3_IDS(&skl_gt3_info),
-	INTEL_SKL_GT4_IDS(&skl_gt4_info),
-	INTEL_BXT_IDS(&bxt_info),
-	INTEL_GLK_IDS(&glk_info),
-	INTEL_KBL_GT1_IDS(&kbl_gt1_info),
-	INTEL_KBL_GT2_IDS(&kbl_gt2_info),
-	INTEL_KBL_GT3_IDS(&kbl_gt3_info),
-	INTEL_KBL_GT4_IDS(&kbl_gt3_info),
-	INTEL_AML_KBL_GT2_IDS(&kbl_gt2_info),
-	INTEL_CFL_S_GT1_IDS(&cfl_gt1_info),
-	INTEL_CFL_S_GT2_IDS(&cfl_gt2_info),
-	INTEL_CFL_H_GT1_IDS(&cfl_gt1_info),
-	INTEL_CFL_H_GT2_IDS(&cfl_gt2_info),
-	INTEL_CFL_U_GT2_IDS(&cfl_gt2_info),
-	INTEL_CFL_U_GT3_IDS(&cfl_gt3_info),
-	INTEL_WHL_U_GT1_IDS(&cfl_gt1_info),
-	INTEL_WHL_U_GT2_IDS(&cfl_gt2_info),
-	INTEL_AML_CFL_GT2_IDS(&cfl_gt2_info),
-	INTEL_WHL_U_GT3_IDS(&cfl_gt3_info),
-	INTEL_CML_GT1_IDS(&cml_gt1_info),
-	INTEL_CML_GT2_IDS(&cml_gt2_info),
-	INTEL_CML_U_GT1_IDS(&cml_gt1_info),
-	INTEL_CML_U_GT2_IDS(&cml_gt2_info),
-	INTEL_ICL_11_IDS(&icl_info),
-	INTEL_EHL_IDS(&ehl_info),
-	INTEL_JSL_IDS(&jsl_info),
-	INTEL_TGL_12_IDS(&tgl_info),
-	INTEL_RKL_IDS(&rkl_info),
-	INTEL_ADLS_IDS(&adl_s_info),
-	INTEL_ADLP_IDS(&adl_p_info),
-	INTEL_ADLN_IDS(&adl_p_info),
-	INTEL_DG1_IDS(&dg1_info),
-	INTEL_RPLS_IDS(&adl_s_info),
-	INTEL_RPLP_IDS(&adl_p_info),
-	INTEL_DG2_IDS(&dg2_info),
-	INTEL_ATS_M_IDS(&ats_m_info),
-	INTEL_MTL_IDS(&mtl_info),
-	{0, 0, 0}
-};
-#endif
 MODULE_DEVICE_TABLE(pci, pciidlist);
 
 static void i915_pci_remove(struct pci_dev *pdev)
@@ -1505,6 +1125,12 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -ENODEV;
 	}
 
+	if (intel_info->require_force_probe) {
+		dev_info(&pdev->dev, "Force probing unsupported Device ID %04x, tainting kernel\n",
+			 pdev->device);
+		add_taint(TAINT_USER, LOCKDEP_STILL_OK);
+	}
+
 	/*
 	 * Don't bind to non-zero function, unless it is a virtual function.
 	 * Early generations used function 1 as a placeholder for multi-head.
@@ -1518,7 +1144,7 @@ static int i915_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -ENXIO;
 
 	/* Detect if we need to wait for other drivers early on */
-	if (intel_modeset_probe_defer(pdev))
+	if (intel_display_driver_probe_defer(pdev))
 		return -EPROBE_DEFER;
 
 	err = i915_driver_probe(pdev, ent);
@@ -1599,6 +1225,28 @@ static struct pci_driver i915_pci_driver = {
 	.driver.pm = &i915_pm_ops,
 	.sriov_configure = i915_pci_sriov_configure,
 };
+
+#ifdef CONFIG_PCI_IOV
+/* our Gen12 SR-IOV platforms are simple */
+#define GEN12_VF_OFFSET 1
+#define GEN12_VF_STRIDE 1
+#define GEN12_VF_ROUTING_OFFSET(id) (GEN12_VF_OFFSET + ((id) - 1) * GEN12_VF_STRIDE)
+
+struct pci_dev *i915_pci_pf_get_vf_dev(struct pci_dev *pdev, unsigned int id)
+{
+	u16 vf_devid = pci_dev_id(pdev) + GEN12_VF_ROUTING_OFFSET(id);
+
+	GEM_BUG_ON(!dev_is_pf(&pdev->dev));
+	GEM_BUG_ON(!id);
+	GEM_BUG_ON(id > pci_num_vf(pdev));
+
+	/* caller must use pci_dev_put() */
+	return pci_get_domain_bus_and_slot(pci_domain_nr(pdev->bus),
+					   PCI_BUS_NUM(vf_devid),
+					   PCI_DEVFN(PCI_SLOT(vf_devid),
+					   PCI_FUNC(vf_devid)));
+}
+#endif
 
 int i915_pci_register_driver(void)
 {

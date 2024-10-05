@@ -63,8 +63,8 @@ static void measure_clocks(struct intel_engine_cs *engine,
 
 		udelay(1000);
 
-		dt[i] = ktime_sub(ktime_get(), dt[i]);
 		cycles[i] += read_timestamp(engine);
+		dt[i] = ktime_sub(ktime_get(), dt[i]);
 		local_irq_enable();
 	}
 
@@ -81,7 +81,6 @@ static int live_gt_clocks(void *arg)
 	struct intel_gt *gt = arg;
 	struct intel_engine_cs *engine;
 	enum intel_engine_id id;
-	intel_wakeref_t wakeref;
 	int err = 0;
 
 	if (!gt->clock_frequency) { /* unknown */
@@ -92,7 +91,7 @@ static int live_gt_clocks(void *arg)
 	if (GRAPHICS_VER(gt->i915) < 4) /* Any CS_TIMESTAMP? */
 		return 0;
 
-	wakeref = intel_gt_pm_get(gt);
+	intel_gt_pm_get(gt);
 	intel_uncore_forcewake_get(gt->uncore, FORCEWAKE_ALL);
 
 	for_each_engine(engine, gt, id) {
@@ -129,7 +128,7 @@ static int live_gt_clocks(void *arg)
 	}
 
 	intel_uncore_forcewake_put(gt->uncore, FORCEWAKE_ALL);
-	intel_gt_pm_put(gt, wakeref);
+	intel_gt_pm_put(gt);
 
 	return err;
 }

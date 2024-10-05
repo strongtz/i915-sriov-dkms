@@ -61,12 +61,11 @@
 #include <linux/dmi.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
-#include <drm/intel/i915_drm.h>
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 #include <drm/i915_drm.h>
+#else
+#include <drm/intel/i915_drm.h>
 #endif
-
 #include <asm/msr.h>
 #include <asm/processor.h>
 #include "intel_ips.h"

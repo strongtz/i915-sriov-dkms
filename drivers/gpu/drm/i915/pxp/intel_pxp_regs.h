@@ -24,4 +24,8 @@
 /* PXP global terminate register for session termination */
 #define KCR_GLOBAL_TERMINATE(base) _MMIO((base) + 0xf8)
 
+/* KCR status registers */
+#define KCR_STATUS_1(base)   _MMIO((base) + 0xf4)
+#define KCR_STATUS_1_ATTACK_MASK 0x80000000
+
 #endif /* __INTEL_PXP_REGS_H__ */

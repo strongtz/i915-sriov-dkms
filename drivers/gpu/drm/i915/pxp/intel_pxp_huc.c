@@ -38,8 +38,8 @@ int intel_pxp_huc_load_and_auth(struct intel_pxp *pxp)
 	huc_in.header.command_id  = PXP43_CMDID_START_HUC_AUTH;
 	huc_in.header.status      = 0;
 	huc_in.header.buffer_len  = sizeof(huc_in.huc_base_address);
-	huc_in.huc_base_address   = huc_phys_addr;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0))
+	huc_in.huc_base_address   = cpu_to_le64(huc_phys_addr);
+
 	err = intel_pxp_tee_stream_message(pxp, client_id, fence_id,
 					   &huc_in, sizeof(huc_in),
 					   &huc_out, sizeof(huc_out));
@@ -66,6 +66,6 @@ int intel_pxp_huc_load_and_auth(struct intel_pxp *pxp)
 			huc_out.header.status);
 		return -EPROTO;
 	}
-#endif
+
 	return 0;
 }

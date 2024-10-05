@@ -3,6 +3,8 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include "i915_selftest.h"
 #include "intel_engine_heartbeat.h"
 #include "intel_engine_pm.h"
@@ -88,8 +90,9 @@ static int __live_context_size(struct intel_engine_cs *engine)
 		goto err;
 
 	vaddr = i915_gem_object_pin_map_unlocked(ce->state->obj,
-						 i915_coherent_map_type(engine->i915,
-									ce->state->obj, false));
+						 intel_gt_coherent_map_type(engine->gt,
+									    ce->state->obj,
+									    false));
 	if (IS_ERR(vaddr)) {
 		err = PTR_ERR(vaddr);
 		intel_context_unpin(ce);
@@ -284,8 +287,12 @@ out_engine:
 	intel_engine_pm_flush(engine);
 
 	if (intel_engine_pm_is_awake(engine)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
 		struct drm_printer p = drm_debug_printer(__func__);
-
+#else
+		struct drm_printer p = drm_dbg_printer(&engine->i915->drm,
+						       DRM_UT_DRIVER, __func__);
+#endif
 		intel_engine_dump(engine, &p,
 				  "%s is still awake:%d after idle-barriers\n",
 				  engine->name,

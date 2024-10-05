@@ -314,10 +314,11 @@ int pnv_calc_dpll_params(int refclk, struct dpll *clock)
 {
 	clock->m = clock->m2 + 2;
 	clock->p = clock->p1 * clock->p2;
-	if (WARN_ON(clock->n == 0 || clock->p == 0))
-		return 0;
-	clock->vco = DIV_ROUND_CLOSEST(refclk * clock->m, clock->n);
-	clock->dot = DIV_ROUND_CLOSEST(clock->vco, clock->p);
+
+	clock->vco = clock->n == 0 ? 0 :
+		DIV_ROUND_CLOSEST(refclk * clock->m, clock->n);
+	clock->dot = clock->p == 0 ? 0 :
+		DIV_ROUND_CLOSEST(clock->vco, clock->p);
 
 	return clock->dot;
 }
@@ -331,10 +332,11 @@ int i9xx_calc_dpll_params(int refclk, struct dpll *clock)
 {
 	clock->m = i9xx_dpll_compute_m(clock);
 	clock->p = clock->p1 * clock->p2;
-	if (WARN_ON(clock->n + 2 == 0 || clock->p == 0))
-		return 0;
-	clock->vco = DIV_ROUND_CLOSEST(refclk * clock->m, clock->n + 2);
-	clock->dot = DIV_ROUND_CLOSEST(clock->vco, clock->p);
+
+	clock->vco = clock->n + 2 == 0 ? 0 :
+		DIV_ROUND_CLOSEST(refclk * clock->m, clock->n + 2);
+	clock->dot = clock->p == 0 ? 0 :
+		DIV_ROUND_CLOSEST(clock->vco, clock->p);
 
 	return clock->dot;
 }
@@ -343,10 +345,11 @@ int vlv_calc_dpll_params(int refclk, struct dpll *clock)
 {
 	clock->m = clock->m1 * clock->m2;
 	clock->p = clock->p1 * clock->p2 * 5;
-	if (WARN_ON(clock->n == 0 || clock->p == 0))
-		return 0;
-	clock->vco = DIV_ROUND_CLOSEST(refclk * clock->m, clock->n);
-	clock->dot = DIV_ROUND_CLOSEST(clock->vco, clock->p);
+
+	clock->vco = clock->n == 0 ? 0 :
+		DIV_ROUND_CLOSEST(refclk * clock->m, clock->n);
+	clock->dot = clock->p == 0 ? 0 :
+		DIV_ROUND_CLOSEST(clock->vco, clock->p);
 
 	return clock->dot;
 }
@@ -355,11 +358,11 @@ int chv_calc_dpll_params(int refclk, struct dpll *clock)
 {
 	clock->m = clock->m1 * clock->m2;
 	clock->p = clock->p1 * clock->p2 * 5;
-	if (WARN_ON(clock->n == 0 || clock->p == 0))
-		return 0;
-	clock->vco = DIV_ROUND_CLOSEST_ULL(mul_u32_u32(refclk, clock->m),
-					   clock->n << 22);
-	clock->dot = DIV_ROUND_CLOSEST(clock->vco, clock->p);
+
+	clock->vco = clock->n == 0 ? 0 :
+		DIV_ROUND_CLOSEST_ULL(mul_u32_u32(refclk, clock->m), clock->n << 22);
+	clock->dot = clock->p == 0 ? 0 :
+		DIV_ROUND_CLOSEST(clock->vco, clock->p);
 
 	return clock->dot;
 }
@@ -999,12 +1002,27 @@ static int dg2_crtc_compute_clock(struct intel_atomic_state *state,
 static int mtl_crtc_compute_clock(struct intel_atomic_state *state,
 				  struct intel_crtc *crtc)
 {
+	struct drm_i915_private *i915 = to_i915(state->base.dev);
 	struct intel_crtc_state *crtc_state =
 		intel_atomic_get_new_crtc_state(state, crtc);
 	struct intel_encoder *encoder =
 		intel_get_crtc_new_encoder(state, crtc_state);
+	enum phy phy = intel_port_to_phy(i915, encoder->port);
+	int ret;
 
-	return intel_cx0mpllb_calc_state(crtc_state, encoder);
+	ret = intel_cx0pll_calc_state(crtc_state, encoder);
+	if (ret)
+		return ret;
+
+	/* TODO: Do the readback via intel_compute_shared_dplls() */
+	if (intel_is_c10phy(i915, phy))
+		crtc_state->port_clock = intel_c10pll_calc_port_clock(encoder, &crtc_state->cx0pll_state.c10);
+	else
+		crtc_state->port_clock = intel_c20pll_calc_port_clock(encoder, &crtc_state->cx0pll_state.c20);
+
+	crtc_state->hw.adjusted_mode.crtc_clock = intel_crtc_dotclock(crtc_state);
+
+	return 0;
 }
 
 static bool ilk_needs_fb_cb_tune(const struct dpll *dpll, int factor)
@@ -1164,6 +1182,8 @@ static int ilk_crtc_compute_clock(struct intel_atomic_state *state,
 				refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
 
+	i9xx_calc_dpll_params(refclk, &crtc_state->dpll);
+
 	ilk_compute_dpll(crtc_state, &crtc_state->dpll,
 			 &crtc_state->dpll);
 
@@ -1238,6 +1258,8 @@ static int chv_crtc_compute_clock(struct intel_atomic_state *state,
 				refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
 
+	chv_calc_dpll_params(refclk, &crtc_state->dpll);
+
 	chv_compute_dpll(crtc_state);
 
 	/* FIXME this is a mess */
@@ -1260,9 +1282,10 @@ static int vlv_crtc_compute_clock(struct intel_atomic_state *state,
 
 	if (!crtc_state->clock_set &&
 	    !vlv_find_best_dpll(limit, crtc_state, crtc_state->port_clock,
-				refclk, NULL, &crtc_state->dpll)) {
+				refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
-	}
+
+	vlv_calc_dpll_params(refclk, &crtc_state->dpll);
 
 	vlv_compute_dpll(crtc_state);
 
@@ -1312,6 +1335,8 @@ static int g4x_crtc_compute_clock(struct intel_atomic_state *state,
 				refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
 
+	i9xx_calc_dpll_params(refclk, &crtc_state->dpll);
+
 	i9xx_compute_dpll(crtc_state, &crtc_state->dpll,
 			  &crtc_state->dpll);
 
@@ -1350,6 +1375,8 @@ static int pnv_crtc_compute_clock(struct intel_atomic_state *state,
 				refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
 
+	pnv_calc_dpll_params(refclk, &crtc_state->dpll);
+
 	i9xx_compute_dpll(crtc_state, &crtc_state->dpll,
 			  &crtc_state->dpll);
 
@@ -1385,6 +1412,8 @@ static int i9xx_crtc_compute_clock(struct intel_atomic_state *state,
 	    !i9xx_find_best_dpll(limit, crtc_state, crtc_state->port_clock,
 				 refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
+
+	i9xx_calc_dpll_params(refclk, &crtc_state->dpll);
 
 	i9xx_compute_dpll(crtc_state, &crtc_state->dpll,
 			  &crtc_state->dpll);
@@ -1425,6 +1454,8 @@ static int i8xx_crtc_compute_clock(struct intel_atomic_state *state,
 	    !i9xx_find_best_dpll(limit, crtc_state, crtc_state->port_clock,
 				 refclk, NULL, &crtc_state->dpll))
 		return -EINVAL;
+
+	i9xx_calc_dpll_params(refclk, &crtc_state->dpll);
 
 	i8xx_compute_dpll(crtc_state, &crtc_state->dpll,
 			  &crtc_state->dpll);
@@ -1534,8 +1565,6 @@ void
 intel_dpll_init_clock_hook(struct drm_i915_private *dev_priv)
 {
 	if (DISPLAY_VER(dev_priv) >= 14)
-		dev_priv->display.funcs.dpll = &mtl_dpll_funcs;
-	else if (DISPLAY_VER(dev_priv) >= 14)
 		dev_priv->display.funcs.dpll = &mtl_dpll_funcs;
 	else if (IS_DG2(dev_priv))
 		dev_priv->display.funcs.dpll = &dg2_dpll_funcs;
@@ -1780,13 +1809,11 @@ static void chv_prepare_pll(const struct intel_crtc_state *crtc_state)
 	enum pipe pipe = crtc->pipe;
 	enum dpio_channel port = vlv_pipe_to_channel(pipe);
 	u32 loopfilter, tribuf_calcntr;
-	u32 bestn, bestm1, bestm2, bestp1, bestp2, bestm2_frac;
+	u32 bestm2, bestp1, bestp2, bestm2_frac;
 	u32 dpio_val;
 	int vco;
 
-	bestn = crtc_state->dpll.n;
 	bestm2_frac = crtc_state->dpll.m2 & 0x3fffff;
-	bestm1 = crtc_state->dpll.m1;
 	bestm2 = crtc_state->dpll.m2 >> 22;
 	bestp1 = crtc_state->dpll.p1;
 	bestp2 = crtc_state->dpll.p2;
@@ -2067,7 +2094,7 @@ static void assert_pll(struct drm_i915_private *dev_priv,
 	bool cur_state;
 
 	cur_state = intel_de_read(dev_priv, DPLL(pipe)) & DPLL_VCO_ENABLE;
-	I915_STATE_WARN(cur_state != state,
+	I915_STATE_WARN(dev_priv, cur_state != state,
 			"PLL state assertion failure (expected %s, current %s)\n",
 			str_on_off(state), str_on_off(cur_state));
 }

@@ -1,6 +1,6 @@
 # Kernel version
-KERNELRELEASE       ?= $(shell uname -r)
-KERNELVERSION       := $(shell var=$(KERNELRELEASE); echo $${var%%-*})
+KERNELRELEASE ?= $(shell uname -r)
+KERNELVERSION := $(shell var=$(KERNELRELEASE); echo $${var%%-*})
 
 # Kernel extraversion (separated by dashes)
 EXTRAVERSION        := $(shell var=$(KERNELRELEASE); echo $${var#*-})
@@ -16,26 +16,9 @@ LSBRELEASE_MINOR    := $(shell var=$$(echo $(LSBRELEASE) | awk -F. '{x=$$2+0; pr
 LSBRELEASE_NAME     := $(shell lsb_release -is 2> /dev/null || cat /etc/*-release | grep '^ID=' | head -n1 | cut -d '=' -f2 | xargs)
 LSBRELEASE_DEFINE   := $(shell var=$(LSBRELEASE_NAME); var=$$(echo $$var | sed 's/-/_/' | awk '{print toupper($$0)}'); echo RELEASE_$${var:-EMPTY})
 
-# Option to override latest GuC firmware (default is API 1.9.0 / v70.20.0)
-# https://patchwork.kernel.org/project/intel-gfx/patch/20240216211432.519411-1-John.C.Harrison@Intel.com/
-# https://gitlab.com/kernel-firmware/linux-firmware/-/merge_requests/156
-GUCFIRMWARE_MAJOR ?= $(shell echo $${GUCFIRMWARE_MAJOR:-1})
-GUCFIRMWARE_MINOR ?= $(shell echo $${GUCFIRMWARE_MINOR:-9})
-
 version:
 $(info KERNELRELEASE=$(KERNELRELEASE))
 $(info KERNELVERSION=$(KERNELVERSION))
-$(info EXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR))
-$(info EXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR))
-$(info EXTRAVERSION_NAME=$(EXTRAVERSION_NAME))
-$(info EXTRAVERSION_DEFINE=$(EXTRAVERSION_DEFINE))
-$(info LSBRELEASE=$(LSBRELEASE))
-$(info LSBRELEASE_MAJOR=$(LSBRELEASE_MAJOR))
-$(info LSBRELEASE_MINOR=$(LSBRELEASE_MINOR))
-$(info LSBRELEASE_NAME=$(LSBRELEASE_NAME))
-$(info LSBRELEASE_DEFINE=$(LSBRELEASE_DEFINE))
-$(info GUCFIRMWARE_MAJOR=$(GUCFIRMWARE_MAJOR))
-$(info GUCFIRMWARE_MINOR=$(GUCFIRMWARE_MINOR))
 
 # ----------------------------------------------------------------------------
 # i915 module - copied from drivers/gpu/drm/i915/Makefile
@@ -47,8 +30,6 @@ EXTRA_CFLAGS += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
 				-DCONFIG_COMPAT -DCONFIG_PERF_EVENTS -DCONFIG_PCI_IOV \
 				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
 				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP \
-				-DGUC_VF_VERSION_LATEST_MAJOR=$(GUCFIRMWARE_MAJOR) \
-				-DGUC_VF_VERSION_LATEST_MINOR=$(GUCFIRMWARE_MINOR) \
 				-DEXTRAVERSION_MAJOR=$(EXTRAVERSION_MAJOR) \
 				-DEXTRAVERSION_MINOR=$(EXTRAVERSION_MINOR) \
 				-D$(EXTRAVERSION_DEFINE) \
@@ -60,33 +41,32 @@ KBUILD_MODPOST_WARN = 1
 
 # core driver code
 i915-y += i915_driver.o \
-	  i915_drm_client.o \
-	  i915_config.o \
-	  i915_getparam.o \
-	  i915_hwmon.o \
-	  i915_ioctl.o \
-	  i915_irq.o \
-	  i915_mitigations.o \
-	  i915_module.o \
-	  i915_params.o \
-	  i915_pci.o \
-	  i915_scatterlist.o \
-	  i915_suspend.o \
-	  i915_switcheroo.o \
-	  i915_sysfs.o \
-	  i915_utils.o \
-	  intel_device_info.o \
-	  intel_memory_region.o \
-	  intel_pcode.o \
-	  intel_pm.o \
-	  intel_region_ttm.o \
-	  intel_runtime_pm.o \
-	  intel_sbi.o \
-	  intel_step.o \
-	  intel_uncore.o \
-	  intel_wakeref.o \
-	  vlv_sideband.o \
-	  vlv_suspend.o
+		i915_drm_client.o \
+		i915_config.o \
+		i915_getparam.o \
+		i915_ioctl.o \
+		i915_irq.o \
+		i915_mitigations.o \
+		i915_module.o \
+		i915_params.o \
+		i915_pci.o \
+		i915_scatterlist.o \
+		i915_suspend.o \
+		i915_switcheroo.o \
+		i915_sysfs.o \
+		i915_utils.o \
+		intel_clock_gating.o \
+		intel_device_info.o \
+		intel_memory_region.o \
+		intel_pcode.o \
+		intel_region_ttm.o \
+		intel_runtime_pm.o \
+		intel_sbi.o \
+		intel_step.o \
+		intel_uncore.o \
+		intel_wakeref.o \
+		vlv_sideband.o \
+		vlv_suspend.o
 
 # core peripheral code
 i915-y += \
@@ -103,13 +83,12 @@ i915-y += \
 	i915_syncmap.o \
 	i915_user_extensions.o
 
-i915-$(CONFIG_COMPAT)   += i915_ioc32.o
+i915-$(CONFIG_COMPAT)	 += i915_ioc32.o
 i915-$(CONFIG_DEBUG_FS) += \
 	i915_debugfs.o \
 	i915_debugfs_params.o \
 	display/intel_display_debugfs.o \
 	display/intel_pipe_crc.o
-
 i915-$(CONFIG_PERF_EVENTS) += i915_pmu.o
 
 # "Graphics Technology" (aka we talk to the gpu)
@@ -132,6 +111,7 @@ gt-y += \
 	gt/intel_ggtt_fencing.o \
 	gt/intel_gt.o \
 	gt/intel_gt_buffer_pool.o \
+	gt/intel_gt_ccs_mode.o \
 	gt/intel_gt_clock_utils.o \
 	gt/intel_gt_debugfs.o \
 	gt/intel_gt_engines_debugfs.o \
@@ -205,46 +185,47 @@ gem-y += \
 	gem/i915_gem_wait.o \
 	gem/i915_gemfs.o
 i915-y += \
-	  $(gem-y) \
-	  i915_active.o \
-	  i915_cmd_parser.o \
-	  i915_deps.o \
-	  i915_gem_evict.o \
-	  i915_gem_gtt.o \
-	  i915_gem_ww.o \
-	  i915_gem.o \
-	  i915_query.o \
-	  i915_request.o \
-	  i915_scheduler.o \
-	  i915_trace_points.o \
-	  i915_ttm_buddy_manager.o \
-	  i915_vma.o \
-	  i915_vma_resource.o
+		$(gem-y) \
+		i915_active.o \
+		i915_cmd_parser.o \
+		i915_deps.o \
+		i915_gem_evict.o \
+		i915_gem_gtt.o \
+		i915_gem_ww.o \
+		i915_gem.o \
+		i915_query.o \
+		i915_request.o \
+		i915_scheduler.o \
+		i915_trace_points.o \
+		i915_ttm_buddy_manager.o \
+		i915_vma.o \
+		i915_vma_resource.o
 
 # general-purpose microcontroller (GuC) support
 i915-y += \
-	  gt/uc/intel_gsc_fw.o \
-	  gt/uc/intel_gsc_proxy.o \
-	  gt/uc/intel_gsc_uc.o \
-	  gt/uc/intel_gsc_uc_heci_cmd_submit.o \
-	  gt/uc/intel_guc.o \
-	  gt/uc/intel_guc_ads.o \
-	  gt/uc/intel_guc_capture.o \
-	  gt/uc/intel_guc_ct.o \
-	  gt/uc/intel_guc_debugfs.o \
-	  gt/uc/intel_guc_fw.o \
-	  gt/uc/intel_guc_hwconfig.o \
-	  gt/uc/intel_guc_log.o \
-	  gt/uc/intel_guc_log_debugfs.o \
-	  gt/uc/intel_guc_rc.o \
-	  gt/uc/intel_guc_slpc.o \
-	  gt/uc/intel_guc_submission.o \
-	  gt/uc/intel_huc.o \
-	  gt/uc/intel_huc_debugfs.o \
-	  gt/uc/intel_huc_fw.o \
-	  gt/uc/intel_uc.o \
-	  gt/uc/intel_uc_debugfs.o \
-	  gt/uc/intel_uc_fw.o
+		gt/uc/intel_gsc_fw.o \
+		gt/uc/intel_gsc_proxy.o \
+		gt/uc/intel_gsc_uc.o \
+		gt/uc/intel_gsc_uc_debugfs.o \
+		gt/uc/intel_gsc_uc_heci_cmd_submit.o \
+		gt/uc/intel_guc.o \
+		gt/uc/intel_guc_ads.o \
+		gt/uc/intel_guc_capture.o \
+		gt/uc/intel_guc_ct.o \
+		gt/uc/intel_guc_debugfs.o \
+		gt/uc/intel_guc_fw.o \
+		gt/uc/intel_guc_hwconfig.o \
+		gt/uc/intel_guc_log.o \
+		gt/uc/intel_guc_log_debugfs.o \
+		gt/uc/intel_guc_rc.o \
+		gt/uc/intel_guc_slpc.o \
+		gt/uc/intel_guc_submission.o \
+		gt/uc/intel_huc.o \
+		gt/uc/intel_huc_debugfs.o \
+		gt/uc/intel_huc_fw.o \
+		gt/uc/intel_uc.o \
+		gt/uc/intel_uc_debugfs.o \
+		gt/uc/intel_uc_fw.o
 
 # graphics system controller (GSC) support
 i915-y += gt/intel_gsc.o
@@ -256,6 +237,7 @@ iov-y += \
 	gt/iov/intel_iov.o \
 	gt/iov/intel_iov_debugfs.o \
 	gt/iov/intel_iov_event.o \
+	gt/iov/intel_iov_ggtt.o \
 	gt/iov/intel_iov_memirq.o \
 	gt/iov/intel_iov_provisioning.o \
 	gt/iov/intel_iov_query.o \
@@ -264,6 +246,9 @@ iov-y += \
 	gt/iov/intel_iov_state.o \
 	gt/iov/intel_iov_sysfs.o
 i915-y += $(iov-y)
+
+# graphics hardware monitoring (HWMON) support
+i915-$(CONFIG_HWMON) += i915_hwmon.o
 
 # modesetting core code
 i915-y += \
@@ -281,9 +266,14 @@ i915-y += \
 	display/intel_crtc_state_dump.o \
 	display/intel_cursor.o \
 	display/intel_display.o \
+	display/intel_display_driver.o \
+	display/intel_display_irq.o \
 	display/intel_display_power.o \
 	display/intel_display_power_map.o \
 	display/intel_display_power_well.o \
+	display/intel_display_reset.o \
+	display/intel_display_rps.o \
+	display/intel_display_wa.o \
 	display/intel_dmc.o \
 	display/intel_dpio_phy.o \
 	display/intel_dpll.o \
@@ -299,22 +289,31 @@ i915-y += \
 	display/intel_frontbuffer.o \
 	display/intel_global_state.o \
 	display/intel_hdcp.o \
+	display/intel_hdcp_gsc.o \
 	display/intel_hotplug.o \
+	display/intel_hotplug_irq.o \
 	display/intel_hti.o \
+	display/intel_link_bw.o \
+	display/intel_load_detect.o \
 	display/intel_lpe_audio.o \
+	display/intel_modeset_lock.o \
 	display/intel_modeset_verify.o \
 	display/intel_modeset_setup.o \
 	display/intel_overlay.o \
 	display/intel_pch_display.o \
 	display/intel_pch_refclk.o \
 	display/intel_plane_initial.o \
+	display/intel_pmdemand.o \
 	display/intel_psr.o \
 	display/intel_quirks.o \
 	display/intel_sprite.o \
+	display/intel_sprite_uapi.o \
 	display/intel_tc.o \
 	display/intel_vblank.o \
 	display/intel_vga.o \
+	display/intel_wm.o \
 	display/i9xx_plane.o \
+	display/i9xx_wm.o \
 	display/skl_scaler.o \
 	display/skl_universal_plane.o \
 	display/skl_watermark.o
@@ -340,6 +339,7 @@ i915-y += \
 	display/intel_cx0_phy.o \
 	display/intel_ddi.o \
 	display/intel_ddi_buf_trans.o \
+	display/intel_display_device.o \
 	display/intel_display_trace.o \
 	display/intel_dkl_phy.o \
 	display/intel_dp.o \
@@ -369,7 +369,7 @@ i915-y += \
 
 i915-y += i915_perf.o
 
-# Protected execution platform (PXP) support
+# Protected execution platform (PXP) support. Base support is required for HuC
 i915-y += \
 	pxp/intel_pxp.o \
 	pxp/intel_pxp_tee.o \
@@ -405,10 +405,10 @@ i915-y += i915_vgpu.o
 i915-$(CONFIG_DRM_I915_GVT) += \
 	intel_gvt.o \
 	intel_gvt_mmio_table.o
+include $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/gvt/Makefile
 
-obj-$(CONFIG_DRM_I915)           += i915.o
-
-CFLAGS_i915_trace_points.o := -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915
+#obj-$(CONFIG_DRM_I915) += i915.o
+#obj-$(CONFIG_DRM_I915_GVT_KVMGT) += kvmgt.o
 
 
 i915-y := $(addprefix drivers/gpu/drm/i915/,$(i915-y))
@@ -417,15 +417,11 @@ i915-y := $(addprefix drivers/gpu/drm/i915/,$(i915-y))
 # common to all modules
 #
 
-# This prioritises the DKMS package include directories over the kernel headers
-# allowing us to override header files where the source versions have extra
-# structs and declarations and so forth that we need for the backport to build.
-
 LINUXINCLUDE := \
-    -I$(KBUILD_EXTMOD)/include \
-    -I$(KBUILD_EXTMOD)/include/trace \
-    -I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915 \
-    $(LINUXINCLUDE)
+	-I$(KBUILD_EXTMOD)/include \
+	-I$(KBUILD_EXTMOD)/include/trace \
+	-I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915 \
+	$(LINUXINCLUDE)
 
 obj-m := i915.o
 

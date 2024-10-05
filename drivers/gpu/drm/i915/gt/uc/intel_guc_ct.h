@@ -8,6 +8,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/spinlock.h>
+#include <linux/stackdepot.h>
 #include <linux/workqueue.h>
 #include <linux/ktime.h>
 #include <linux/wait.h>
@@ -81,6 +82,16 @@ struct intel_guc_ct {
 
 		struct list_head incoming; /* incoming requests */
 		struct work_struct worker; /* handler for incoming requests */
+
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GEM)
+		struct {
+			u16 fence;
+			u16 action;
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+			depot_stack_handle_t stack;
+#endif
+		} lost_and_found[SZ_16];
+#endif
 	} requests;
 
 	/** @stall_time: time of first time a CTB submission is stalled */
@@ -98,7 +109,15 @@ struct intel_guc_ct {
 		 */
 		struct delayed_work work;
 	} mtl_workaround;
+
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+	int dead_ct_reason;
+	bool dead_ct_reported;
+	struct work_struct dead_ct_worker;
+#endif
 };
+
+long intel_guc_ct_max_queue_time_jiffies(void);
 
 void intel_guc_ct_init_early(struct intel_guc_ct *ct);
 int intel_guc_ct_init(struct intel_guc_ct *ct);

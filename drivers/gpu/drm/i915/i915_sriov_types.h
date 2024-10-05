@@ -14,6 +14,7 @@
  * @__status: Status of the PF. Don't access directly!
  * @device_vfs: Number of VFs supported by the device.
  * @driver_vfs: Number of VFs supported by the driver.
+ * @sysfs: FIXME missing doc
  * @sysfs.home: Home object for all entries in sysfs.
  * @sysfs.kobjs: Array with PF and VFs objects exposed in sysfs.
  */

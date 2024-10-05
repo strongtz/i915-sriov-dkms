@@ -15,6 +15,7 @@
 #include "intel_lvds.h"
 #include "intel_lvds_regs.h"
 #include "intel_pps.h"
+#include "intel_pps_regs.h"
 #include "intel_quirks.h"
 
 static void vlv_steal_power_sequencer(struct drm_i915_private *dev_priv,
@@ -786,7 +787,7 @@ void intel_pps_vdd_on(struct intel_dp *intel_dp)
 	vdd = false;
 	with_intel_pps_lock(intel_dp, wakeref)
 		vdd = intel_pps_vdd_on_unlocked(intel_dp);
-	I915_STATE_WARN(!vdd, "[ENCODER:%d:%s] %s VDD already requested on\n",
+	I915_STATE_WARN(i915, !vdd, "[ENCODER:%d:%s] %s VDD already requested on\n",
 			dp_to_dig_port(intel_dp)->base.base.base.id,
 			dp_to_dig_port(intel_dp)->base.base.name,
 			pps_name(i915, &intel_dp->pps));
@@ -866,6 +867,7 @@ static void edp_panel_vdd_work(struct work_struct *__work)
 
 static void edp_panel_vdd_schedule_off(struct intel_dp *intel_dp)
 {
+	struct drm_i915_private *i915 = dp_to_i915(intel_dp);
 	unsigned long delay;
 
 	/*
@@ -881,7 +883,8 @@ static void edp_panel_vdd_schedule_off(struct intel_dp *intel_dp)
 	 * operations.
 	 */
 	delay = msecs_to_jiffies(intel_dp->pps.panel_power_cycle_delay * 5);
-	schedule_delayed_work(&intel_dp->pps.panel_vdd_work, delay);
+	queue_delayed_work(i915->unordered_wq,
+			   &intel_dp->pps.panel_vdd_work, delay);
 }
 
 /*
@@ -898,7 +901,8 @@ void intel_pps_vdd_off_unlocked(struct intel_dp *intel_dp, bool sync)
 	if (!intel_dp_is_edp(intel_dp))
 		return;
 
-	I915_STATE_WARN(!intel_dp->pps.want_panel_vdd, "[ENCODER:%d:%s] %s VDD not forced on",
+	I915_STATE_WARN(dev_priv, !intel_dp->pps.want_panel_vdd,
+			"[ENCODER:%d:%s] %s VDD not forced on",
 			dp_to_dig_port(intel_dp)->base.base.base.id,
 			dp_to_dig_port(intel_dp)->base.base.name,
 			pps_name(dev_priv, &intel_dp->pps));
@@ -1535,17 +1539,13 @@ static void pps_init_registers(struct intel_dp *intel_dp, bool force_disable_vdd
 	/*
 	 * Compute the divisor for the pp clock, simply match the Bspec formula.
 	 */
-	if (i915_mmio_reg_valid(regs.pp_div)) {
+	if (i915_mmio_reg_valid(regs.pp_div))
 		intel_de_write(dev_priv, regs.pp_div,
 			       REG_FIELD_PREP(PP_REFERENCE_DIVIDER_MASK, (100 * div) / 2 - 1) | REG_FIELD_PREP(PANEL_POWER_CYCLE_DELAY_MASK, DIV_ROUND_UP(seq->t11_t12, 1000)));
-	} else {
-		u32 pp_ctl;
-
-		pp_ctl = intel_de_read(dev_priv, regs.pp_ctrl);
-		pp_ctl &= ~BXT_POWER_CYCLE_DELAY_MASK;
-		pp_ctl |= REG_FIELD_PREP(BXT_POWER_CYCLE_DELAY_MASK, DIV_ROUND_UP(seq->t11_t12, 1000));
-		intel_de_write(dev_priv, regs.pp_ctrl, pp_ctl);
-	}
+	else
+		intel_de_rmw(dev_priv, regs.pp_ctrl, BXT_POWER_CYCLE_DELAY_MASK,
+			     REG_FIELD_PREP(BXT_POWER_CYCLE_DELAY_MASK,
+					    DIV_ROUND_UP(seq->t11_t12, 1000)));
 
 	drm_dbg_kms(&dev_priv->drm,
 		    "panel power sequencer register settings: PP_ON %#x, PP_OFF %#x, PP_DIV %#x\n",
@@ -1656,12 +1656,9 @@ void intel_pps_unlock_regs_wa(struct drm_i915_private *dev_priv)
 	 */
 	pps_num = intel_num_pps(dev_priv);
 
-	for (pps_idx = 0; pps_idx < pps_num; pps_idx++) {
-		u32 val = intel_de_read(dev_priv, PP_CONTROL(pps_idx));
-
-		val = (val & ~PANEL_UNLOCK_MASK) | PANEL_UNLOCK_REGS;
-		intel_de_write(dev_priv, PP_CONTROL(pps_idx), val);
-	}
+	for (pps_idx = 0; pps_idx < pps_num; pps_idx++)
+		intel_de_rmw(dev_priv, PP_CONTROL(pps_idx),
+			     PANEL_UNLOCK_MASK, PANEL_UNLOCK_REGS);
 }
 
 void intel_pps_setup(struct drm_i915_private *i915)
@@ -1727,7 +1724,7 @@ void assert_pps_unlocked(struct drm_i915_private *dev_priv, enum pipe pipe)
 	    ((val & PANEL_UNLOCK_MASK) == PANEL_UNLOCK_REGS))
 		locked = false;
 
-	I915_STATE_WARN(panel_pipe == pipe && locked,
+	I915_STATE_WARN(dev_priv, panel_pipe == pipe && locked,
 			"panel assertion failure, pipe %c regs locked\n",
 			pipe_name(pipe));
 }

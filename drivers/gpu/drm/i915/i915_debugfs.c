@@ -51,9 +51,9 @@
 #include "i915_debugfs_params.h"
 #include "i915_driver.h"
 #include "i915_irq.h"
+#include "i915_reg.h"
 #include "i915_scheduler.h"
 #include "intel_mchbar_regs.h"
-#include "intel_pm.h"
 
 static inline struct drm_i915_private *node_to_i915(struct drm_info_node *node)
 {
@@ -68,6 +68,7 @@ static int i915_capabilities(struct seq_file *m, void *data)
 	seq_printf(m, "pch: %d\n", INTEL_PCH_TYPE(i915));
 
 	intel_device_info_print(INTEL_INFO(i915), RUNTIME_INFO(i915), &p);
+	intel_display_device_info_print(DISPLAY_INFO(i915), DISPLAY_RUNTIME_INFO(i915), &p);
 	i915_print_iommu_status(i915, &p);
 	intel_gt_info_print(&to_gt(i915)->info, &p);
 	intel_driver_caps_print(&i915->caps, &p);
@@ -154,7 +155,7 @@ static const char *i915_cache_level_str(struct drm_i915_gem_object *obj)
 {
 	struct drm_i915_private *i915 = obj_to_i915(obj);
 
-	if (IS_METEORLAKE(i915)) {
+	if (IS_GFX_GT_IP_RANGE(to_gt(i915), IP_VER(12, 70), IP_VER(12, 74))) {
 		switch (obj->pat_index) {
 		case 0: return " WB";
 		case 1: return " WT";
@@ -184,16 +185,14 @@ static const char *i915_cache_level_str(struct drm_i915_gem_object *obj)
 		default: return " not defined";
 		}
 	} else {
-		if (i915_gem_object_has_cache_level(obj, I915_CACHE_NONE))
-			return " uncached";
-		else if (i915_gem_object_has_cache_level(obj, I915_CACHE_LLC))
-			return HAS_LLC(i915) ? " LLC" : " snooped";
-		else if (i915_gem_object_has_cache_level(obj, I915_CACHE_L3_LLC))
-			return " L3+LLC";
-		else if (i915_gem_object_has_cache_level(obj, I915_CACHE_WT))
-			return " WT";
-		else
-			return " not defined";
+		switch (obj->pat_index) {
+		case 0: return " UC";
+		case 1: return HAS_LLC(i915) ?
+			       " LLC" : " snooped";
+		case 2: return " L3+LLC";
+		case 3: return " WT";
+		default: return " not defined";
+		}
 	}
 }
 
@@ -628,14 +627,12 @@ static int i915_wedged_get(void *data, u64 *val)
 
 	for_each_gt(gt, i915, i) {
 		int ret;
-		u64 v;
 
-		ret = intel_gt_debugfs_reset_show(gt, &v);
+		ret = intel_gt_debugfs_reset_show(gt, val);
 		if (ret)
 			return ret;
 
 		/* at least one tile should be wedged */
-		*val |= !!v;
 		if (*val)
 			break;
 	}
@@ -717,6 +714,15 @@ i915_drop_caches_get(void *data, u64 *val)
 	return 0;
 }
 
+static bool has_permanent_wakeref(struct drm_i915_private *i915)
+{
+	/*
+	 * XXX: When we have VFs enabled, PF take an untracked wakeref, so
+	 * we can't determine properly whether the GT PM is idle.
+	 */
+	return IS_SRIOV_PF(i915) && (pci_num_vf(to_pci_dev(i915->drm.dev)) > 0);
+}
+
 static int
 gt_drop_caches(struct intel_gt *gt, u64 val)
 {
@@ -736,9 +742,11 @@ gt_drop_caches(struct intel_gt *gt, u64 val)
 	}
 
 	if (val & DROP_IDLE) {
-		ret = intel_gt_pm_wait_for_idle(gt);
-		if (ret)
-			return ret;
+		if (!has_permanent_wakeref(gt->i915)) {
+			ret = intel_gt_pm_wait_for_idle(gt);
+			if (ret)
+				return ret;
+		}
 	}
 
 	if (val & DROP_RESET_ACTIVE && intel_gt_terminally_wedged(gt))
@@ -754,15 +762,19 @@ static int
 i915_drop_caches_set(void *data, u64 val)
 {
 	struct drm_i915_private *i915 = data;
+	struct intel_gt *gt;
 	unsigned int flags;
+	unsigned int i;
 	int ret;
 
 	drm_dbg(&i915->drm, "Dropping caches: 0x%08llx [0x%08llx]\n",
 		val, val & DROP_ALL);
 
-	ret = gt_drop_caches(to_gt(i915), val);
-	if (ret)
-		return ret;
+	for_each_gt(gt, i915, i) {
+		ret = gt_drop_caches(gt, val);
+		if (ret)
+			return ret;
+	}
 
 	fs_reclaim_acquire(GFP_KERNEL);
 	flags = memalloc_noreclaim_save();

@@ -2,15 +2,12 @@
 /*
  * Copyright © 2019 Intel Corporation
  */
-
 #include <linux/version.h>
-
 #include <drm/drm_managed.h>
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
-#include <drm/intel/intel-gtt.h>
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 #include <drm/intel-gtt.h>
+#else
+#include <drm/intel/intel-gtt.h>
 #endif
 
 #include "gem/i915_gem_internal.h"
@@ -20,6 +17,7 @@
 #include "i915_perf_oa_regs.h"
 #include "i915_reg.h"
 #include "intel_context.h"
+#include "intel_engine_pm.h"
 #include "intel_engine_regs.h"
 #include "intel_ggtt_gmch.h"
 #include "intel_gt.h"
@@ -34,7 +32,6 @@
 #include "intel_migrate.h"
 #include "intel_mocs.h"
 #include "intel_pci_config.h"
-#include "intel_pm.h"
 #include "intel_rc6.h"
 #include "intel_renderstate.h"
 #include "intel_rps.h"
@@ -194,7 +191,7 @@ int intel_gt_init_hw(struct intel_gt *gt)
 	if (IS_HASWELL(i915))
 		intel_uncore_write(uncore,
 				   HSW_MI_PREDICATE_RESULT_2,
-				   IS_HSW_GT3(i915) ?
+				   IS_HASWELL_GT3(i915) ?
 				   LOWER_SLICE_ENABLED : LOWER_SLICE_DISABLED);
 
 	/* Apply the GT workarounds... */
@@ -287,10 +284,21 @@ intel_gt_clear_error_registers(struct intel_gt *gt,
 				   I915_MASTER_ERROR_INTERRUPT);
 	}
 
-	if (GRAPHICS_VER_FULL(i915) >= IP_VER(12, 50)) {
+	/*
+	 * For the media GT, this ring fault register is not replicated,
+	 * so don't do multicast/replicated register read/write operation on it.
+	 */
+	if (MEDIA_VER(i915) >= 13 && gt->type == GT_MEDIA) {
+		intel_uncore_rmw(uncore, XELPMP_RING_FAULT_REG,
+				 RING_FAULT_VALID, 0);
+		intel_uncore_posting_read(uncore,
+					  XELPMP_RING_FAULT_REG);
+
+	} else if (GRAPHICS_VER_FULL(i915) >= IP_VER(12, 50)) {
 		intel_gt_mcr_multicast_rmw(gt, XEHP_RING_FAULT_REG,
 					   RING_FAULT_VALID, 0);
 		intel_gt_mcr_read_any(gt, XEHP_RING_FAULT_REG);
+
 	} else if (GRAPHICS_VER(i915) >= 12) {
 		intel_uncore_rmw(uncore, GEN12_RING_FAULT_REG, RING_FAULT_VALID, 0);
 		intel_uncore_posting_read(uncore, GEN12_RING_FAULT_REG);
@@ -495,7 +503,7 @@ static int intel_gt_init_scratch(struct intel_gt *gt, unsigned int size)
 	obj = i915_gem_object_create_lmem(i915, size,
 					  I915_BO_ALLOC_VOLATILE |
 					  I915_BO_ALLOC_GPU_ONLY);
-	if (IS_ERR(obj))
+	if (IS_ERR(obj) && !IS_METEORLAKE(i915)) /* Wa_22018444074 */
 		obj = i915_gem_object_create_stolen(i915, size);
 	if (IS_ERR(obj))
 		obj = i915_gem_object_create_internal(i915, size);
@@ -829,7 +837,27 @@ void intel_gt_driver_unregister(struct intel_gt *gt)
 	intel_rps_driver_unregister(&gt->rps);
 	intel_gsc_fini(&gt->gsc);
 
-	/* flush the GSC uC worker */
+	/*
+	 * If we unload the driver and wedge before the GSC worker is complete,
+	 * the worker will hit an error on its submission to the GSC engine and
+	 * then exit. This is hard to hit for a user, but it is reproducible
+	 * with skipping selftests. The error is handled gracefully by the
+	 * worker, so there are no functional issues, but we still end up with
+	 * an error message in dmesg, which is something we want to avoid as
+	 * this is a supported scenario. We could modify the worker to better
+	 * handle a wedging occurring during its execution, but that gets
+	 * complicated for a couple of reasons:
+	 * - We do want the error on runtime wedging, because there are
+	 *   implications for subsystems outside of GT (i.e., PXP, HDCP), it's
+	 *   only the error on driver unload that we want to silence.
+	 * - The worker is responsible for multiple submissions (GSC FW load,
+	 *   HuC auth, SW proxy), so all of those will have to be adapted to
+	 *   handle the wedged_on_fini scenario.
+	 * Therefore, it's much simpler to just wait for the worker to be done
+	 * before wedging on driver removal, also considering that the worker
+	 * will likely already be idle in the great majority of non-selftest
+	 * scenarios.
+	 */
 	intel_gsc_uc_flush_work(&gt->uc.gsc);
 
 	/*
@@ -917,7 +945,7 @@ static int intel_gt_tile_setup(struct intel_gt *gt, phys_addr_t phys_addr)
 int intel_gt_probe_all(struct drm_i915_private *i915)
 {
 	struct pci_dev *pdev = to_pci_dev(i915->drm.dev);
-	struct intel_gt *gt = &i915->gt0;
+	struct intel_gt *gt = to_gt(i915);
 	const struct intel_gt_definition *gtdef;
 	phys_addr_t phys_addr;
 	unsigned int mmio_bar;
@@ -997,8 +1025,6 @@ int intel_gt_probe_all(struct drm_i915_private *i915)
 
 err:
 	i915_probe_error(i915, "Failed to initialize %s! (%d)\n", gtdef->name, ret);
-	intel_gt_release_all(i915);
-
 	return ret;
 }
 
@@ -1017,19 +1043,44 @@ int intel_gt_tiles_init(struct drm_i915_private *i915)
 	return 0;
 }
 
-void intel_gt_release_all(struct drm_i915_private *i915)
-{
-	struct intel_gt *gt;
-	unsigned int id;
-
-	for_each_gt(gt, i915, id)
-		i915->gt[id] = NULL;
-}
-
 void intel_gt_info_print(const struct intel_gt_info *info,
 			 struct drm_printer *p)
 {
 	drm_printf(p, "available engines: %x\n", info->engine_mask);
 
 	intel_sseu_dump(&info->sseu, p);
+}
+
+enum i915_map_type intel_gt_coherent_map_type(struct intel_gt *gt,
+					      struct drm_i915_gem_object *obj,
+					      bool always_coherent)
+{
+	/*
+	 * Wa_22016122933: always return I915_MAP_WC for Media
+	 * version 13.0 when the object is on the Media GT
+	 */
+	if (i915_gem_object_is_lmem(obj) || intel_gt_needs_wa_22016122933(gt))
+		return I915_MAP_WC;
+	if (HAS_LLC(gt->i915) || always_coherent)
+		return I915_MAP_WB;
+	else
+		return I915_MAP_WC;
+}
+
+void intel_gt_bind_context_set_ready(struct intel_gt *gt, bool ready)
+{
+	struct intel_engine_cs *engine = gt->engine[BCS0];
+
+	if (engine && engine->bind_context)
+		engine->bind_context_ready = ready;
+}
+
+bool intel_gt_is_bind_context_ready(struct intel_gt *gt)
+{
+	struct intel_engine_cs *engine = gt->engine[BCS0];
+
+	if (engine)
+		return engine->bind_context_ready;
+
+	return false;
 }

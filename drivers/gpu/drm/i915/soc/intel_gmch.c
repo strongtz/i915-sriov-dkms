@@ -8,13 +8,11 @@
 #include <linux/version.h>
 
 #include <drm/drm_managed.h>
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
-#include <drm/intel/i915_drm.h>
-#else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 #include <drm/i915_drm.h>
+#else
+#include <drm/intel/i915_drm.h>
 #endif
-
 
 #include "i915_drv.h"
 #include "intel_gmch.h"
@@ -54,11 +52,9 @@ intel_alloc_mchbar_resource(struct drm_i915_private *i915)
 	mchbar_addr = ((u64)temp_hi << 32) | temp_lo;
 
 	/* If ACPI doesn't have it, assume we need to allocate it ourselves */
-#ifdef CONFIG_PNP
-	if (mchbar_addr &&
+	if (IS_ENABLED(CONFIG_PNP) && mchbar_addr &&
 	    pnp_range_reserved(mchbar_addr, mchbar_addr + MCHBAR_SIZE))
 		return 0;
-#endif
 
 	/* Get some space for it */
 	i915->gmch.mch_res.name = "i915 MCHBAR";

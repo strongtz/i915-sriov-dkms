@@ -16,7 +16,6 @@
 #include "intel_context.h"
 #include "intel_gt.h"
 #include "intel_ring.h"
-#include "intel_tlb.h"
 
 #include "selftests/igt_flush_test.h"
 #include "selftests/i915_random.h"
@@ -137,8 +136,15 @@ pte_tlbinv(struct intel_context *ce,
 	i915_request_get(rq);
 	i915_request_add(rq);
 
-	/* Short sleep to sanitycheck the batch is spinning before we begin */
-	msleep(10);
+	/*
+	 * Short sleep to sanitycheck the batch is spinning before we begin.
+	 * FIXME: Why is GSC so slow?
+	 */
+	if (ce->engine->class == OTHER_CLASS)
+		msleep(200);
+	else
+		msleep(10);
+
 	if (va == vb) {
 		if (!i915_request_completed(rq)) {
 			pr_err("%s(%s): Semaphore sanitycheck failed %llx, with alignment %llx, using PTE size %x (phys %x, sg %x)\n",
@@ -192,11 +198,18 @@ out:
 
 static struct drm_i915_gem_object *create_lmem(struct intel_gt *gt)
 {
+	struct intel_memory_region *mr = gt->i915->mm.regions[INTEL_REGION_LMEM_0];
+	resource_size_t size = SZ_1G;
+
 	/*
 	 * Allocation of largest possible page size allows to test all types
-	 * of pages.
+	 * of pages. To succeed with both allocations, especially in case of Small
+	 * BAR, try to allocate no more than quarter of mappable memory.
 	 */
-	return i915_gem_object_create_lmem(gt->i915, SZ_1G, I915_BO_ALLOC_CONTIGUOUS);
+	if (mr && size > mr->io_size / 4)
+		size = mr->io_size / 4;
+
+	return i915_gem_object_create_lmem(gt->i915, size, I915_BO_ALLOC_CONTIGUOUS);
 }
 
 static struct drm_i915_gem_object *create_smem(struct intel_gt *gt)
@@ -389,59 +402,4 @@ int intel_tlb_live_selftests(struct drm_i915_private *i915)
 	}
 
 	return 0;
-}
-
-static int tlb_page_size(void *arg)
-{
-	int start, size, offset;
-
-	for (start = 0; start < 57; start++) {
-		for (size = 0; size <= 57 - start; size++) {
-			for (offset = 0; offset <= size; offset++) {
-				u64 len = BIT(size);
-				u64 addr = BIT(start) + len - BIT(offset);
-				u64 expected_start = addr;
-				u64 expected_end = addr + len - 1;
-				int err = 0;
-
-				if (addr + len < addr)
-					continue;
-
-				len = tlb_page_selective_size(&addr, len);
-				if (addr > expected_start) {
-					pr_err("(start:%d, size:%d, offset:%d, range:[%llx, %llx]) "
-						"invalidate range:[%llx + %llx] after start:%llx\n",
-					       start, size, offset,
-					       expected_start, expected_end,
-					       addr, len,
-					       expected_start);
-					err = -EINVAL;
-				}
-
-				if (addr + len < expected_end) {
-					pr_err("(start:%d, size:%d, offset:%d, range:[%llx, %llx]) "
-						"invalidate range:[%llx + %llx] before end:%llx\n",
-					       start, size, offset,
-					       expected_start, expected_end,
-					       addr, len,
-					       expected_end);
-					err = -EINVAL;
-				}
-
-				if (err)
-					return err;
-			}
-		}
-	}
-
-	return 0;
-}
-
-int intel_tlb_mock_selftests(void)
-{
-	static const struct i915_subtest tests[] = {
-		SUBTEST(tlb_page_size),
-	};
-
-	return i915_subtests(tests, NULL);
 }

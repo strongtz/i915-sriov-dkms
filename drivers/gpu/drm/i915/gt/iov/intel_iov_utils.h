@@ -69,6 +69,11 @@ static inline u16 pf_get_numvfs(struct intel_iov *iov)
 	return pci_num_vf(to_pci_dev(iov_to_dev(iov)));
 }
 
+static inline u16 pf_has_vfs_enabled(struct intel_iov *iov)
+{
+	return pci_num_vf(to_pci_dev(iov_to_dev(iov))) > 0;
+}
+
 static inline bool pf_in_error(struct intel_iov *iov)
 {
 	return i915_sriov_pf_aborted(iov_to_i915(iov));

@@ -176,15 +176,15 @@ enum pipe intel_connector_get_pipe(struct intel_connector *connector)
 /**
  * intel_connector_update_modes - update connector from edid
  * @connector: DRM connector device to use
- * @edid: previously read EDID information
+ * @drm_edid: previously read EDID information
  */
 int intel_connector_update_modes(struct drm_connector *connector,
-				struct edid *edid)
+				 const struct drm_edid *drm_edid)
 {
 	int ret;
 
-	drm_connector_update_edid_property(connector, edid);
-	ret = drm_add_edid_modes(connector, edid);
+	drm_edid_connector_update(connector, drm_edid);
+	ret = drm_edid_connector_add_modes(connector);
 
 	return ret;
 }
@@ -192,22 +192,22 @@ int intel_connector_update_modes(struct drm_connector *connector,
 /**
  * intel_ddc_get_modes - get modelist from monitor
  * @connector: DRM connector device to use
- * @adapter: i2c adapter
+ * @ddc: DDC bus i2c adapter
  *
  * Fetch the EDID information from @connector using the DDC bus.
  */
 int intel_ddc_get_modes(struct drm_connector *connector,
-			struct i2c_adapter *adapter)
+			struct i2c_adapter *ddc)
 {
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
 	int ret;
 
-	edid = drm_get_edid(connector, adapter);
-	if (!edid)
+	drm_edid = drm_edid_read_ddc(connector, ddc);
+	if (!drm_edid)
 		return 0;
 
-	ret = intel_connector_update_modes(connector, edid);
-	kfree(edid);
+	ret = intel_connector_update_modes(connector, drm_edid);
+	drm_edid_free(drm_edid);
 
 	return ret;
 }
@@ -218,6 +218,51 @@ static const struct drm_prop_enum_list force_audio_names[] = {
 	{ HDMI_AUDIO_AUTO, "auto" },
 	{ HDMI_AUDIO_ON, "on" },
 };
+
+int intel_connector_apply_border(struct intel_crtc_state *crtc_state,
+				 void *border_data)
+{
+	const struct drm_display_mode *adjusted_mode =
+		&crtc_state->hw.adjusted_mode;
+	int width = adjusted_mode->crtc_hdisplay;
+	int height = adjusted_mode->crtc_vdisplay;
+	struct drm_rect *border = border_data;
+	int sx = width, sy = height;
+	int left = border->x1;
+	int top = border->y1;
+	int right = border->x2;
+	int bottom = border->y2;
+
+	if (left == 0 && top == 0 && right == 0 && bottom == 0)
+		return 0;
+
+	if (left < 0 || top < 0 || right < 0 || bottom < 0)
+		return -EINVAL;
+
+	if (left == 1)
+		left++;
+	if (left + right >= width || top + bottom >= height)
+		return -EINVAL;
+
+	width -= (left + right);
+	height -= (top + bottom);
+
+	do_div(sx, width);
+	do_div(sy, height);
+	if (sx >= 3 || sy >= 3)
+		return -EINVAL;
+
+	if (width & 1)
+		width++;
+	if (height & 1)
+		height++;
+
+	drm_rect_init(&crtc_state->border.dst,
+		      left, top, width, height);
+	crtc_state->border.enabled = true;
+
+	return 0;
+}
 
 void
 intel_attach_force_audio_property(struct drm_connector *connector)
@@ -280,22 +325,14 @@ intel_attach_aspect_ratio_property(struct drm_connector *connector)
 void
 intel_attach_hdmi_colorspace_property(struct drm_connector *connector)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 	if (!drm_mode_create_hdmi_colorspace_property(connector, 0))
-#else
-	if (!drm_mode_create_hdmi_colorspace_property(connector))
-#endif
 		drm_connector_attach_colorspace_property(connector);
 }
 
 void
 intel_attach_dp_colorspace_property(struct drm_connector *connector)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 	if (!drm_mode_create_dp_colorspace_property(connector, 0))
-#else
-	if (!drm_mode_create_dp_colorspace_property(connector))
-#endif
 		drm_connector_attach_colorspace_property(connector);
 }
 
@@ -315,4 +352,24 @@ intel_attach_scaling_mode_property(struct drm_connector *connector)
 	drm_connector_attach_scaling_mode_property(connector, scaling_modes);
 
 	connector->state->scaling_mode = DRM_MODE_SCALE_ASPECT;
+}
+
+void
+intel_attach_border_property(struct drm_connector *connector)
+{
+	struct drm_device *dev = connector->dev;
+	struct drm_i915_private *dev_priv = to_i915(dev);
+	struct drm_property *prop;
+
+	prop = dev_priv->display.properties.border;
+	if (prop == NULL) {
+		prop = drm_property_create(dev, DRM_MODE_PROP_BLOB,
+					   "Border", 0);
+		if (prop == NULL)
+			return;
+
+		dev_priv->display.properties.border = prop;
+	}
+
+	drm_object_attach_property(&connector->base, prop, 0);
 }

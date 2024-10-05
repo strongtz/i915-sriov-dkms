@@ -11,6 +11,7 @@
 #include "intel_de.h"
 #include "intel_display_types.h"
 #include "intel_dsb.h"
+#include "intel_dsb_regs.h"
 
 struct i915_vma;
 
@@ -92,6 +93,22 @@ static bool assert_dsb_has_room(struct intel_dsb *dsb)
 			 crtc->base.base.id, crtc->base.name, dsb->id);
 }
 
+static void intel_dsb_dump(struct intel_dsb *dsb)
+{
+	struct intel_crtc *crtc = dsb->crtc;
+	struct drm_i915_private *i915 = to_i915(crtc->base.dev);
+	const u32 *buf = dsb->cmd_buf;
+	int i;
+
+	drm_dbg_kms(&i915->drm, "[CRTC:%d:%s] DSB %d commands {\n",
+		    crtc->base.base.id, crtc->base.name, dsb->id);
+	for (i = 0; i < ALIGN(dsb->free_pos, 64 / 4); i += 4)
+		drm_dbg_kms(&i915->drm,
+			    " 0x%08x: 0x%08x 0x%08x 0x%08x 0x%08x\n",
+			    i * 4, buf[i], buf[i+1], buf[i+2], buf[i+3]);
+	drm_dbg_kms(&i915->drm, "}\n");
+}
+
 static bool is_dsb_busy(struct drm_i915_private *i915, enum pipe pipe,
 			enum dsb_id id)
 {
@@ -120,7 +137,15 @@ static bool intel_dsb_prev_ins_is_write(struct intel_dsb *dsb,
 	const u32 *buf = dsb->cmd_buf;
 	u32 prev_opcode, prev_reg;
 
-	prev_opcode = buf[dsb->ins_start_offset + 1] >> DSB_OPCODE_SHIFT;
+	/*
+	 * Nothing emitted yet? Must check before looking
+	 * at the actual data since i915_gem_object_create_internal()
+	 * does *not* give you zeroed memory!
+	 */
+	if (dsb->free_pos == 0)
+		return false;
+
+	prev_opcode = buf[dsb->ins_start_offset + 1] & ~DSB_REG_VALUE_MASK;
 	prev_reg = buf[dsb->ins_start_offset + 1] & DSB_REG_VALUE_MASK;
 
 	return prev_opcode == opcode && prev_reg == i915_mmio_reg_offset(reg);
@@ -128,12 +153,18 @@ static bool intel_dsb_prev_ins_is_write(struct intel_dsb *dsb,
 
 static bool intel_dsb_prev_ins_is_mmio_write(struct intel_dsb *dsb, i915_reg_t reg)
 {
-	return intel_dsb_prev_ins_is_write(dsb, DSB_OPCODE_MMIO_WRITE, reg);
+	/* only full byte-enables can be converted to indexed writes */
+	return intel_dsb_prev_ins_is_write(dsb,
+					   DSB_OPCODE_MMIO_WRITE << DSB_OPCODE_SHIFT |
+					   DSB_BYTE_EN << DSB_BYTE_EN_SHIFT,
+					   reg);
 }
 
 static bool intel_dsb_prev_ins_is_indexed_write(struct intel_dsb *dsb, i915_reg_t reg)
 {
-	return intel_dsb_prev_ins_is_write(dsb, DSB_OPCODE_INDEXED_WRITE, reg);
+	return intel_dsb_prev_ins_is_write(dsb,
+					   DSB_OPCODE_INDEXED_WRITE << DSB_OPCODE_SHIFT,
+					   reg);
 }
 
 /**
@@ -221,10 +252,11 @@ void intel_dsb_finish(struct intel_dsb *dsb)
 /**
  * intel_dsb_commit() - Trigger workload execution of DSB.
  * @dsb: DSB context
+ * @wait_for_vblank: wait for vblank before executing
  *
  * This function is used to do actual write to hardware using DSB.
  */
-void intel_dsb_commit(struct intel_dsb *dsb)
+void intel_dsb_commit(struct intel_dsb *dsb, bool wait_for_vblank)
 {
 	struct intel_crtc *crtc = dsb->crtc;
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
@@ -242,16 +274,12 @@ void intel_dsb_commit(struct intel_dsb *dsb)
 	}
 
 	intel_de_write(dev_priv, DSB_CTRL(pipe, dsb->id),
+		       (wait_for_vblank ? DSB_WAIT_FOR_VBLANK : 0) |
 		       DSB_ENABLE);
 	intel_de_write(dev_priv, DSB_HEAD(pipe, dsb->id),
 		       i915_ggtt_offset(dsb->vma));
 	intel_de_write(dev_priv, DSB_TAIL(pipe, dsb->id),
 		       i915_ggtt_offset(dsb->vma) + tail);
-
-	drm_dbg_kms(&dev_priv->drm,
-		    "DSB execution started - head 0x%x, tail 0x%x\n",
-		    i915_ggtt_offset(dsb->vma),
-		    i915_ggtt_offset(dsb->vma) + tail);
 }
 
 void intel_dsb_wait(struct intel_dsb *dsb)
@@ -260,10 +288,21 @@ void intel_dsb_wait(struct intel_dsb *dsb)
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 	enum pipe pipe = crtc->pipe;
 
-	if (wait_for(!is_dsb_busy(dev_priv, pipe, dsb->id), 1))
+	if (wait_for(!is_dsb_busy(dev_priv, pipe, dsb->id), 1)) {
+		u32 offset = i915_ggtt_offset(dsb->vma);
+
+		intel_de_write_fw(dev_priv, DSB_CTRL(pipe, dsb->id),
+				  DSB_ENABLE | DSB_HALT);
+
 		drm_err(&dev_priv->drm,
-			"[CRTC:%d:%s] DSB %d timed out waiting for idle\n",
-			crtc->base.base.id, crtc->base.name, dsb->id);
+			"[CRTC:%d:%s] DSB %d timed out waiting for idle (current head=0x%x, head=0x%x, tail=0x%x)\n",
+			crtc->base.base.id, crtc->base.name, dsb->id,
+			intel_de_read_fw(dev_priv, DSB_CURRENT_HEAD(pipe, dsb->id)) - offset,
+			intel_de_read_fw(dev_priv, DSB_HEAD(pipe, dsb->id)) - offset,
+			intel_de_read_fw(dev_priv, DSB_TAIL(pipe, dsb->id)) - offset);
+
+		intel_dsb_dump(dsb);
+	}
 
 	/* Attempt to reset it */
 	dsb->free_pos = 0;

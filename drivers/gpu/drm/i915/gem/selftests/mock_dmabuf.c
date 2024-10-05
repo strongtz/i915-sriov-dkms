@@ -3,6 +3,7 @@
  *
  * Copyright © 2016 Intel Corporation
  */
+#include <linux/vmalloc.h>
 
 #include "mock_dmabuf.h"
 

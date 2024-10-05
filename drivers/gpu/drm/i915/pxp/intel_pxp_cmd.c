@@ -94,11 +94,12 @@ static void pxp_request_commit(struct i915_request *rq)
 	mutex_unlock(&tl->mutex);
 }
 
-int intel_pxp_terminate_session(struct intel_pxp *pxp, u32 id)
+int intel_pxp_terminate_sessions(struct intel_pxp *pxp, long mask)
 {
 	struct i915_request *rq;
 	struct intel_context *ce = pxp->ce;
 	u32 *cs;
+	int idx;
 	int err = 0;
 
 	if (!intel_pxp_is_enabled(pxp))
@@ -114,13 +115,14 @@ int intel_pxp_terminate_session(struct intel_pxp *pxp, u32 id)
 			goto out_rq;
 	}
 
-	cs = intel_ring_begin(rq, SESSION_TERMINATION_LEN(1) + WAIT_LEN);
+	cs = intel_ring_begin(rq, SESSION_TERMINATION_LEN(hweight32(mask)) + WAIT_LEN);
 	if (IS_ERR(cs)) {
 		err = PTR_ERR(cs);
 		goto out_rq;
 	}
 
-	cs = pxp_emit_session_termination(cs, id);
+	for_each_set_bit(idx, &mask, INTEL_PXP_MAX_HWDRM_SESSIONS)
+		cs = pxp_emit_session_termination(cs, idx);
 	cs = pxp_emit_wait(cs);
 
 	intel_ring_advance(rq, cs);

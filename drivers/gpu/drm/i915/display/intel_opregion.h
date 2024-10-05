@@ -26,7 +26,6 @@
 #define _INTEL_OPREGION_H_
 
 #include <linux/workqueue.h>
-#include <linux/version.h>
 #include <linux/pci.h>
 
 struct drm_i915_private;
@@ -61,6 +60,7 @@ struct intel_opregion {
 #ifdef CONFIG_ACPI
 
 int intel_opregion_setup(struct drm_i915_private *dev_priv);
+void intel_opregion_cleanup(struct drm_i915_private *i915);
 
 void intel_opregion_register(struct drm_i915_private *dev_priv);
 void intel_opregion_unregister(struct drm_i915_private *dev_priv);
@@ -84,6 +84,10 @@ bool intel_opregion_headless_sku(struct drm_i915_private *i915);
 static inline int intel_opregion_setup(struct drm_i915_private *dev_priv)
 {
 	return 0;
+}
+
+static inline void intel_opregion_cleanup(struct drm_i915_private *i915)
+{
 }
 
 static inline void intel_opregion_register(struct drm_i915_private *dev_priv)

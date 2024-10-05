@@ -30,6 +30,8 @@ void i915_gem_suspend(struct drm_i915_private *i915)
 	intel_wakeref_auto(&i915->runtime_pm.userfault_wakeref, 0);
 	flush_workqueue(i915->wq);
 
+	i915_sriov_suspend_prepare(i915);
+
 	/*
 	 * We have to flush all the executing contexts to main memory so
 	 * that they can saved in the hibernation image. To ensure the last
@@ -238,6 +240,8 @@ void i915_gem_resume(struct drm_i915_private *i915)
 
 	ret = lmem_restore(i915, I915_TTM_BACKUP_ALLOW_GPU);
 	GEM_WARN_ON(ret);
+
+	i915_sriov_resume(i915);
 
 	return;
 

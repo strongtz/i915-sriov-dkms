@@ -37,6 +37,7 @@
 #include "i915_gem_dmabuf.h"
 #include "i915_gem_mman.h"
 #include "i915_gem_object.h"
+#include "i915_gem_object_frontbuffer.h"
 #include "i915_gem_ttm.h"
 #include "i915_memcpy.h"
 #include "i915_trace.h"
@@ -58,12 +59,11 @@ bool i915_gem_object_has_cache_level(const struct drm_i915_gem_object *obj,
 				     enum i915_cache_level lvl)
 {
 	/*
-	 * cache_level == I915_CACHE_INVAL indicates the UMD's have set the
-	 * caching policy through pat_index, in which case the KMD should
-	 * leave the coherency to be managed by user space, simply return
-	 * true here.
+	 * In case the pat_index is set by user space, this kernel mode
+	 * driver should leave the coherency to be managed by user space,
+	 * simply return true here.
 	 */
-	if (obj->cache_level == I915_CACHE_INVAL)
+	if (obj->pat_set_by_user)
 		return true;
 
 	/*
@@ -212,7 +212,7 @@ bool i915_gem_object_can_bypass_llc(struct drm_i915_gem_object *obj)
 	/*
 	 * Always flush cache for UMD objects at creation time.
 	 */
-	if (obj->cache_level == I915_CACHE_INVAL)
+	if (obj->pat_set_by_user)
 		return true;
 
 	/*
@@ -227,7 +227,7 @@ bool i915_gem_object_can_bypass_llc(struct drm_i915_gem_object *obj)
 	 * it, but since i915 takes the stance of always zeroing memory before
 	 * handing it to userspace, we need to prevent this.
 	 */
-	return IS_JSL_EHL(i915);
+	return (IS_JASPERLAKE(i915) || IS_ELKHARTLAKE(i915));
 }
 
 static void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
@@ -470,7 +470,7 @@ void __i915_gem_object_flush_frontbuffer(struct drm_i915_gem_object *obj,
 {
 	struct intel_frontbuffer *front;
 
-	front = __intel_frontbuffer_get(obj);
+	front = i915_gem_object_get_frontbuffer(obj);
 	if (front) {
 		intel_frontbuffer_flush(front, origin);
 		intel_frontbuffer_put(front);
@@ -482,7 +482,7 @@ void __i915_gem_object_invalidate_frontbuffer(struct drm_i915_gem_object *obj,
 {
 	struct intel_frontbuffer *front;
 
-	front = __intel_frontbuffer_get(obj);
+	front = i915_gem_object_get_frontbuffer(obj);
 	if (front) {
 		intel_frontbuffer_invalidate(front, origin);
 		intel_frontbuffer_put(front);
@@ -940,7 +940,7 @@ int i915_gem_object_wait_moving_fence(struct drm_i915_gem_object *obj,
 	return ret < 0 ? ret : 0;
 }
 
-/**
+/*
  * i915_gem_object_has_unknown_state - Return true if the object backing pages are
  * in an unknown_state. This means that userspace must NEVER be allowed to touch
  * the pages, with either the GPU or CPU.

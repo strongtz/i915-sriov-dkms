@@ -21,22 +21,20 @@ static int cmp_u32(const void *A, const void *B)
 	return *a - *b;
 }
 
-static intel_wakeref_t perf_begin(struct intel_gt *gt)
+static void perf_begin(struct intel_gt *gt)
 {
-	intel_wakeref_t wakeref = intel_gt_pm_get(gt);
+	intel_gt_pm_get(gt);
 
 	/* Boost gpufreq to max [waitboost] and keep it fixed */
 	atomic_inc(&gt->rps.num_waiters);
-	schedule_work(&gt->rps.work);
+	queue_work(gt->i915->unordered_wq, &gt->rps.work);
 	flush_work(&gt->rps.work);
-
-	return wakeref;
 }
 
-static int perf_end(struct intel_gt *gt, intel_wakeref_t wakeref)
+static int perf_end(struct intel_gt *gt)
 {
 	atomic_dec(&gt->rps.num_waiters);
-	intel_gt_pm_put(gt, wakeref);
+	intel_gt_pm_put(gt);
 
 	return igt_flush_test(gt->i915);
 }
@@ -64,7 +62,7 @@ static int write_timestamp(struct i915_request *rq, int slot)
 		return PTR_ERR(cs);
 
 	cmd = MI_STORE_REGISTER_MEM | MI_USE_GGTT;
-	if (GRAPHICS_VER(rq->engine->i915) >= 8)
+	if (GRAPHICS_VER(rq->i915) >= 8)
 		cmd++;
 	*cs++ = cmd;
 	*cs++ = i915_mmio_reg_offset(timestamp_reg(rq->engine));
@@ -135,13 +133,12 @@ static int perf_mi_bb_start(void *arg)
 	struct intel_gt *gt = arg;
 	struct intel_engine_cs *engine;
 	enum intel_engine_id id;
-	intel_wakeref_t wakeref;
 	int err = 0;
 
 	if (GRAPHICS_VER(gt->i915) < 4) /* Any CS_TIMESTAMP? */
 		return 0;
 
-	wakeref = perf_begin(gt);
+	perf_begin(gt);
 	for_each_engine(engine, gt, id) {
 		struct intel_context *ce = engine->kernel_context;
 		struct i915_vma *batch;
@@ -210,7 +207,7 @@ out:
 		pr_info("%s: MI_BB_START cycles: %u\n",
 			engine->name, trifilter(cycles));
 	}
-	if (perf_end(gt, wakeref))
+	if (perf_end(gt))
 		err = -EIO;
 
 	return err;
@@ -263,13 +260,12 @@ static int perf_mi_noop(void *arg)
 	struct intel_gt *gt = arg;
 	struct intel_engine_cs *engine;
 	enum intel_engine_id id;
-	intel_wakeref_t wakeref;
 	int err = 0;
 
 	if (GRAPHICS_VER(gt->i915) < 4) /* Any CS_TIMESTAMP? */
 		return 0;
 
-	wakeref = perf_begin(gt);
+	perf_begin(gt);
 	for_each_engine(engine, gt, id) {
 		struct intel_context *ce = engine->kernel_context;
 		struct i915_vma *base, *nop;
@@ -368,7 +364,7 @@ out:
 		pr_info("%s: 16K MI_NOOP cycles: %u\n",
 			engine->name, trifilter(cycles));
 	}
-	if (perf_end(gt, wakeref))
+	if (perf_end(gt))
 		err = -EIO;
 
 	return err;

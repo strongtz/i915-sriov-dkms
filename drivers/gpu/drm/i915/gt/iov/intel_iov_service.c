@@ -14,6 +14,7 @@
 
 #include "gt/intel_gt_regs.h"
 
+#include "intel_iov_ggtt.h"
 #include "intel_iov_relay.h"
 #include "intel_iov_service.h"
 #include "intel_iov_types.h"
@@ -54,8 +55,10 @@ static const i915_reg_t mtl_runtime_regs[] = {
 	GEN11_HUC_KERNEL_LOAD_INFO,	/* _MMIO(0xC1DC) */
 	GEN9_TIMESTAMP_OVERRIDE,	/* _MMIO(0x44074) */
 	_MMIO(0x10100C),
+	_MMIO(MTL_GSC_HECI1_BASE + HECI_FWSTS5),/* _MMIO(0x116c68) */
 	MTL_GT_ACTIVITY_FACTOR,		/* _MMIO(0x138010) */
 	_MMIO(0x389140),
+	_MMIO(0x38C1DC),                /* _MMIO(0x38C1DC) */
 };
 
 static const i915_reg_t *get_runtime_regs(struct drm_i915_private *i915,
@@ -222,9 +225,20 @@ void intel_iov_service_release(struct intel_iov *iov)
  */
 void intel_iov_service_update(struct intel_iov *iov)
 {
+	struct intel_gt *media_gt = iov_to_i915(iov)->media_gt;
+	enum forcewake_domains fw;
+
 	GEM_BUG_ON(!intel_iov_is_pf(iov));
 
+	if (media_gt) {
+		fw = intel_uncore_forcewake_for_reg(media_gt->uncore, _MMIO(0x38c1dc), FW_REG_READ);
+		intel_uncore_forcewake_get(media_gt->uncore, fw);
+	}
+
 	pf_prepare_runtime_info(iov);
+
+	if (media_gt)
+		intel_uncore_forcewake_put(media_gt->uncore, fw);
 }
 
 /**
@@ -336,6 +350,86 @@ static int pf_reply_runtime_query(struct intel_iov *iov, u32 origin,
 					   response, 2 + 2 * chunk);
 }
 
+static gen8_pte_t get_pte_from_msg(const u32 *msg, u16 id)
+{
+	u32 pte_lo = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_LO, msg[id * 2 + 2]);
+	u32 pte_hi = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_HI, msg[id * 2 + 3]);
+
+	return make_u64(pte_hi, pte_lo);
+}
+
+static int pf_reply_update_ggtt(struct intel_iov *iov, u32 origin,
+				u32 relay_id, const u32 *msg, u32 len)
+{
+	u32 response[VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN];
+	u16 num_copies;
+	u8 mode;
+	u32 pte_offset;
+	u16 count;
+	gen8_pte_t ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
+	gen8_pte_t *start_range;
+	u16 range_size;
+	u16 updated = 0;
+	int ret;
+	int i;
+
+	if (!i915_ggtt_require_binder(iov_to_i915(iov)))
+		return -EOPNOTSUPP;
+
+	if (unlikely(!msg[0]) || unlikely(!msg[1]) || len < 4 || len % 2 != 0)
+		return -EPROTO;
+
+	num_copies = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, msg[1]);
+	mode = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE, msg[1]);
+	pte_offset = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET, msg[1]);
+	count = (len - 2) / 2;
+
+	if (count > VF2PF_UPDATE_GGTT_MAX_PTES)
+		return -EMSGSIZE;
+
+	ptes[0] = get_pte_from_msg(msg, 0);
+	start_range = &ptes[0];
+	range_size = 1;
+
+	for (i = 1; i < count; i++) {
+		ptes[i] = get_pte_from_msg(msg, i);
+
+		if ((ptes[i - 1] & ~GEN12_GGTT_PTE_ADDR_MASK) !=
+		    (ptes[i] & ~GEN12_GGTT_PTE_ADDR_MASK)) {
+			u16 local_num_copies = (VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode)) ?
+					       0 : num_copies;
+
+			ret = intel_iov_ggtt_pf_update_vf_ptes(iov, origin, pte_offset, mode,
+							       local_num_copies, start_range, range_size);
+			if (ret < 0) {
+				return ret;
+			} else {
+				updated += ret;
+				start_range = &ptes[i];
+				pte_offset += range_size;
+				range_size = 0;
+				if (!VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode))
+					num_copies = 0;
+			}
+		}
+		range_size++;
+	}
+
+	ret = intel_iov_ggtt_pf_update_vf_ptes(iov, origin, pte_offset, mode, num_copies,
+					       start_range, range_size);
+	if (ret < 0)
+		return ret;
+
+	updated += ret;
+
+	response[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		      FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_RESPONSE_SUCCESS) |
+		      FIELD_PREP(VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES, updated);
+
+	return intel_iov_relay_reply_to_vf(&iov->relay, origin, relay_id,
+					   response, ARRAY_SIZE(response));
+}
+
 /**
  * intel_iov_service_process_msg - Service request message from VF.
  * @iov: the IOV struct
@@ -353,7 +447,7 @@ int intel_iov_service_process_msg(struct intel_iov *iov, u32 origin,
 {
 	int err = -EOPNOTSUPP;
 	u32 action;
-	u32 data;
+	u32 __maybe_unused data;
 
 	GEM_BUG_ON(!intel_iov_is_pf(iov));
 	GEM_BUG_ON(len < GUC_HXG_MSG_MIN_LEN);
@@ -372,6 +466,9 @@ int intel_iov_service_process_msg(struct intel_iov *iov, u32 origin,
 		break;
 	case IOV_ACTION_VF2PF_QUERY_RUNTIME:
 		err = pf_reply_runtime_query(iov, origin, relay_id, msg, len);
+		break;
+	case IOV_ACTION_VF2PF_UPDATE_GGTT32:
+		err = pf_reply_update_ggtt(iov, origin, relay_id, msg, len);
 		break;
 	default:
 		break;
@@ -453,6 +550,38 @@ static int reply_mmio_relay_handshake(struct intel_iov *iov,
 
 	data[1] = FIELD_PREP(VF2PF_MMIO_HANDSHAKE_RESPONSE_MSG_1_MAJOR, major) |
 		  FIELD_PREP(VF2PF_MMIO_HANDSHAKE_RESPONSE_MSG_1_MINOR, minor);
+
+	return send_mmio_relay_reply(iov, vfid, magic, data);
+}
+
+static int reply_mmio_relay_update_ggtt(struct intel_iov *iov, u32 vfid, u32 magic, const u32 *msg)
+{
+	u32 data[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_NUM_DATA + 1] = { };
+	u16 num_copies;
+	u8 mode;
+	u32 pte_lo, pte_hi;
+	u32 pte_offset;
+	gen8_pte_t pte;
+	int ret;
+
+	if (!i915_ggtt_require_binder(iov_to_i915(iov)))
+		return -EOPNOTSUPP;
+
+	if (unlikely(!msg[0]))
+		return -EPROTO;
+
+	num_copies = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES, msg[1]);
+	mode = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_MODE, msg[1]);
+	pte_offset = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_OFFSET, msg[1]);
+	pte_lo = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_2_PTE_LO, msg[2]);
+	pte_hi = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_3_PTE_HI, msg[3]);
+
+	pte = make_u64(pte_hi, pte_lo);
+
+	ret = intel_iov_ggtt_pf_update_vf_ptes(iov, vfid, pte_offset, mode, num_copies, &pte, 1);
+	if (ret < 0)
+		return ret;
+	data[0] = FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_RESPONSE_MSG_1_NUM_PTES, (u16)ret);
 
 	return send_mmio_relay_reply(iov, vfid, magic, data);
 }
@@ -543,6 +672,9 @@ int intel_iov_service_process_mmio_relay(struct intel_iov *iov, const u32 *msg,
 	switch (opcode) {
 	case IOV_OPCODE_VF2PF_MMIO_HANDSHAKE:
 		err = reply_mmio_relay_handshake(iov, vfid, magic, msg + 2);
+		break;
+	case IOV_OPCODE_VF2PF_MMIO_UPDATE_GGTT:
+		err = reply_mmio_relay_update_ggtt(iov, vfid, magic, msg + 2);
 		break;
 	case IOV_OPCODE_VF2PF_MMIO_GET_RUNTIME:
 		err = reply_mmio_relay_get_reg(iov, vfid, magic, msg + 2);

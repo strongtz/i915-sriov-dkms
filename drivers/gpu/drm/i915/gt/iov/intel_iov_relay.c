@@ -405,8 +405,8 @@ unlink:
  * intel_iov_relay_send_to_vf - Send message to VF.
  * @relay: the Relay struct
  * @target: target VF number
- * @data: request payload data
- * @dat_len: length of the payload data (in dwords, can be 0)
+ * @msg: FIXME missing doc
+ * @len: FIXME missing doc
  * @buf: placeholder for the response message
  * @buf_size: size of the response message placeholder (in dwords)
  *

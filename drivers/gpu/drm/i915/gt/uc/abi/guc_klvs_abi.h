@@ -18,6 +18,7 @@
  *  |   |       |   - `GuC Self Config KLVs`_                                  |
  *  |   |       |   - `GuC VGT Policy KLVs`_                                   |
  *  |   |       |   - `GuC VF Configuration KLVs`_                             |
+ *  |   |       |   - `GuC Global Config KLVs`_                                |
  *  |   |       |                                                              |
  *  |   +-------+--------------------------------------------------------------+
  *  |   |  15:0 | **LEN** - length of VALUE (in 32bit dwords)                  |
@@ -31,9 +32,9 @@
  */
 
 #define GUC_KLV_LEN_MIN				1u
-#define GUC_KLV_0_KEY				(0xffff << 16)
-#define GUC_KLV_0_LEN				(0xffff << 0)
-#define GUC_KLV_n_VALUE				(0xffffffff << 0)
+#define GUC_KLV_0_KEY				(0xffffu << 16)
+#define GUC_KLV_0_LEN				(0xffffu << 0)
+#define GUC_KLV_n_VALUE				(0xffffffffu << 0)
 
 /**
  * DOC: GuC Self Config KLVs
@@ -117,6 +118,13 @@ enum {
 	GUC_CONTEXT_POLICIES_KLV_NUM_IDS = 5,
 };
 
+/*
+ * Workaround keys:
+ */
+enum {
+	GUC_WORKAROUND_KLV_SERIALIZED_RA_MODE                           = 0x9001,
+};
+
 /**
  * DOC: GuC VGT Policy KLVs
  *
@@ -188,7 +196,7 @@ enum {
  *      of and this will never be perfectly-exact (accumulated nano-second
  *      granularity) since the GPUs clock time runs off a different crystal
  *      from the CPUs clock. Changing this KLV on a VF that is currently
- *      running a context wont take effect until a new context is scheduled in.
+ *      running a context won't take effect until a new context is scheduled in.
  *      That said, when the PF is changing this value from 0xFFFFFFFF to
  *      something else, it might never take effect if the VF is running an
  *      inifinitely long compute or shader kernel. In such a scenario, the
@@ -307,5 +315,19 @@ enum {
 
 #define GUC_KLV_VF_CFG_BEGIN_CONTEXT_ID_KEY	0x8a0b
 #define GUC_KLV_VF_CFG_BEGIN_CONTEXT_ID_LEN	1u
+
+/**
+ * DOC: GuC Global Config KLVs
+ *
+ * Additional `GuC KLV`_ keys available for use with HOST2GUC_SELF_CFG_.
+ *
+ * _`GUC_KLV_GLOBAL_CFG_GMD_ID` : 0x3000
+ *      Contains raw value of the GMD_ID register (0xd8c or 0x380d8c).
+ *      Supported only on platforms with GMD (MTL+).
+ *      Requires VF ABI version 1.2+.
+ */
+
+#define GUC_KLV_GLOBAL_CFG_GMD_ID_KEY			0x3000
+#define GUC_KLV_GLOBAL_CFG_GMD_ID_LEN			1u
 
 #endif /* _ABI_GUC_KLVS_ABI_H */

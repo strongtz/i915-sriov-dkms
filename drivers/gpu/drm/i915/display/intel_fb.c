@@ -3,15 +3,21 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_blend.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_modeset_helper.h>
+
+#include <linux/dma-fence.h>
+#include <linux/dma-resv.h>
 
 #include "i915_drv.h"
 #include "intel_display.h"
 #include "intel_display_types.h"
 #include "intel_dpt.h"
 #include "intel_fb.h"
+#include "intel_frontbuffer.h"
 
 #define check_array_bounds(i915, a, i) drm_WARN_ON(&(i915)->drm, (i) >= ARRAY_SIZE(a))
 
@@ -401,7 +407,7 @@ static bool plane_has_modifier(struct drm_i915_private *i915,
 	 * where supported.
 	 */
 	if (intel_fb_is_ccs_modifier(md->modifier) &&
-	   HAS_FLAT_CCS(i915) != !md->ccs.packed_aux_planes)
+	    HAS_FLAT_CCS(i915) != !md->ccs.packed_aux_planes)
 		return false;
 
 	return true;
@@ -753,14 +759,15 @@ static unsigned int intel_fb_modifier_to_tiling(u64 fb_modifier)
 	}
 }
 
-static bool intel_modifier_uses_dpt(struct drm_i915_private *i915, u64 modifier)
+bool intel_fb_modifier_uses_dpt(struct drm_i915_private *i915, u64 modifier)
 {
-	return DISPLAY_VER(i915) >= 13 && modifier != DRM_FORMAT_MOD_LINEAR;
+	return HAS_DPT(i915) && modifier != DRM_FORMAT_MOD_LINEAR;
 }
 
 bool intel_fb_uses_dpt(const struct drm_framebuffer *fb)
 {
-	return fb && intel_modifier_uses_dpt(to_i915(fb->dev), fb->modifier);
+	return fb && to_i915(fb->dev)->params.enable_dpt &&
+		intel_fb_modifier_uses_dpt(to_i915(fb->dev), fb->modifier);
 }
 
 unsigned int intel_cursor_alignment(const struct drm_i915_private *i915)
@@ -1112,11 +1119,8 @@ static int intel_fb_offset_to_xy(int *x, int *y,
 		return -EINVAL;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
-	height = drm_framebuffer_plane_height(fb->height, fb, color_plane);
-#else
 	height = drm_format_info_plane_height(fb->format, fb->height, color_plane);
-#endif
+
 	height = ALIGN(height, intel_tile_height(fb, color_plane));
 
 	/* Catch potential overflows early */
@@ -1234,7 +1238,7 @@ bool intel_fb_needs_pot_stride_remap(const struct intel_framebuffer *fb)
 	struct drm_i915_private *i915 = to_i915(fb->base.dev);
 
 	return (IS_ALDERLAKE_P(i915) || DISPLAY_VER(i915) >= 14) &&
-	       fb->base.modifier != DRM_FORMAT_MOD_LINEAR;
+		intel_fb_uses_dpt(&fb->base);
 }
 
 static int intel_fb_pitch(const struct intel_framebuffer *fb, int color_plane, unsigned int rotation)
@@ -1373,7 +1377,8 @@ plane_view_scanout_stride(const struct intel_framebuffer *fb, int color_plane,
 	struct drm_i915_private *i915 = to_i915(fb->base.dev);
 	unsigned int stride_tiles;
 
-	if (IS_ALDERLAKE_P(i915) || DISPLAY_VER(i915) >= 14)
+	if ((IS_ALDERLAKE_P(i915) || DISPLAY_VER(i915) >= 14) &&
+	    src_stride_tiles < dst_stride_tiles)
 		stride_tiles = src_stride_tiles;
 	else
 		stride_tiles = dst_stride_tiles;
@@ -1500,8 +1505,20 @@ static u32 calc_plane_remap_info(const struct intel_framebuffer *fb, int color_p
 
 			size += remap_info->size;
 		} else {
-			unsigned int dst_stride = plane_view_dst_stride_tiles(fb, color_plane,
-									      remap_info->width);
+			unsigned int dst_stride;
+
+			/*
+			 * The hardware automagically calculates the CCS AUX surface
+			 * stride from the main surface stride so can't really remap a
+			 * smaller subset (unless we'd remap in whole AUX page units).
+			 */
+			if (intel_fb_needs_pot_stride_remap(fb) &&
+			    intel_fb_is_ccs_modifier(fb->base.modifier))
+				dst_stride = remap_info->src_stride;
+			else
+				dst_stride = remap_info->width;
+
+			dst_stride = plane_view_dst_stride_tiles(fb, color_plane, dst_stride);
 
 			assign_chk_ovf(i915, remap_info->dst_stride, dst_stride);
 			color_plane_info->mapping_stride = dst_stride *
@@ -1604,7 +1621,7 @@ int intel_fill_fb_info(struct drm_i915_private *i915, struct intel_framebuffer *
 	for (i = 0; i < num_planes; i++) {
 		struct fb_plane_view_dims view_dims;
 		unsigned int width, height;
-		unsigned int cpp, size;
+		unsigned int size;
 		u32 offset;
 		int x, y;
 		int ret;
@@ -1621,7 +1638,6 @@ int intel_fill_fb_info(struct drm_i915_private *i915, struct intel_framebuffer *
 				return -EINVAL;
 		}
 
-		cpp = fb->base.format->cpp[i];
 		intel_fb_plane_dims(fb, i, &width, &height);
 
 		ret = convert_plane_offset_to_xy(fb, i, width, &x, &y);
@@ -1752,7 +1768,7 @@ u32 intel_fb_max_stride(struct drm_i915_private *dev_priv,
 	 * The new CCS hash mode makes remapping impossible
 	 */
 	if (DISPLAY_VER(dev_priv) < 4 || intel_fb_is_ccs_modifier(modifier) ||
-	    intel_modifier_uses_dpt(dev_priv, modifier))
+	    intel_fb_modifier_uses_dpt(dev_priv, modifier))
 		return intel_plane_fb_max_stride(dev_priv, pixel_format, modifier);
 	else if (DISPLAY_VER(dev_priv) >= 7)
 		return 256 * 1024;
@@ -1900,6 +1916,21 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 	return drm_gem_handle_create(file, &obj->base, handle);
 }
 
+struct frontbuffer_fence_cb {
+	struct dma_fence_cb base;
+	struct intel_frontbuffer *front;
+};
+
+static void intel_user_framebuffer_fence_wake(struct dma_fence *dma,
+					      struct dma_fence_cb *data)
+{
+	struct frontbuffer_fence_cb *cb = container_of(data, typeof(*cb), base);
+
+	intel_frontbuffer_queue_flush(cb->front);
+	kfree(cb);
+	dma_fence_put(dma);
+}
+
 static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
 					struct drm_file *file,
 					unsigned int flags, unsigned int color,
@@ -1907,11 +1938,47 @@ static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
 					unsigned int num_clips)
 {
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
+	struct intel_frontbuffer *front = to_intel_frontbuffer(fb);
+	struct dma_fence *fence;
+	struct frontbuffer_fence_cb *cb;
+	int ret = 0;
 
+	if (!atomic_read(&front->bits))
+		return 0;
+
+	if (dma_resv_test_signaled(obj->base.resv, dma_resv_usage_rw(false)))
+		goto flush;
+
+	ret = dma_resv_get_singleton(obj->base.resv, dma_resv_usage_rw(false),
+				     &fence);
+	if (ret || !fence)
+		goto flush;
+
+	cb = kmalloc(sizeof(*cb), GFP_KERNEL);
+	if (!cb) {
+		dma_fence_put(fence);
+		ret = -ENOMEM;
+		goto flush;
+	}
+
+	cb->front = front;
+
+	intel_frontbuffer_invalidate(front, ORIGIN_DIRTYFB);
+
+	ret = dma_fence_add_callback(fence, &cb->base,
+				     intel_user_framebuffer_fence_wake);
+	if (ret) {
+		intel_user_framebuffer_fence_wake(fence, &cb->base);
+		if (ret == -ENOENT)
+			ret = 0;
+	}
+
+	return ret;
+
+flush:
 	i915_gem_object_flush_if_display(obj);
-	intel_frontbuffer_flush(to_intel_frontbuffer(fb), ORIGIN_DIRTYFB);
-
-	return 0;
+	intel_frontbuffer_flush(front, ORIGIN_DIRTYFB);
+	return ret;
 }
 
 static const struct drm_framebuffer_funcs intel_fb_funcs = {
@@ -2054,6 +2121,7 @@ int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 
 		vm = intel_dpt_create(intel_fb);
 		if (IS_ERR(vm)) {
+			drm_dbg_kms(&dev_priv->drm, "failed to create DPT\n");
 			ret = PTR_ERR(vm);
 			goto err;
 		}
@@ -2064,11 +2132,14 @@ int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 	ret = drm_framebuffer_init(&dev_priv->drm, fb, &intel_fb_funcs);
 	if (ret) {
 		drm_err(&dev_priv->drm, "framebuffer init failed %d\n", ret);
-		goto err;
+		goto err_free_dpt;
 	}
 
 	return 0;
 
+err_free_dpt:
+	if (intel_fb_uses_dpt(fb))
+		intel_dpt_destroy(intel_fb->dpt_vm);
 err:
 	intel_frontbuffer_put(intel_fb->frontbuffer);
 	return ret;
@@ -2093,6 +2164,7 @@ intel_user_framebuffer_create(struct drm_device *dev,
 	if (HAS_LMEM(i915) && !i915_gem_object_can_migrate(obj, INTEL_REGION_LMEM_0)) {
 		/* object is "remote", not in local memory */
 		i915_gem_object_put(obj);
+		drm_dbg_kms(&i915->drm, "framebuffer must reside in local memory\n");
 		return ERR_PTR(-EREMOTE);
 	}
 

@@ -11,10 +11,36 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 
+struct drm_i915_private;
+
 struct intel_context;
 struct intel_gt;
 struct i915_pxp_component;
-struct drm_i915_private;
+struct i915_vma;
+
+#define INTEL_PXP_MAX_HWDRM_SESSIONS 16
+
+struct intel_pxp_session {
+	/** @index: Numeric identifier for this protected session */
+	int index;
+	/** @protection_type: type of protection requested */
+	int protection_type;
+	/** @protection_mode: mode of protection requested */
+	int protection_mode;
+	/** @drmfile: pointer to drm_file, which is allocated on device file open() call */
+	struct drm_file *drmfile;
+
+	/**
+	 * @is_valid: indicates whether the session has been established
+	 *            in the HW root of trust. Note that, after a teardown, the
+	 *            session can still be considered in play on the HW even if
+	 *            the keys are gone, so we can't rely on the HW state of the
+	 *            session to know if it's valid.
+	 */
+	bool is_valid;
+
+	u32 tag;
+};
 
 /**
  * struct intel_pxp - pxp state
@@ -25,6 +51,15 @@ struct intel_pxp {
 	 * the VDBOX, the KCR engine (and GSC CS depending on the platform)
 	 */
 	struct intel_gt *ctrl_gt;
+
+	/**
+	 * @platform_cfg_is_bad: used to track if any prior arb session creation resulted
+	 * in a failure that was caused by a platform configuration issue, meaning that
+	 * failure will not get resolved without a change to the platform (not kernel)
+	 * such as BIOS configuration, firwmware update, etc. This bool gets reflected when
+	 * GET_PARAM:I915_PARAM_PXP_STATUS is called.
+	 */
+	bool platform_cfg_is_bad;
 
 	/**
 	 * @kcr_base: base mmio offset for the KCR engine which is different on legacy platforms
@@ -38,6 +73,7 @@ struct intel_pxp {
 	struct gsccs_session_resources {
 		u64 host_session_handle; /* used by firmware to link commands to sessions */
 		struct intel_context *ce; /* context for gsc command submission */
+		struct i915_address_space *vm; /* only for user space session contexts */
 
 		struct i915_vma *pkt_vma; /* GSC FW cmd packet vma */
 		void *pkt_vaddr;  /* GSC FW cmd packet virt pointer */
@@ -45,6 +81,8 @@ struct intel_pxp {
 		struct i915_vma *bb_vma; /* HECI_PKT batch buffer vma */
 		void *bb_vaddr; /* HECI_PKT batch buffer virt pointer */
 	} gsccs_res;
+	/** @gsccs_clients: list of gsccs_res structs for each active client. */
+	struct list_head gsccs_clients; /* protected by session_mutex */
 
 	/**
 	 * @pxp_component: i915_pxp_component struct of the bound mei_pxp
@@ -53,8 +91,17 @@ struct intel_pxp {
 	 */
 	struct i915_pxp_component *pxp_component;
 
-	/* @dev_link: Enforce module relationship for power management ordering. */
+	/**
+	 * @dev_link: Enforce module relationship for power management ordering.
+	 */
 	struct device_link *dev_link;
+	/**
+	 * @mei_pxp_last_msg_interrupted: To catch and drop stale responses
+	 * from previuosly interrupted send-msg to mei before issuing new
+	 * send-recv.
+	 */
+	bool mei_pxp_last_msg_interrupted;
+
 	/**
 	 * @pxp_component_added: track if the pxp component has been added.
 	 * Set and cleared in tee init and fini functions respectively.
@@ -66,13 +113,6 @@ struct intel_pxp {
 
 	/** @arb_mutex: protects arb session start */
 	struct mutex arb_mutex;
-	/**
-	 * @arb_is_valid: tracks arb session status.
-	 * After a teardown, the arb session can still be in play on the HW
-	 * even if the keys are gone, so we can't rely on the HW state of the
-	 * session to know if it's valid and need to track the status in SW.
-	 */
-	bool arb_is_valid;
 
 	/**
 	 * @key_instance: tracks which key instance we're on, so we can use it
@@ -105,6 +145,17 @@ struct intel_pxp {
 	 * re-initialized under gt->irq_lock and completed in &session_work.
 	 */
 	struct completion termination;
+
+	/** @session_mutex: protects hwdrm_sesions, and reserved_sessions. */
+	struct mutex session_mutex;
+	/** @reserved_sessions: bitmap of hw session slots for used-vs-free book-keeping. */
+	DECLARE_BITMAP(reserved_sessions, INTEL_PXP_MAX_HWDRM_SESSIONS);
+	/** @hwdrm_sessions: array of intel_pxp_sesion ptrs mapped to reserved_sessions bitmap. */
+	struct intel_pxp_session *hwdrm_sessions[INTEL_PXP_MAX_HWDRM_SESSIONS];
+	/** @arb_session: the default intel_pxp_session. */
+	struct intel_pxp_session arb_session;
+	/** @next_tag_id: looping counter (per session) to track teardown-creation events. */
+	u8 next_tag_id[INTEL_PXP_MAX_HWDRM_SESSIONS];
 
 	/** @session_work: worker that manages session events. */
 	struct work_struct session_work;

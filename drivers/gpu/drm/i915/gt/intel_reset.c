@@ -6,8 +6,9 @@
 #include <linux/sched/mm.h>
 #include <linux/stop_machine.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
-#include "display/intel_display.h"
+#include "display/intel_display_reset.h"
 #include "display/intel_overlay.h"
 
 #include "gem/i915_gem_context.h"
@@ -20,6 +21,7 @@
 #include "i915_file_private.h"
 #include "i915_gpu_error.h"
 #include "i915_irq.h"
+#include "i915_reg.h"
 #include "intel_breadcrumbs.h"
 #include "intel_engine_pm.h"
 #include "intel_engine_regs.h"
@@ -33,9 +35,6 @@
 #include "uc/intel_guc.h"
 
 #define RESET_MAX_RETRIES 3
-
-/* XXX How to handle concurrent GGTT updates using tiling registers? */
-#define RESET_UNDER_STOP_MACHINE 0
 
 static void client_mark_guilty(struct i915_gem_context *ctx, bool banned)
 {
@@ -270,8 +269,26 @@ out:
 static int gen6_hw_domain_reset(struct intel_gt *gt, u32 hw_domain_mask)
 {
 	struct intel_uncore *uncore = gt->uncore;
-	int loops = GRAPHICS_VER_FULL(gt->i915) < IP_VER(12, 70) ? 2 : 1; /* see comment below */
+	int loops;
 	int err;
+
+	/*
+	 * On some platforms, e.g. Jasperlake, we see that the engine register
+	 * state is not cleared until shortly after GDRST reports completion,
+	 * causing a failure as we try to immediately resume while the internal
+	 * state is still in flux. If we immediately repeat the reset, the
+	 * second reset appears to serialise with the first, and since it is a
+	 * no-op, the registers should retain their reset value. However, there
+	 * is still a concern that upon leaving the second reset, the internal
+	 * engine state is still in flux and not ready for resuming.
+	 *
+	 * Starting on MTL, there are some prep steps that we need to do when
+	 * resetting some engines that need to be applied every time we write to
+	 * GEN6_GDRST. As those are time consuming (tens of ms), we don't want
+	 * to perform that twice, so, since the Jasperlake issue hasn't been
+	 * observed on MTL, we avoid repeating the reset on newer platforms.
+	 */
+	loops = GRAPHICS_VER_FULL(gt->i915) < IP_VER(12, 70) ? 2 : 1;
 
 	/*
 	 * GEN6_GDRST is not in the gt power well, no need to check
@@ -281,27 +298,7 @@ static int gen6_hw_domain_reset(struct intel_gt *gt, u32 hw_domain_mask)
 	do {
 		intel_uncore_write_fw(uncore, GEN6_GDRST, hw_domain_mask);
 
-		/*
-		 * Wait for the device to ack the reset requests.
-		 *
-		 * On some platforms, e.g. Jasperlake, we see that the
-		 * engine register state is not cleared until shortly after
-		 * GDRST reports completion, causing a failure as we try
-		 * to immediately resume while the internal state is still
-		 * in flux. If we immediately repeat the reset, the second
-		 * reset appears to serialise with the first, and since
-		 * it is a no-op, the registers should retain their reset
-		 * value. However, there is still a concern that upon
-		 * leaving the second reset, the internal engine state
-		 * is still in flux and not ready for resuming.
-		 *
-		 * Starting on MTL, there are some prep steps that we need to do
-		 * when resetting some engines that need to be applied every
-		 * time we write to GEN6_GDRST. As those are time consuming
-		 * (tens of ms), we don't want to perform that twice, so, since
-		 * the Jasperlake issue hasn't been observed on MTL, we avoid
-		 * repeating the reset.
-		 */
+		/* Wait for the device to ack the reset requests. */
 		err = __intel_wait_for_register_fw(uncore, GEN6_GDRST,
 						   hw_domain_mask, 0,
 						   2000, 0,
@@ -755,7 +752,8 @@ static int __reset_guc(struct intel_gt *gt)
 
 static bool needs_wa_14015076503(struct intel_gt *gt, intel_engine_mask_t engine_mask)
 {
-	if (!IS_METEORLAKE(gt->i915) || !HAS_ENGINE(gt, GSC0) || IS_SRIOV_VF(gt->i915))
+	if (MEDIA_VER_FULL(gt->i915) != IP_VER(13, 0) || !HAS_ENGINE(gt, GSC0) ||
+	    IS_SRIOV_VF(gt->i915))
 		return false;
 
 	if (!__HAS_ENGINE(engine_mask, GSC0))
@@ -773,20 +771,29 @@ wa_14015076503_start(struct intel_gt *gt, intel_engine_mask_t engine_mask, bool 
 	/*
 	 * wa_14015076503: if the GSC FW is loaded, we need to alert it that
 	 * we're going to do a GSC engine reset and then wait for 200ms for the
-	 * FW to get ready for it. However, if this the first ALL_ENGINES reset
-	 * attempt and the GSC is not busy, we can try to instead reset the GuC
-	 * and all the other engines individually to avoid the 200ms wait.
+	 * FW to get ready for it. However, if this is the first ALL_ENGINES
+	 * reset attempt and the GSC is not busy, we can try to instead reset
+	 * the GuC and all the other engines individually to avoid the 200ms
+	 * wait.
+	 * Skipping the GSC engine is safe because, differently from other
+	 * engines, the GSCCS only role is to forward the commands to the GSC
+	 * FW, so it doesn't have any HW outside of the CS itself and therefore
+	 * it has no state that we don't explicitly re-init on resume or on
+	 * context switch LRC or power context). The HW for the GSC uC is
+	 * managed by the GSC FW so we don't need to care about that.
 	 */
 	if (engine_mask == ALL_ENGINES && first && intel_engine_is_idle(gt->engine[GSC0])) {
 		__reset_guc(gt);
 		engine_mask = gt->info.engine_mask & ~BIT(GSC0);
 	} else {
-		intel_uncore_write(gt->uncore,
-				   HECI_GENERAL_STATUS(MTL_GSC_HECI2_BASE),
-				   BIT(0));
-		intel_uncore_write(gt->uncore,
-				   HECI_CONTROL_AND_STATUS(MTL_GSC_HECI2_BASE),
-				   BIT(2));
+		intel_uncore_rmw(gt->uncore,
+				 HECI_H_GS1(MTL_GSC_HECI2_BASE),
+				 0, HECI_H_GS1_ER_PREP);
+
+		/* make sure the reset bit is clear when writing the CSR reg */
+		intel_uncore_rmw(gt->uncore,
+				 HECI_H_CSR(MTL_GSC_HECI2_BASE),
+				 HECI_H_CSR_RST, HECI_H_CSR_IG);
 		msleep(200);
 	}
 
@@ -799,8 +806,9 @@ wa_14015076503_end(struct intel_gt *gt, intel_engine_mask_t engine_mask)
 	if (!needs_wa_14015076503(gt, engine_mask))
 		return;
 
-	intel_uncore_write(gt->uncore,
-			   HECI_GENERAL_STATUS(MTL_GSC_HECI2_BASE), 0);
+	intel_uncore_rmw(gt->uncore,
+			 HECI_H_GS1(MTL_GSC_HECI2_BASE),
+			 HECI_H_GS1_ER_PREP, 0);
 }
 
 int __intel_gt_reset(struct intel_gt *gt, intel_engine_mask_t engine_mask)
@@ -1056,7 +1064,7 @@ void intel_gt_set_wedged(struct intel_gt *gt)
 	mutex_lock(&gt->reset.mutex);
 
 	if (GEM_SHOW_DEBUG()) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
 		struct drm_printer p = drm_debug_printer(__func__);
 #else
 		struct drm_printer p = drm_dbg_printer(&gt->i915->drm,
@@ -1342,7 +1350,7 @@ int __intel_engine_reset_bh(struct intel_engine_cs *engine, const char *msg)
 	if (msg)
 		drm_notice(&engine->i915->drm,
 			   "Resetting %s for %s\n", engine->name, msg);
-	atomic_inc(&engine->i915->gpu_error.reset_engine_count[engine->uabi_class]);
+	i915_increase_reset_engine_count(&engine->i915->gpu_error, engine);
 
 	ret = intel_gt_reset_engine(engine);
 	if (ret) {
@@ -1413,11 +1421,11 @@ static void intel_gt_reset_global(struct intel_gt *gt,
 
 	/* Use a watchdog to ensure that our reset completes */
 	intel_wedge_on_timeout(&w, gt, 60 * HZ) {
-		intel_display_prepare_reset(gt->i915);
+		intel_display_reset_prepare(gt->i915);
 
 		intel_gt_reset(gt, engine_mask, reason);
 
-		intel_display_finish_reset(gt->i915);
+		intel_display_reset_finish(gt->i915);
 	}
 
 	if (!test_bit(I915_WEDGED, &gt->reset.flags))
@@ -1624,8 +1632,11 @@ void intel_gt_set_wedged_on_fini(struct intel_gt *gt)
 
 void intel_gt_init_reset(struct intel_gt *gt)
 {
-	init_waitqueue_head(&gt->reset.queue);
 	mutex_init(&gt->reset.mutex);
+	lockdep_set_subclass(&gt->reset.mutex, IS_SRIOV_VF(gt->i915) + 1);
+	might_lock(&gt->reset.mutex); /* mark the subclass as used */
+
+	init_waitqueue_head(&gt->reset.queue);
 	init_srcu_struct(&gt->reset.backoff_srcu);
 
 	/*
@@ -1667,7 +1678,7 @@ void __intel_init_wedge(struct intel_wedge_me *w,
 	w->name = name;
 
 	INIT_DELAYED_WORK_ONSTACK(&w->work, intel_wedge_me);
-	schedule_delayed_work(&w->work, timeout);
+	queue_delayed_work(gt->i915->unordered_wq, &w->work, timeout);
 }
 
 void __intel_fini_wedge(struct intel_wedge_me *w)
@@ -1675,6 +1686,24 @@ void __intel_fini_wedge(struct intel_wedge_me *w)
 	cancel_delayed_work_sync(&w->work);
 	destroy_delayed_work_on_stack(&w->work);
 	w->gt = NULL;
+}
+
+/*
+ * Wa_22011802037 requires that we (or the GuC) ensure that no command
+ * streamers are executing MI_FORCE_WAKE while an engine reset is initiated.
+ */
+bool intel_engine_reset_needs_wa_22011802037(struct intel_gt *gt)
+{
+	if (GRAPHICS_VER(gt->i915) < 11)
+		return false;
+
+	if (IS_GFX_GT_IP_STEP(gt, IP_VER(12, 70), STEP_A0, STEP_B0))
+		return true;
+
+	if (GRAPHICS_VER_FULL(gt->i915) >= IP_VER(12, 70))
+		return false;
+
+	return true;
 }
 
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)

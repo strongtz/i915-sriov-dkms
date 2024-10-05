@@ -108,7 +108,6 @@
  */
 #include <linux/interrupt.h>
 #include <linux/string_helpers.h>
-#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "i915_reg.h"
@@ -631,7 +630,7 @@ static void __execlists_schedule_out(struct i915_request * const rq,
 	execlists_context_status_change(rq, INTEL_CONTEXT_SCHEDULE_OUT);
 	if (engine->fw_domain && !--engine->fw_active)
 		intel_uncore_forcewake_put(engine->uncore, engine->fw_domain);
-	intel_gt_pm_put_async_untracked(engine->gt);
+	intel_gt_pm_put_async(engine->gt);
 
 	/*
 	 * If this is part of a virtual engine, its next request may
@@ -2328,6 +2327,7 @@ static u32 active_ccid(struct intel_engine_cs *engine)
 
 static void execlists_capture(struct intel_engine_cs *engine)
 {
+	struct drm_i915_private *i915 = engine->i915;
 	struct execlists_capture *cap;
 
 	if (!IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR))
@@ -2376,7 +2376,7 @@ static void execlists_capture(struct intel_engine_cs *engine)
 		goto err_rq;
 
 	INIT_WORK(&cap->work, execlists_capture_work);
-	schedule_work(&cap->work);
+	queue_work(i915->unordered_wq, &cap->work);
 	return;
 
 err_rq:
@@ -2718,7 +2718,7 @@ static int emit_pdps(struct i915_request *rq)
 	int err, i;
 	u32 *cs;
 
-	GEM_BUG_ON(intel_vgpu_active(rq->engine->i915));
+	GEM_BUG_ON(intel_vgpu_active(rq->i915));
 
 	/*
 	 * Beware ye of the dragons, this sequence is magic!
@@ -3001,9 +3001,7 @@ static void execlists_reset_prepare(struct intel_engine_cs *engine)
 	 * Wa_22011802037: In addition to stopping the cs, we need
 	 * to wait for any pending mi force wakeups
 	 */
-	if (IS_MTL_GRAPHICS_STEP(engine->i915, M, STEP_A0, STEP_B0) ||
-	    (GRAPHICS_VER(engine->i915) >= 11 &&
-	    GRAPHICS_VER_FULL(engine->i915) < IP_VER(12, 70)))
+	if (intel_engine_reset_needs_wa_22011802037(engine->gt))
 		intel_engine_wait_for_pending_mi_fw(engine);
 
 	engine->execlists.reset_ccid = active_ccid(engine);
@@ -3274,6 +3272,9 @@ static void execlists_park(struct intel_engine_cs *engine)
 {
 	cancel_timer(&engine->execlists.timer);
 	cancel_timer(&engine->execlists.preempt);
+
+	/* Reset upon idling, or we may delay the busy wakeup. */
+	WRITE_ONCE(engine->sched_engine->queue_priority_hint, INT_MIN);
 }
 
 static void add_to_engine(struct i915_request *rq)
@@ -3314,11 +3315,7 @@ static void remove_from_engine(struct i915_request *rq)
 
 static bool can_preempt(struct intel_engine_cs *engine)
 {
-	if (GRAPHICS_VER(engine->i915) > 8)
-		return true;
-
-	/* GPGPU on bdw requires extra w/a; not implemented */
-	return engine->class != RENDER_CLASS;
+	return GRAPHICS_VER(engine->i915) > 8;
 }
 
 static void kick_execlists(const struct i915_request *rq, int prio)
@@ -3550,22 +3547,24 @@ int intel_execlists_submission_setup(struct intel_engine_cs *engine)
 	logical_ring_default_vfuncs(engine);
 	logical_ring_default_irqs(engine);
 
+	seqcount_init(&engine->stats.execlists.lock);
+
 	if (engine->flags & I915_ENGINE_HAS_RCS_REG_STATE)
 		rcs_submission_override(engine);
 
 	lrc_init_wa_ctx(engine);
 
 	if (HAS_LOGICAL_RING_ELSQ(i915)) {
-		execlists->submit_reg = uncore->regs +
+		execlists->submit_reg = intel_uncore_regs(uncore) +
 			i915_mmio_reg_offset(RING_EXECLIST_SQ_CONTENTS(base));
-		execlists->ctrl_reg = uncore->regs +
+		execlists->ctrl_reg = intel_uncore_regs(uncore) +
 			i915_mmio_reg_offset(RING_EXECLIST_CONTROL(base));
 
 		engine->fw_domain = intel_uncore_forcewake_for_reg(engine->uncore,
 				    RING_EXECLIST_CONTROL(engine->mmio_base),
 				    FW_REG_WRITE);
 	} else {
-		execlists->submit_reg = uncore->regs +
+		execlists->submit_reg = intel_uncore_regs(uncore) +
 			i915_mmio_reg_offset(RING_ELSP(base));
 	}
 
@@ -3681,7 +3680,7 @@ static void virtual_context_destroy(struct kref *kref)
 	 * lock, we can delegate the free of the engine to an RCU worker.
 	 */
 	INIT_RCU_WORK(&ve->rcu, rcu_virtual_context_destroy);
-	queue_rcu_work(system_wq, &ve->rcu);
+	queue_rcu_work(ve->context.engine->i915->unordered_wq, &ve->rcu);
 }
 
 static void virtual_engine_initial_hint(struct virtual_engine *ve)
@@ -3701,11 +3700,7 @@ static void virtual_engine_initial_hint(struct virtual_engine *ve)
 	 * NB This does not force us to execute on this engine, it will just
 	 * typically be the first we inspect for submission.
 	 */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,6)
 	swp = get_random_u32_below(ve->num_siblings);
-#else
-	swp = prandom_u32_max(ve->num_siblings);
-#endif
 	if (swp)
 		swap(ve->siblings[swp], ve->siblings[0]);
 }
@@ -4163,17 +4158,6 @@ void intel_execlists_show_requests(struct intel_engine_cs *engine,
 	spin_unlock_irqrestore(&sched_engine->lock, flags);
 }
 
-static unsigned long list_count(struct list_head *list)
-{
-	struct list_head *pos;
-	unsigned long count = 0;
-
-	list_for_each(pos, list)
-		count++;
-
-	return count;
-}
-
 void intel_execlists_dump_active_requests(struct intel_engine_cs *engine,
 					  struct i915_request *hung_rq,
 					  struct drm_printer *m)
@@ -4184,8 +4168,8 @@ void intel_execlists_dump_active_requests(struct intel_engine_cs *engine,
 
 	intel_engine_dump_active_requests(&engine->sched_engine->requests, hung_rq, m);
 
-	drm_printf(m, "\tOn hold?: %lu\n",
-		   list_count(&engine->sched_engine->hold));
+	drm_printf(m, "\tOn hold?: %zu\n",
+		   list_count_nodes(&engine->sched_engine->hold));
 
 	spin_unlock_irqrestore(&engine->sched_engine->lock, flags);
 }

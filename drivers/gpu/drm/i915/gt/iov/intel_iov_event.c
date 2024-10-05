@@ -160,7 +160,7 @@ int intel_iov_event_print_events(struct intel_iov *iov, struct drm_printer *p)
 			continue;
 
 #define __format_iov_threshold(...) "%s:%u "
-#define __value_iov_threshold(K, N, ...), #N, data->adverse_events[IOV_THRESHOLD_##K]
+#define __value_iov_threshold(K, N, ...) , #N, data->adverse_events[IOV_THRESHOLD_##K]
 
 		drm_printf(p, "VF%u:\t" IOV_THRESHOLDS(__format_iov_threshold) "\n",
 			   n IOV_THRESHOLDS(__value_iov_threshold));

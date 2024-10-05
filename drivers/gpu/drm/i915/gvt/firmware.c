@@ -30,6 +30,7 @@
 
 #include <linux/firmware.h>
 #include <linux/crc32.h>
+#include <linux/vmalloc.h>
 
 #include "i915_drv.h"
 #include "gvt.h"
@@ -45,7 +46,7 @@ struct gvt_firmware_header {
 	u64 cfg_space_offset;	/* offset in the file */
 	u64 mmio_size;
 	u64 mmio_offset;	/* offset in the file */
-	unsigned char data[1];
+	unsigned char data[];
 };
 
 #define dev_to_drm_minor(d) dev_get_drvdata((d))
@@ -77,7 +78,7 @@ static int expose_firmware_sysfs(struct intel_gvt *gvt)
 	unsigned long size, crc32_start;
 	int ret;
 
-	size = sizeof(*h) + info->mmio_size + info->cfg_space_size;
+	size = offsetof(struct gvt_firmware_header, data) + info->mmio_size + info->cfg_space_size;
 	firmware = vzalloc(size);
 	if (!firmware)
 		return -ENOMEM;
@@ -171,7 +172,7 @@ static int verify_firmware(struct intel_gvt *gvt,
 	mem = (fw->data + h->cfg_space_offset);
 
 	id = *(u16 *)(mem + PCI_VENDOR_ID);
-	VERIFY("vender id", id, pdev->vendor);
+	VERIFY("vendor id", id, pdev->vendor);
 
 	id = *(u16 *)(mem + PCI_DEVICE_ID);
 	VERIFY("device id", id, pdev->device);

@@ -28,7 +28,6 @@
 #include <linux/acpi.h>
 #include <linux/dmi.h>
 #include <linux/firmware.h>
-#include <linux/version.h>
 #include <acpi/video.h>
 
 #include <drm/drm_edid.h>
@@ -636,7 +635,8 @@ static void asle_work(struct work_struct *work)
 void intel_opregion_asle_intr(struct drm_i915_private *dev_priv)
 {
 	if (dev_priv->display.opregion.asle)
-		schedule_work(&dev_priv->display.opregion.asle_work);
+		queue_work(dev_priv->unordered_wq,
+			   &dev_priv->display.opregion.asle_work);
 }
 
 #define ACPI_EV_DISPLAY_SWITCH (1<<0)
@@ -1123,11 +1123,7 @@ const struct drm_edid *intel_opregion_get_edid(struct intel_connector *intel_con
 
 	drm_edid = drm_edid_alloc(edid, len);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	if (!drm_edid_valid(drm_edid)) {
-#else
-	if (!drm_edid_is_valid(drm_edid_raw(drm_edid))) {
-#endif
 		drm_dbg_kms(&i915->drm, "Invalid EDID in ACPI OpRegion (Mailbox #5)\n");
 		drm_edid_free(drm_edid);
 		drm_edid = NULL;
@@ -1164,12 +1160,9 @@ void intel_opregion_register(struct drm_i915_private *i915)
 	intel_opregion_resume(i915);
 }
 
-void intel_opregion_resume(struct drm_i915_private *i915)
+static void intel_opregion_resume_display(struct drm_i915_private *i915)
 {
 	struct intel_opregion *opregion = &i915->display.opregion;
-
-	if (!opregion->header)
-		return;
 
 	if (opregion->acpi) {
 		intel_didl_outputs(i915);
@@ -1191,8 +1184,32 @@ void intel_opregion_resume(struct drm_i915_private *i915)
 
 	/* Some platforms abuse the _DSM to enable MUX */
 	intel_dsm_get_bios_data_funcs_supported(i915);
+}
+
+void intel_opregion_resume(struct drm_i915_private *i915)
+{
+	struct intel_opregion *opregion = &i915->display.opregion;
+
+	if (!opregion->header)
+		return;
+
+	if (HAS_DISPLAY(i915))
+		intel_opregion_resume_display(i915);
 
 	intel_opregion_notify_adapter(i915, PCI_D0);
+}
+
+static void intel_opregion_suspend_display(struct drm_i915_private *i915)
+{
+	struct intel_opregion *opregion = &i915->display.opregion;
+
+	if (opregion->asle)
+		opregion->asle->ardy = ASLE_ARDY_NOT_READY;
+
+	cancel_work_sync(&i915->display.opregion.asle_work);
+
+	if (opregion->acpi)
+		opregion->acpi->drdy = 0;
 }
 
 void intel_opregion_suspend(struct drm_i915_private *i915, pci_power_t state)
@@ -1204,13 +1221,8 @@ void intel_opregion_suspend(struct drm_i915_private *i915, pci_power_t state)
 
 	intel_opregion_notify_adapter(i915, state);
 
-	if (opregion->asle)
-		opregion->asle->ardy = ASLE_ARDY_NOT_READY;
-
-	cancel_work_sync(&i915->display.opregion.asle_work);
-
-	if (opregion->acpi)
-		opregion->acpi->drdy = 0;
+	if (HAS_DISPLAY(i915))
+		intel_opregion_suspend_display(i915);
 }
 
 void intel_opregion_unregister(struct drm_i915_private *i915)
@@ -1226,6 +1238,14 @@ void intel_opregion_unregister(struct drm_i915_private *i915)
 		unregister_acpi_notifier(&opregion->acpi_notifier);
 		opregion->acpi_notifier.notifier_call = NULL;
 	}
+}
+
+void intel_opregion_cleanup(struct drm_i915_private *i915)
+{
+	struct intel_opregion *opregion = &i915->display.opregion;
+
+	if (!opregion->header)
+		return;
 
 	/* just clear all opregion memory pointers now */
 	memunmap(opregion->header);

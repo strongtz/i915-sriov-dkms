@@ -236,6 +236,7 @@ static vm_fault_t i915_error_to_vmf_fault(int err)
 	case 0:
 	case -EAGAIN:
 	case -ENOSPC: /* transient failure to evict? */
+	case -ENOBUFS: /* temporarily out of fences? */
 	case -ERESTARTSYS:
 	case -EINTR:
 	case -EBUSY:
@@ -290,6 +291,41 @@ out:
 	return i915_error_to_vmf_fault(err);
 }
 
+static void set_address_limits(struct vm_area_struct *area,
+			       struct i915_vma *vma,
+			       unsigned long obj_offset,
+			       unsigned long *start_vaddr,
+			       unsigned long *end_vaddr)
+{
+	unsigned long vm_start, vm_end, vma_size; /* user's memory parameters */
+	long start, end; /* memory boundaries */
+
+	/*
+	 * Let's move into the ">> PAGE_SHIFT"
+	 * domain to be sure not to lose bits
+	 */
+	vm_start = area->vm_start >> PAGE_SHIFT;
+	vm_end = area->vm_end >> PAGE_SHIFT;
+	vma_size = vma->size >> PAGE_SHIFT;
+
+	/*
+	 * Calculate the memory boundaries by considering the offset
+	 * provided by the user during memory mapping and the offset
+	 * provided for the partial mapping.
+	 */
+	start = vm_start;
+	start -= obj_offset;
+	start += vma->gtt_view.partial.offset;
+	end = start + vma_size;
+
+	start = max_t(long, start, vm_start);
+	end = min_t(long, end, vm_end);
+
+	/* Let's move back into the "<< PAGE_SHIFT" domain */
+	*start_vaddr = (unsigned long)start << PAGE_SHIFT;
+	*end_vaddr = (unsigned long)end << PAGE_SHIFT;
+}
+
 static vm_fault_t vm_fault_gtt(struct vm_fault *vmf)
 {
 #define MIN_CHUNK_PAGES (SZ_1M >> PAGE_SHIFT)
@@ -302,14 +338,18 @@ static vm_fault_t vm_fault_gtt(struct vm_fault *vmf)
 	struct i915_ggtt *ggtt = to_gt(i915)->ggtt;
 	bool write = area->vm_flags & VM_WRITE;
 	struct i915_gem_ww_ctx ww;
+	unsigned long obj_offset;
+	unsigned long start, end; /* memory boundaries */
 	intel_wakeref_t wakeref;
 	struct i915_vma *vma;
 	pgoff_t page_offset;
+	unsigned long pfn;
 	int srcu;
 	int ret;
 
-	/* We don't use vmf->pgoff since that has the fake offset */
+	obj_offset = area->vm_pgoff - drm_vma_node_start(&mmo->vma_node);
 	page_offset = (vmf->address - area->vm_start) >> PAGE_SHIFT;
+	page_offset += obj_offset;
 
 	trace_i915_gem_object_fault(obj, page_offset, true, write);
 
@@ -384,6 +424,14 @@ retry:
 	}
 
 	/* Access to snoopable pages through the GTT is incoherent. */
+	/*
+	 * For objects created by userspace through GEM_CREATE with pat_index
+	 * set by set_pat extension, coherency is managed by userspace, make
+	 * sure we don't fail handling the vm fault by calling
+	 * i915_gem_object_has_cache_level() which always return true for such
+	 * objects. Otherwise this helper function would fall back to checking
+	 * whether the object is un-cached.
+	 */
 	if (!(i915_gem_object_has_cache_level(obj, I915_CACHE_NONE) ||
 	      HAS_LLC(i915))) {
 		ret = -EFAULT;
@@ -394,12 +442,14 @@ retry:
 	if (ret)
 		goto err_unpin;
 
+	set_address_limits(area, vma, obj_offset, &start, &end);
+
+	pfn = (ggtt->gmadr.start + i915_ggtt_offset(vma)) >> PAGE_SHIFT;
+	pfn += (start - area->vm_start) >> PAGE_SHIFT;
+	pfn += obj_offset - vma->gtt_view.partial.offset;
+
 	/* Finally, remap it using the new GTT offset */
-	ret = remap_io_mapping(area,
-			       area->vm_start + (vma->gtt_view.partial.offset << PAGE_SHIFT),
-			       (ggtt->gmadr.start + i915_ggtt_offset(vma)) >> PAGE_SHIFT,
-			       min_t(u64, vma->size, area->vm_end - area->vm_start),
-			       &ggtt->iomap);
+	ret = remap_io_mapping(area, start, pfn, end - start, &ggtt->iomap);
 	if (ret)
 		goto err_fence;
 
@@ -699,11 +749,7 @@ insert:
 	GEM_BUG_ON(lookup_mmo(obj, mmap_type) != mmo);
 out:
 	if (file)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,9)
 		drm_vma_node_allow_once(&mmo->vma_node, file);
-#else
-		drm_vma_node_allow(&mmo->vma_node, file);
-#endif
 	return mmo;
 
 err:
@@ -911,8 +957,7 @@ static const struct file_operations singleton_fops = {
 static struct file *mmap_singleton(struct drm_i915_private *i915)
 {
 	struct file *file;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
 	rcu_read_lock();
 	file = READ_ONCE(i915->gem.mmap_singleton);
 	if (file && !get_file_rcu(file))
@@ -937,7 +982,6 @@ static struct file *mmap_singleton(struct drm_i915_private *i915)
 	return file;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 static int
 i915_gem_object_mmap(struct drm_i915_gem_object *obj,
 		     struct i915_mmap_offset *mmo,
@@ -1089,6 +1133,8 @@ int i915_gem_fb_mmap(struct drm_i915_gem_object *obj, struct vm_area_struct *vma
 		mmo = mmap_offset_attach(obj, mmap_type, NULL);
 		if (IS_ERR(mmo))
 			return PTR_ERR(mmo);
+
+		vma->vm_pgoff += drm_vma_node_start(&mmo->vma_node);
 	}
 
 	/*
@@ -1100,131 +1146,6 @@ int i915_gem_fb_mmap(struct drm_i915_gem_object *obj, struct vm_area_struct *vma
 	obj = i915_gem_object_get(obj);
 	return i915_gem_object_mmap(obj, mmo, vma);
 }
-#else
-/*
- * This overcomes the limitation in drm_gem_mmap's assignment of a
- * drm_gem_object as the vma->vm_private_data. Since we need to
- * be able to resolve multiple mmap offsets which could be tied
- * to a single gem object.
- */
-int i915_gem_mmap(struct file *filp, struct vm_area_struct *vma)
-{
-	struct drm_vma_offset_node *node;
-	struct drm_file *priv = filp->private_data;
-	struct drm_device *dev = priv->minor->dev;
-	struct drm_i915_gem_object *obj = NULL;
-	struct i915_mmap_offset *mmo = NULL;
-	struct file *anon;
-
-	if (drm_dev_is_unplugged(dev))
-		return -ENODEV;
-
-	rcu_read_lock();
-	drm_vma_offset_lock_lookup(dev->vma_offset_manager);
-	node = drm_vma_offset_exact_lookup_locked(dev->vma_offset_manager,
-						  vma->vm_pgoff,
-						  vma_pages(vma));
-	if (node && drm_vma_node_is_allowed(node, priv)) {
-		/*
-		 * Skip 0-refcnted objects as it is in the process of being
-		 * destroyed and will be invalid when the vma manager lock
-		 * is released.
-		 */
-		if (!node->driver_private) {
-			mmo = container_of(node, struct i915_mmap_offset, vma_node);
-			obj = i915_gem_object_get_rcu(mmo->obj);
-
-			GEM_BUG_ON(obj && obj->ops->mmap_ops);
-		} else {
-			obj = i915_gem_object_get_rcu
-				(container_of(node, struct drm_i915_gem_object,
-					      base.vma_node));
-
-			GEM_BUG_ON(obj && !obj->ops->mmap_ops);
-		}
-	}
-	drm_vma_offset_unlock_lookup(dev->vma_offset_manager);
-	rcu_read_unlock();
-	if (!obj)
-		return node ? -EACCES : -EINVAL;
-
-	if (i915_gem_object_is_readonly(obj)) {
-		if (vma->vm_flags & VM_WRITE) {
-			i915_gem_object_put(obj);
-			return -EINVAL;
-		}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
-		vm_flags_clear(vma, VM_MAYWRITE);
-#else
-		vma->vm_flags &= ~VM_MAYWRITE;
-#endif
-	}
-
-	anon = mmap_singleton(to_i915(dev));
-	if (IS_ERR(anon)) {
-		i915_gem_object_put(obj);
-		return PTR_ERR(anon);
-	}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
-	vm_flags_set(vma, VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP | VM_IO);
-#else
-	vma->vm_flags |= VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP | VM_IO;
-#endif
-
-	/*
-	 * We keep the ref on mmo->obj, not vm_file, but we require
-	 * vma->vm_file->f_mapping, see vma_link(), for later revocation.
-	 * Our userspace is accustomed to having per-file resource cleanup
-	 * (i.e. contexts, objects and requests) on their close(fd), which
-	 * requires avoiding extraneous references to their filp, hence why
-	 * we prefer to use an anonymous file for their mmaps.
-	 */
-	vma_set_file(vma, anon);
-	/* Drop the initial creation reference, the vma is now holding one. */
-	fput(anon);
-
-	if (obj->ops->mmap_ops) {
-		vma->vm_page_prot = pgprot_decrypted(vm_get_page_prot(vma->vm_flags));
-		vma->vm_ops = obj->ops->mmap_ops;
-		vma->vm_private_data = node->driver_private;
-		return 0;
-	}
-
-	vma->vm_private_data = mmo;
-
-	switch (mmo->mmap_type) {
-	case I915_MMAP_TYPE_WC:
-		vma->vm_page_prot =
-			pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
-		vma->vm_ops = &vm_ops_cpu;
-		break;
-
-	case I915_MMAP_TYPE_FIXED:
-		GEM_WARN_ON(1);
-		fallthrough;
-	case I915_MMAP_TYPE_WB:
-		vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
-		vma->vm_ops = &vm_ops_cpu;
-		break;
-
-	case I915_MMAP_TYPE_UC:
-		vma->vm_page_prot =
-			pgprot_noncached(vm_get_page_prot(vma->vm_flags));
-		vma->vm_ops = &vm_ops_cpu;
-		break;
-
-	case I915_MMAP_TYPE_GTT:
-		vma->vm_page_prot =
-			pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
-		vma->vm_ops = &vm_ops_gtt;
-		break;
-	}
-	vma->vm_page_prot = pgprot_decrypted(vma->vm_page_prot);
-
-	return 0;
-}
-#endif
 
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
 #include "selftests/i915_gem_mman.c"

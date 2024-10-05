@@ -6,7 +6,12 @@
 #ifndef _ABI_IOV_MESSAGES_ABI_H_
 #define _ABI_IOV_MESSAGES_ABI_H_
 
+#include "gt/uc/abi/guc_actions_pf_abi.h"
+#include "gt/uc/abi/guc_actions_vf_abi.h"
 #include "gt/uc/abi/guc_messages_abi.h"
+
+#define VF2PF_MSG_MAX_LEN \
+	(GUC_CTB_MAX_DWORDS - PF2GUC_RELAY_TO_VF_REQUEST_MSG_MIN_LEN)
 
 /**
  * DOC: IOV Message
@@ -26,5 +31,8 @@
  * Format of the _`IOV Failure` is same as `HXG Failure`_.
  * See `IOV Error Codes`_ for possible error codes.
  */
+
+static_assert(PF2GUC_RELAY_TO_VF_REQUEST_MSG_MIN_LEN >
+	      VF2GUC_RELAY_TO_PF_REQUEST_MSG_MIN_LEN);
 
 #endif /* _ABI_IOV_MESSAGES_ABI_H_ */

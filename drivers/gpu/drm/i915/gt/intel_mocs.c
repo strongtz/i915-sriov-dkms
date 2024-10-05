@@ -404,18 +404,6 @@ static const struct drm_i915_mocs_entry dg2_mocs_table[] = {
 	MOCS_ENTRY(3, 0, L3_3_WB | L3_LKUP(1)),
 };
 
-static const struct drm_i915_mocs_entry dg2_mocs_table_g10_ax[] = {
-	/* Wa_14011441408: Set Go to Memory for MOCS#0 */
-	MOCS_ENTRY(0, 0, L3_1_UC | L3_GLBGO(1) | L3_LKUP(1)),
-	/* UC - Coherent; GO:Memory */
-	MOCS_ENTRY(1, 0, L3_1_UC | L3_GLBGO(1) | L3_LKUP(1)),
-	/* UC - Non-Coherent; GO:Memory */
-	MOCS_ENTRY(2, 0, L3_1_UC | L3_GLBGO(1)),
-
-	/* WB - LC */
-	MOCS_ENTRY(3, 0, L3_3_WB | L3_LKUP(1)),
-};
-
 static const struct drm_i915_mocs_entry pvc_mocs_table[] = {
 	/* Error */
 	MOCS_ENTRY(0, 0, L3_3_WB),
@@ -507,7 +495,7 @@ static unsigned int get_mocs_settings(const struct drm_i915_private *i915,
 	memset(table, 0, sizeof(struct drm_i915_mocs_table));
 
 	table->unused_entries_index = I915_MOCS_PTE;
-	if (IS_METEORLAKE(i915)) {
+	if (IS_GFX_GT_IP_RANGE(&i915->gt0, IP_VER(12, 70), IP_VER(12, 74))) {
 		table->size = ARRAY_SIZE(mtl_mocs_table);
 		table->table = mtl_mocs_table;
 		table->n_entries = MTL_NUM_MOCS_ENTRIES;
@@ -521,13 +509,8 @@ static unsigned int get_mocs_settings(const struct drm_i915_private *i915,
 		table->wb_index = 2;
 		table->unused_entries_index = 2;
 	} else if (IS_DG2(i915)) {
-		if (IS_DG2_GRAPHICS_STEP(i915, G10, STEP_A0, STEP_B0)) {
-			table->size = ARRAY_SIZE(dg2_mocs_table_g10_ax);
-			table->table = dg2_mocs_table_g10_ax;
-		} else {
-			table->size = ARRAY_SIZE(dg2_mocs_table);
-			table->table = dg2_mocs_table;
-		}
+		table->size = ARRAY_SIZE(dg2_mocs_table);
+		table->table = dg2_mocs_table;
 		table->uc_index = 1;
 		table->n_entries = GEN9_NUM_MOCS_ENTRIES;
 		table->unused_entries_index = 3;
@@ -717,9 +700,9 @@ void intel_mocs_init_engine(struct intel_engine_cs *engine)
 		init_l3cc_table(engine->gt, &table);
 }
 
-static u32 global_mocs_offset(struct intel_gt *gt)
+static u32 global_mocs_offset(void)
 {
-	return i915_mmio_reg_offset(GEN12_GLOBAL_MOCS(0)) + gt->uncore->gsi_offset;
+	return i915_mmio_reg_offset(GEN12_GLOBAL_MOCS(0));
 }
 
 void intel_set_mocs_index(struct intel_gt *gt)
@@ -742,7 +725,7 @@ void intel_mocs_init(struct intel_gt *gt)
 	 */
 	flags = get_mocs_settings(gt->i915, &table);
 	if (flags & HAS_GLOBAL_MOCS)
-		__init_mocs_table(gt->uncore, &table, global_mocs_offset(gt));
+		__init_mocs_table(gt->uncore, &table, global_mocs_offset());
 
 	/*
 	 * Initialize the L3CC table as part of mocs initalization to make

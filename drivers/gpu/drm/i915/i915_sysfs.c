@@ -38,7 +38,6 @@
 #include "i915_drv.h"
 #include "i915_sriov_sysfs.h"
 #include "i915_sysfs.h"
-#include "intel_pm.h"
 
 struct drm_i915_private *kdev_minor_to_i915(struct device *kdev)
 {

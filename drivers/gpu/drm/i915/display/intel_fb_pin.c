@@ -35,7 +35,8 @@ intel_pin_fb_obj_dpt(struct drm_framebuffer *fb,
 	 * We are not syncing against the binding (and potential migrations)
 	 * below, so this vm must never be async.
 	 */
-	GEM_WARN_ON(vm->bind_async_flags);
+	if (drm_WARN_ON(&dev_priv->drm, vm->bind_async_flags))
+		return ERR_PTR(-EINVAL);
 
 	if (WARN_ON(!i915_gem_object_is_framebuffer(obj)))
 		return ERR_PTR(-EINVAL);
@@ -243,7 +244,7 @@ int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 	struct i915_vma *vma;
 	bool phys_cursor =
 		plane->id == PLANE_CURSOR &&
-		INTEL_INFO(dev_priv)->display.cursor_needs_physical;
+		DISPLAY_INFO(dev_priv)->cursor_needs_physical;
 
 	if (!intel_fb_uses_dpt(fb)) {
 		vma = intel_pin_and_fence_fb_obj(fb, phys_cursor,
@@ -254,6 +255,16 @@ int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 			return PTR_ERR(vma);
 
 		plane_state->ggtt_vma = vma;
+
+		/*
+		 * Pre-populate the dma address before we enter the vblank
+		 * evade critical section as i915_gem_object_get_dma_address()
+		 * will trigger might_sleep() even if it won't actually sleep,
+		 * which is the case when the fb has already been pinned.
+		 */
+		if (phys_cursor)
+			plane_state->phys_dma_addr =
+				i915_gem_object_get_dma_address(intel_fb_obj(fb), 0);
 	} else {
 		struct intel_framebuffer *intel_fb = to_intel_framebuffer(fb);
 

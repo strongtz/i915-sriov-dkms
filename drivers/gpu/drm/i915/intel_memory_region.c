@@ -4,7 +4,6 @@
  */
 
 #include <linux/prandom.h>
-#include <linux/version.h>
 
 #include <uapi/drm/i915_drm.h>
 
@@ -39,11 +38,7 @@ static int __iopagetest(struct intel_memory_region *mem,
 			u8 value, resource_size_t offset,
 			const void *caller)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,6)
 	int byte = get_random_u32_below(pagesize);
-#else
-	int byte = prandom_u32_max(pagesize);
-#endif
 	u8 result[3];
 
 	memset_io(va, value, pagesize); /* or GPF! */
@@ -97,11 +92,7 @@ static int iopagetest(struct intel_memory_region *mem,
 static resource_size_t random_page(resource_size_t last)
 {
 	/* Limited to low 44b (16TiB), but should suffice for a spot check */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,6)
 	return get_random_u32_below(last >> PAGE_SHIFT) << PAGE_SHIFT;
-#else
-	return prandom_u32_max(last >> PAGE_SHIFT) << PAGE_SHIFT;
-#endif
 }
 
 static int iomemtest(struct intel_memory_region *mem,

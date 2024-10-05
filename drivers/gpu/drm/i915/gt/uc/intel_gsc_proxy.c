@@ -1,21 +1,27 @@
-#include "intel_gsc_proxy.h"
-
 // SPDX-License-Identifier: MIT
 /*
- * Copyright © 2022 Intel Corporation
+ * Copyright © 2023 Intel Corporation
  */
 
 #include <linux/component.h>
-#include "drm/i915_gsc_proxy_mei_interface.h"
-#include "drm/i915_component.h"
+#include <linux/version.h>
 
-#include "gt/intel_gpu_commands.h"
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/i915_component.h>
+#include <drm/i915_gsc_proxy_mei_interface.h>
+#else
+#include <drm/intel/i915_component.h>
+#include <drm/intel/i915_gsc_proxy_mei_interface.h>
+#endif
+
+
 #include "gt/intel_gt.h"
-#include "gt/intel_ring.h"
-#include "intel_gsc_fw.h"
-#include "intel_gsc_fwif.h"
+#include "gt/intel_gt_print.h"
+#include "intel_gsc_proxy.h"
 #include "intel_gsc_uc.h"
+#include "intel_gsc_uc_heci_cmd_submit.h"
 #include "i915_drv.h"
+#include "i915_reg.h"
 
 /*
  * GSC proxy:
@@ -36,18 +42,46 @@
  *     restart from there) or with an end message.
  */
 
-#define INTEL_GSC_HECI2_H_CSR _MMIO(0x117004)
-#define  CSR_H_INTERRUPT_ENABLE	BIT(0)
-#define  CSR_H_INTERRUPT_STATUS	BIT(1)
-#define  CSR_H_RESET		BIT(4)
-
-/* how long do we wait for the component to load on boot? */
+/*
+ * The component should load quite quickly in most cases, but it could take
+ * a bit. Using a very big timeout just to cover the worst case scenario
+ */
 #define GSC_PROXY_INIT_TIMEOUT_MS 20000
 
 /* the protocol supports up to 32K in each direction */
 #define GSC_PROXY_BUFFER_SIZE SZ_32K
 #define GSC_PROXY_CHANNEL_SIZE (GSC_PROXY_BUFFER_SIZE * 2)
 #define GSC_PROXY_MAX_MSG_SIZE (GSC_PROXY_BUFFER_SIZE - sizeof(struct intel_gsc_mtl_header))
+
+/* FW-defined proxy header */
+struct intel_gsc_proxy_header {
+	/*
+	 * hdr:
+	 * Bits 0-7: type of the proxy message (see enum intel_gsc_proxy_type)
+	 * Bits 8-15: rsvd
+	 * Bits 16-31: length in bytes of the payload following the proxy header
+	 */
+	u32 hdr;
+#define GSC_PROXY_TYPE		 GENMASK(7, 0)
+#define GSC_PROXY_PAYLOAD_LENGTH GENMASK(31, 16)
+
+	u32 source;		/* Source of the Proxy message */
+	u32 destination;	/* Destination of the Proxy message */
+#define GSC_PROXY_ADDRESSING_KMD  0x10000
+#define GSC_PROXY_ADDRESSING_GSC  0x20000
+#define GSC_PROXY_ADDRESSING_CSME 0x30000
+
+	u32 status;		/* Command status */
+} __packed;
+
+/* FW-defined proxy types */
+enum intel_gsc_proxy_type {
+	GSC_PROXY_MSG_TYPE_PROXY_INVALID = 0,
+	GSC_PROXY_MSG_TYPE_PROXY_QUERY = 1,
+	GSC_PROXY_MSG_TYPE_PROXY_PAYLOAD = 2,
+	GSC_PROXY_MSG_TYPE_PROXY_END = 3,
+	GSC_PROXY_MSG_TYPE_PROXY_NOTIFICATION = 4,
+};
 
 struct gsc_proxy_msg {
 	struct intel_gsc_mtl_header header;
@@ -56,7 +90,7 @@ struct gsc_proxy_msg {
 
 static int proxy_send_to_csme(struct intel_gsc_uc *gsc)
 {
-	struct drm_device *drm = &gsc_uc_to_gt(gsc)->i915->drm;
+	struct intel_gt *gt = gsc_uc_to_gt(gsc);
 	struct i915_gsc_proxy_component *comp = gsc->proxy.component;
 	struct intel_gsc_mtl_header *hdr;
 	void *in = gsc->proxy.to_csme;
@@ -74,107 +108,55 @@ static int proxy_send_to_csme(struct intel_gsc_uc *gsc)
 	/* the message must contain at least the proxy header */
 	if (in_size < sizeof(struct intel_gsc_proxy_header) ||
 	    in_size > GSC_PROXY_MAX_MSG_SIZE) {
-		drm_err(drm, "Invalid CSME message size: %u\n", in_size);
+		gt_err(gt, "Invalid CSME message size: %u\n", in_size);
 		return -EINVAL;
 	}
 
 	ret = comp->ops->send(comp->mei_dev, in, in_size);
 	if (ret < 0) {
-		drm_err(drm, "Failed to send CSME message\n");
+		gt_err(gt, "Failed to send CSME message\n");
 		return ret;
 	}
 
 	ret = comp->ops->recv(comp->mei_dev, out, GSC_PROXY_MAX_MSG_SIZE);
 	if (ret < 0) {
-		drm_err(drm, "Failed to receive CSME message\n");
+		gt_err(gt, "Failed to receive CSME message\n");
 		return ret;
 	}
 
 	return ret;
 }
 
-static int emit_gsc_proxy_heci_pkt(struct intel_gsc_uc *gsc, struct i915_request *rq, u32 size)
+static int proxy_send_to_gsc(struct intel_gsc_uc *gsc)
 {
+	struct intel_gt *gt = gsc_uc_to_gt(gsc);
+	u32 *marker = gsc->proxy.to_csme; /* first dw of the reply header */
 	u64 addr_in = i915_ggtt_offset(gsc->proxy.vma);
 	u64 addr_out = addr_in + GSC_PROXY_BUFFER_SIZE;
-	u32 *cs;
-
-	cs = intel_ring_begin(rq, 8);
-	if (IS_ERR(cs))
-		return PTR_ERR(cs);
-
-	*cs++ = GSC_HECI_CMD_PKT;
-	*cs++ = lower_32_bits(addr_in);
-	*cs++ = upper_32_bits(addr_in);
-	*cs++ = size;
-	*cs++ = lower_32_bits(addr_out);
-	*cs++ = upper_32_bits(addr_out);
-	*cs++ = GSC_PROXY_BUFFER_SIZE;
-	*cs++ = 0;
-
-	intel_ring_advance(rq, cs);
-
-	return 0;
-}
-
-static int submit_gsc_proxy_request(struct intel_gsc_uc *gsc, u32 size)
-{
-	struct drm_device *drm = &gsc_uc_to_gt(gsc)->i915->drm;
-	struct intel_context *ce = gsc->ce;
-	struct i915_request *rq;
-	u32 *marker = gsc->proxy.to_csme; /* first dw of the header */
+	u32 size = ((struct gsc_proxy_msg *)gsc->proxy.to_gsc)->header.message_size;
 	int err;
-
-	if (!ce)
-		return -ENODEV;
 
 	/* the message must contain at least the gsc and proxy headers */
 	if (size < sizeof(struct gsc_proxy_msg) || size > GSC_PROXY_BUFFER_SIZE) {
-		drm_err(drm, "Invalid GSC proxy message size: %u\n", size);
+		gt_err(gt, "Invalid GSC proxy message size: %u\n", size);
 		return -EINVAL;
 	}
 
 	/* clear the message marker */
 	*marker = 0;
+
+	/* make sure the marker write is flushed */
 	wmb();
 
 	/* send the request */
-	rq = i915_request_create(ce);
-	if (IS_ERR(rq))
-		return PTR_ERR(rq);
-
-	if (ce->engine->emit_init_breadcrumb) {
-		err = ce->engine->emit_init_breadcrumb(rq);
-		if (err)
-			goto out_rq;
-	}
-
-	err = emit_gsc_proxy_heci_pkt(gsc, rq, size);
-	if (err)
-		goto out_rq;
-
-	err = ce->engine->emit_flush(rq, 0);
-	if (err)
-		goto out_rq;
-
-out_rq:
-	i915_request_get(rq);
-
-	if (unlikely(err))
-		i915_request_set_error_once(rq, err);
-
-	i915_request_add(rq);
-
-	if (!err && i915_request_wait(rq, 0, msecs_to_jiffies(500)) < 0)
-		err = -ETIME;
-
-	i915_request_put(rq);
+	err = intel_gsc_uc_heci_cmd_submit_packet(gsc, addr_in, size,
+						  addr_out, GSC_PROXY_BUFFER_SIZE);
 
 	if (!err) {
-		/* wait for the reply to show up*/
+		/* wait for the reply to show up */
 		err = wait_for(*marker != 0, 300);
 		if (err)
-			drm_err(drm, "Failed to get a proxy reply from gsc\n");
+			gt_err(gt, "Failed to get a proxy reply from gsc\n");
 	}
 
 	return err;
@@ -206,22 +188,19 @@ static int validate_proxy_header(struct intel_gsc_proxy_header *header,
 
 fail:
 	return ret;
-
 }
 
 static int proxy_query(struct intel_gsc_uc *gsc)
 {
-	struct drm_device *drm = &gsc_uc_to_gt(gsc)->i915->drm;
-
+	struct intel_gt *gt = gsc_uc_to_gt(gsc);
 	struct gsc_proxy_msg *to_gsc = gsc->proxy.to_gsc;
 	struct gsc_proxy_msg *to_csme = gsc->proxy.to_csme;
 	int ret;
 
-	to_gsc->header.validity_marker = GSC_HECI_VALIDITY_MARKER;
-	to_gsc->header.gsc_address  = HECI_MEADDRESS_PROXY;
-	to_gsc->header.header_version = MTL_GSC_HEADER_VERSION;
-	to_gsc->header.host_session_handle = 0;
-	to_gsc->header.message_size = sizeof(struct gsc_proxy_msg);
+	intel_gsc_uc_heci_cmd_emit_mtl_header(&to_gsc->header,
+					      HECI_MEADDRESS_PROXY,
+					      sizeof(struct gsc_proxy_msg),
+					      0);
 
 	to_gsc->proxy_header.hdr =
 		FIELD_PREP(GSC_PROXY_TYPE, GSC_PROXY_MSG_TYPE_PROXY_QUERY) |
@@ -236,9 +215,9 @@ static int proxy_query(struct intel_gsc_uc *gsc)
 		memset(gsc->proxy.to_csme, 0, sizeof(struct gsc_proxy_msg));
 
 		/* send proxy message to GSC */
-		ret = submit_gsc_proxy_request(gsc, to_gsc->header.message_size);
+		ret = proxy_send_to_gsc(gsc);
 		if (ret) {
-			drm_err(drm, "failed to send proxy message to GSC! %d\n", ret);
+			gt_err(gt, "failed to send proxy message to GSC! %d\n", ret);
 			goto proxy_error;
 		}
 
@@ -252,14 +231,14 @@ static int proxy_query(struct intel_gsc_uc *gsc)
 					    GSC_PROXY_ADDRESSING_GSC,
 					    GSC_PROXY_ADDRESSING_CSME);
 		if (ret) {
-			drm_err(drm, "invalid GSC to CSME proxy header! %d\n", ret);
+			gt_err(gt, "invalid GSC to CSME proxy header! %d\n", ret);
 			goto proxy_error;
 		}
 
 		/* send the GSC message to the CSME */
 		ret = proxy_send_to_csme(gsc);
 		if (ret < 0) {
-			drm_err(drm, "failed to send proxy message to CSME! %d\n", ret);
+			gt_err(gt, "failed to send proxy message to CSME! %d\n", ret);
 			goto proxy_error;
 		}
 
@@ -271,7 +250,7 @@ static int proxy_query(struct intel_gsc_uc *gsc)
 					    GSC_PROXY_ADDRESSING_CSME,
 					    GSC_PROXY_ADDRESSING_GSC);
 		if (ret) {
-			drm_err(drm, "invalid CSME to GSC proxy header! %d\n", ret);
+			gt_err(gt, "invalid CSME to GSC proxy header! %d\n", ret);
 			goto proxy_error;
 		}
 	}
@@ -291,12 +270,15 @@ int intel_gsc_proxy_request_handler(struct intel_gsc_uc *gsc)
 	assert_rpm_wakelock_held(gt->uncore->rpm);
 
 	/* when GSC is loaded, we can queue this before the component is bound */
-	wait_for(gsc->proxy.component, GSC_PROXY_INIT_TIMEOUT_MS);
+	err = wait_for(gsc->proxy.component, GSC_PROXY_INIT_TIMEOUT_MS);
+	if (err) {
+		gt_err(gt, "GSC proxy component didn't bind within the expected timeout\n");
+		return -EIO;
+	}
 
 	mutex_lock(&gsc->proxy.mutex);
 	if (!gsc->proxy.component) {
-		drm_err(&gt->i915->drm,
-			"GSC proxy worker called without the component being bound!\n");
+		gt_err(gt, "GSC proxy worker called without the component being bound!\n");
 		err = -EIO;
 	} else {
 		/*
@@ -304,8 +286,8 @@ int intel_gsc_proxy_request_handler(struct intel_gsc_uc *gsc)
 		 * interrupts to be generated while we handle the current
 		 * request, but be sure not to write the reset bit
 		 */
-		intel_uncore_rmw(gt->uncore, INTEL_GSC_HECI2_H_CSR,
-				 CSR_H_RESET, CSR_H_INTERRUPT_STATUS);
+		intel_uncore_rmw(gt->uncore, HECI_H_CSR(MTL_GSC_HECI2_BASE),
+				 HECI_H_CSR_RST, HECI_H_CSR_IS);
 		err = proxy_query(gsc);
 	}
 	mutex_unlock(&gsc->proxy.mutex);
@@ -322,8 +304,7 @@ void intel_gsc_proxy_irq_handler(struct intel_gsc_uc *gsc, u32 iir)
 	lockdep_assert_held(gt->irq_lock);
 
 	if (!gsc->proxy.component) {
-		drm_err(&gt->i915->drm,
-			"GSC proxy irq received without the component being bound!\n");
+		gt_err(gt, "GSC proxy irq received without the component being bound!\n");
 		return;
 	}
 
@@ -332,38 +313,42 @@ void intel_gsc_proxy_irq_handler(struct intel_gsc_uc *gsc, u32 iir)
 }
 
 static int i915_gsc_proxy_component_bind(struct device *i915_kdev,
-					 struct device *tee_kdev, void *data)
+					 struct device *mei_kdev, void *data)
 {
 	struct drm_i915_private *i915 = kdev_to_i915(i915_kdev);
 	struct intel_gt *gt = i915->media_gt;
 	struct intel_gsc_uc *gsc = &gt->uc.gsc;
+	intel_wakeref_t wakeref;
 
 	/* enable HECI2 IRQs */
-	intel_uncore_rmw(gt->uncore, INTEL_GSC_HECI2_H_CSR,
-			 0, CSR_H_INTERRUPT_ENABLE);
+	with_intel_runtime_pm(&i915->runtime_pm, wakeref)
+		intel_uncore_rmw(gt->uncore, HECI_H_CSR(MTL_GSC_HECI2_BASE),
+				 HECI_H_CSR_RST, HECI_H_CSR_IE);
 
 	mutex_lock(&gsc->proxy.mutex);
 	gsc->proxy.component = data;
-	gsc->proxy.component->mei_dev = tee_kdev;
+	gsc->proxy.component->mei_dev = mei_kdev;
 	mutex_unlock(&gsc->proxy.mutex);
 
 	return 0;
 }
 
 static void i915_gsc_proxy_component_unbind(struct device *i915_kdev,
-					    struct device *tee_kdev, void *data)
+					    struct device *mei_kdev, void *data)
 {
 	struct drm_i915_private *i915 = kdev_to_i915(i915_kdev);
 	struct intel_gt *gt = i915->media_gt;
 	struct intel_gsc_uc *gsc = &gt->uc.gsc;
+	intel_wakeref_t wakeref;
 
 	mutex_lock(&gsc->proxy.mutex);
 	gsc->proxy.component = NULL;
 	mutex_unlock(&gsc->proxy.mutex);
 
 	/* disable HECI2 IRQs */
-	intel_uncore_rmw(gt->uncore, INTEL_GSC_HECI2_H_CSR,
-			 CSR_H_INTERRUPT_ENABLE, 0);
+	with_intel_runtime_pm(&i915->runtime_pm, wakeref)
+		intel_uncore_rmw(gt->uncore, HECI_H_CSR(MTL_GSC_HECI2_BASE),
+				 HECI_H_CSR_IE | HECI_H_CSR_RST, 0);
 }
 
 static const struct component_ops i915_gsc_proxy_component_ops = {
@@ -420,8 +405,7 @@ int intel_gsc_proxy_init(struct intel_gsc_uc *gsc)
 	mutex_init(&gsc->proxy.mutex);
 
 	if (!IS_ENABLED(CONFIG_INTEL_MEI_GSC_PROXY)) {
-		drm_info(&i915->drm,
-			 "can't init GSC proxy due to missing mei component\n");
+		gt_info(gt, "can't init GSC proxy due to missing mei component\n");
 		return -ENODEV;
 	}
 
@@ -432,7 +416,7 @@ int intel_gsc_proxy_init(struct intel_gsc_uc *gsc)
 	err = component_add_typed(i915->drm.dev, &i915_gsc_proxy_component_ops,
 				  I915_COMPONENT_GSC_PROXY);
 	if (err < 0) {
-		drm_err(&i915->drm, "Failed to add GSC_PROXY component (%d)\n", err);
+		gt_err(gt, "Failed to add GSC_PROXY component (%d)\n", err);
 		goto out_free;
 	}
 

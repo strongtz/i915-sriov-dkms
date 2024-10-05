@@ -7,9 +7,8 @@
 #define __INTEL_GT_REGS__
 
 #include "i915_reg_defs.h"
-#include "display/intel_display_reg_defs.h"	/* VLV_DISPLAY_BASE */
 
-#define MCR_REG(offset)	((const i915_mcr_reg_t){ .reg = (offset) })
+#define VLV_GUNIT_BASE			0x180000
 
 /*
  * The perf control registers are technically multicast registers, but the
@@ -27,7 +26,7 @@
 #define   MTL_CAGF_MASK				REG_GENMASK(8, 0)
 #define   MTL_CC0				0x0
 #define   MTL_CC6				0x3
-#define   MTL_CC_MASK				REG_GENMASK(12, 9)
+#define   MTL_CC_MASK				REG_GENMASK(10, 9)
 
 /* RPM unit config (Gen8+) */
 #define RPM_CONFIG0				_MMIO(0xd00)
@@ -165,6 +164,8 @@
 #define GEN9_CSFE_CHICKEN1_RCS			_MMIO(0x20d4)
 #define   GEN9_PREEMPT_GPGPU_SYNC_SWITCH_DISABLE	(1 << 2)
 #define   GEN11_ENABLE_32_PLANE_MODE		(1 << 7)
+#define GEN12_CS_DEBUG_MODE2			_MMIO(0x20d8)
+#define   INSTRUCTION_STATE_CACHE_INVALIDATE	REG_BIT(6)
 
 #define GEN7_FF_SLICE_CS_CHICKEN1		_MMIO(0x20e0)
 #define   GEN9_FFSC_PERCTX_PREEMPT_CTRL		(1 << 14)
@@ -333,9 +334,11 @@
 #define GEN8_PRIVATE_PAT_HI			_MMIO(0x40e0 + 4)
 #define GEN10_PAT_INDEX(index)			_MMIO(0x40e0 + (index) * 4)
 #define BSD_HWS_PGA_GEN7			_MMIO(0x4180)
-#define GEN12_GFX_CCS_AUX_NV			_MMIO(0x4208)
-#define GEN12_VD0_AUX_NV			_MMIO(0x4218)
-#define GEN12_VD1_AUX_NV			_MMIO(0x4228)
+
+#define GEN12_CCS_AUX_INV			_MMIO(0x4208)
+#define GEN12_VD0_AUX_INV			_MMIO(0x4218)
+#define GEN12_VE0_AUX_INV			_MMIO(0x4238)
+#define GEN12_BCS0_AUX_INV			_MMIO(0x4248)
 
 #define GEN8_RTCR				_MMIO(0x4260)
 #define GEN8_M1TCR				_MMIO(0x4264)
@@ -343,14 +346,12 @@
 #define GEN8_BTCR				_MMIO(0x426c)
 #define GEN8_VTCR				_MMIO(0x4270)
 
-#define GEN12_VD2_AUX_NV			_MMIO(0x4298)
-#define GEN12_VD3_AUX_NV			_MMIO(0x42a8)
-#define GEN12_VE0_AUX_NV			_MMIO(0x4238)
-
 #define BLT_HWS_PGA_GEN7			_MMIO(0x4280)
 
-#define GEN12_VE1_AUX_NV			_MMIO(0x42b8)
+#define GEN12_VD2_AUX_INV			_MMIO(0x4298)
+#define GEN12_CCS0_AUX_INV			_MMIO(0x42c8)
 #define   AUX_INV				REG_BIT(0)
+
 #define VEBOX_HWS_PGA_GEN7			_MMIO(0x4380)
 
 #define GEN12_AUX_ERR_DBG			_MMIO(0x43f4)
@@ -358,7 +359,11 @@
 #define GEN7_TLB_RD_ADDR			_MMIO(0x4700)
 
 #define GEN12_PAT_INDEX(index)			_MMIO(0x4800 + (index) * 4)
-#define XEHP_PAT_INDEX(index)			MCR_REG(0x4800 + (index) * 4)
+#define _PAT_INDEX(index)			_PICK_EVEN_2RANGES(index, 8, \
+								   0x4800, 0x4804, \
+								   0x4848, 0x484c)
+#define XEHP_PAT_INDEX(index)			MCR_REG(_PAT_INDEX(index))
+#define XELPMP_PAT_INDEX(index)			_MMIO(_PAT_INDEX(index))
 
 #define XEHP_TILE0_ADDR_RANGE			MCR_REG(0x4900)
 #define   XEHP_TILE_LMEM_RANGE_SHIFT		8
@@ -408,9 +413,6 @@
 #define   GEN9_FACTOR_IN_CLR_VAL_HIZ		(1 << 9)
 
 #define XEHP_CULLBIT1				MCR_REG(0x6100)
-
-#define CHICKEN_RASTER_1			MCR_REG(0x6204)
-#define   DIS_SF_ROUND_NEAREST_EVEN		REG_BIT(8)
 
 #define CHICKEN_RASTER_2			MCR_REG(0x6208)
 #define   TBIMR_FAST_CLIP			REG_BIT(5)
@@ -480,6 +482,9 @@
 #define   HDC_FORCE_NON_COHERENT		(1 << 4)
 #define   HDC_BARRIER_PERFORMANCE_DISABLE	(1 << 10)
 
+#define COMMON_SLICE_CHICKEN4			_MMIO(0x7300)
+#define   DISABLE_TDC_LOAD_BALANCING_CALC	REG_BIT(6)
+
 #define GEN8_HDC_CHICKEN1			_MMIO(0x7304)
 
 #define GEN11_COMMON_SLICE_CHICKEN3		_MMIO(0x7304)
@@ -523,6 +528,11 @@
 #define   POLYGON_TRIFAN_LINELOOP_DISABLE	REG_BIT(4)
 
 #define GEN8_RC6_CTX_INFO			_MMIO(0x8504)
+
+#define GEN12_SQCNT1				_MMIO(0x8718)
+#define   GEN12_SQCNT1_PMON_ENABLE		REG_BIT(30)
+#define   GEN12_SQCNT1_OABPC			REG_BIT(29)
+#define   GEN12_STRICT_RAR_ENABLE		REG_BIT(23)
 
 #define XEHP_SQCM				MCR_REG(0x8724)
 #define   EN_32B_ACCESS				REG_BIT(30)
@@ -686,10 +696,7 @@
 #define GEN6_RSTCTL				_MMIO(0x9420)
 
 #define GEN7_MISCCPCTL				_MMIO(0x9424)
-#define   GEN7_DOP_CLOCK_GATE_ENABLE		(1 << 0)
-
-#define GEN8_MISCCPCTL				MCR_REG(0x9424)
-#define   GEN8_DOP_CLOCK_GATE_ENABLE		REG_BIT(0)
+#define   GEN7_DOP_CLOCK_GATE_ENABLE		REG_BIT(0)
 #define   GEN12_DOP_CLOCK_GATE_RENDER_ENABLE	REG_BIT(1)
 #define   GEN8_DOP_CLOCK_GATE_CFCLK_ENABLE	(1 << 2)
 #define   GEN8_DOP_CLOCK_GATE_GUC_ENABLE	(1 << 4)
@@ -771,9 +778,6 @@
 
 #define GEN10_DFR_RATIO_EN_AND_CHICKEN		MCR_REG(0x9550)
 #define   DFR_DISABLE				(1 << 9)
-
-#define INF_UNIT_LEVEL_CLKGATE			MCR_REG(0x9560)
-#define   CGPSF_CLKGATE_DIS			(1 << 3)
 
 #define MICRO_BP0_0				_MMIO(0x9800)
 #define MICRO_BP0_2				_MMIO(0x9804)
@@ -979,7 +983,7 @@
 #define   GEN7_WA_FOR_GEN7_L3_CONTROL		0x3C47FF8C
 #define   GEN7_L3AGDIS				(1 << 19)
 
-#define XEHPC_LNCFMISCCFGREG0			_MMIO(0xb01c)
+#define XEHPC_LNCFMISCCFGREG0			MCR_REG(0xb01c)
 #define   XEHPC_HOSTCACHEEN			REG_BIT(1)
 #define   XEHPC_OVRLSCCC			REG_BIT(0)
 
@@ -1042,7 +1046,7 @@
 #define XEHP_L3SCQREG7				MCR_REG(0xb188)
 #define   BLEND_FILL_CACHING_OPT_DIS		REG_BIT(3)
 
-#define XEHPC_L3SCRUB				_MMIO(0xb18c)
+#define XEHPC_L3SCRUB				MCR_REG(0xb18c)
 #define   SCRUB_CL_DWNGRADE_SHARED		REG_BIT(12)
 #define   SCRUB_RATE_PER_BANK_MASK		REG_GENMASK(2, 0)
 #define   SCRUB_RATE_4B_PER_CLK			REG_FIELD_PREP(SCRUB_RATE_PER_BANK_MASK, 0x6)
@@ -1080,6 +1084,7 @@
 
 #define GEN12_RING_FAULT_REG			_MMIO(0xcec4)
 #define XEHP_RING_FAULT_REG			MCR_REG(0xcec4)
+#define XELPMP_RING_FAULT_REG			_MMIO(0xcec4)
 #define   GEN8_RING_FAULT_ENGINE_ID(x)		(((x) >> 12) & 0x7)
 #define   RING_FAULT_GTTSEL_MASK		(1 << 11)
 #define   RING_FAULT_SRCID(x)			(((x) >> 3) & 0xff)
@@ -1096,6 +1101,7 @@
 #define XEHP_BLT_TLB_INV_CR			MCR_REG(0xcee4)
 #define GEN12_COMPCTX_TLB_INV_CR		_MMIO(0xcf04)
 #define XEHP_COMPCTX_TLB_INV_CR			MCR_REG(0xcf04)
+#define XELPMP_GSC_TLB_INV_CR			_MMIO(0xcf04)   /* media GT only */
 
 #define XEHP_MERT_MOD_CTRL			MCR_REG(0xcf28)
 #define RENDER_MOD_CTRL				MCR_REG(0xcf2c)
@@ -1148,6 +1154,8 @@
 #define   ENABLE_SMALLPL			REG_BIT(15)
 #define   SC_DISABLE_POWER_OPTIMIZATION_EBB	REG_BIT(9)
 #define   GEN11_SAMPLER_ENABLE_HEADLESS_MSG	REG_BIT(5)
+#define   MTL_DISABLE_SAMPLER_SC_OOO		REG_BIT(3)
+#define   GEN11_INDIRECT_STATE_BASE_ADDR_OVERRIDE	REG_BIT(0)
 
 #define GEN9_HALF_SLICE_CHICKEN7		MCR_REG(0xe194)
 #define   DG2_DISABLE_ROUND_ENABLE_ALLOW_FOR_SSLA	REG_BIT(15)
@@ -1159,7 +1167,13 @@
 #define   ENABLE_EU_COUNT_FOR_TDL_FLUSH		REG_BIT(10)
 #define   DISABLE_ECC				REG_BIT(5)
 #define   FLOAT_BLEND_OPTIMIZATION_ENABLE	REG_BIT(4)
+/*
+ * We have both ENABLE and DISABLE defines below using the same bit because the
+ * meaning depends on the target platform. There are no platform prefix for them
+ * because different steppings of DG2 pick one or the other semantics.
+ */
 #define   ENABLE_PREFETCH_INTO_IC		REG_BIT(3)
+#define   DISABLE_PREFETCH_INTO_IC		REG_BIT(3)
 
 #define EU_PERF_CNTL0				PERF_REG(0xe458)
 #define EU_PERF_CNTL4				PERF_REG(0xe45c)
@@ -1174,7 +1188,9 @@
 #define   THREAD_EX_ARB_MODE_RR_AFTER_DEP	REG_FIELD_PREP(THREAD_EX_ARB_MODE, 0x2)
 
 #define HSW_ROW_CHICKEN3			_MMIO(0xe49c)
+#define GEN9_ROW_CHICKEN3			MCR_REG(0xe49c)
 #define   HSW_ROW_CHICKEN3_L3_GLOBAL_ATOMICS_DISABLE	(1 << 6)
+#define   MTL_DISABLE_FIX_FOR_EOT_FLUSH		REG_BIT(9)
 
 #define GEN8_ROW_CHICKEN			MCR_REG(0xe4f0)
 #define   FLOW_CONTROL_ENABLE			REG_BIT(15)
@@ -1205,6 +1221,8 @@
 
 #define XEHP_HDC_CHICKEN0			MCR_REG(0xe5f0)
 #define   LSC_L1_FLUSH_CTL_3D_DATAPORT_FLUSH_EVENTS_MASK	REG_GENMASK(13, 11)
+#define   DIS_ATOMIC_CHAINING_TYPED_WRITES	REG_BIT(3)
+
 #define ICL_HDC_MODE				MCR_REG(0xe5f4)
 
 #define EU_PERF_CNTL2				PERF_REG(0xe658)
@@ -1452,9 +1470,15 @@
 #define   ECOBITS_PPGTT_CACHE4B			(0 << 8)
 
 #define GEN12_RCU_MODE				_MMIO(0x14800)
+#define   XEHP_RCU_MODE_FIXED_SLICE_CCS_MODE	REG_BIT(1)
 #define   GEN12_RCU_MODE_CCS_ENABLE		REG_BIT(0)
 
-#define CHV_FUSE_GT				_MMIO(VLV_DISPLAY_BASE + 0x2168)
+#define XEHP_CCS_MODE				_MMIO(0x14804)
+#define   XEHP_CCS_MODE_CSLICE_MASK		REG_GENMASK(2, 0) /* CCS0-3 + rsvd */
+#define   XEHP_CCS_MODE_CSLICE_WIDTH		ilog2(XEHP_CCS_MODE_CSLICE_MASK + 1)
+#define   XEHP_CCS_MODE_CSLICE(cslice, ccs)	(ccs << (cslice * XEHP_CCS_MODE_CSLICE_WIDTH))
+
+#define CHV_FUSE_GT				_MMIO(VLV_GUNIT_BASE + 0x2168)
 #define   CHV_FGT_DISABLE_SS0			(1 << 10)
 #define   CHV_FGT_DISABLE_SS1			(1 << 11)
 #define   CHV_FGT_EU_DIS_SS0_R0_SHIFT		16
@@ -1639,7 +1663,7 @@
 #define GEN12_VCS6_VCS7_INTR_MASK		_MMIO(0x1900b4)
 #define GEN11_VECS0_VECS1_INTR_MASK		_MMIO(0x1900d0)
 #define GEN12_VECS2_VECS3_INTR_MASK		_MMIO(0x1900d4)
-#define GEN11_HECI2_RSVD_INTR_MASK		_MMIO(0x1900e4)
+#define GEN12_HECI2_RSVD_INTR_MASK		_MMIO(0x1900e4)
 #define GEN11_GUC_SG_INTR_MASK			_MMIO(0x1900e8)
 #define MTL_GUC_MGUC_INTR_MASK			_MMIO(0x1900e8) /* MTL+ */
 #define GEN11_GPM_WGBOXPERF_INTR_MASK		_MMIO(0x1900ec)

@@ -27,7 +27,7 @@
 void intel_gt_pm_debugfs_forcewake_user_open(struct intel_gt *gt)
 {
 	atomic_inc(&gt->user_wakeref);
-	intel_gt_pm_get_untracked(gt);
+	intel_gt_pm_get(gt);
 	if (GRAPHICS_VER(gt->i915) >= 6)
 		intel_uncore_forcewake_user_get(gt->uncore);
 }
@@ -36,7 +36,7 @@ void intel_gt_pm_debugfs_forcewake_user_release(struct intel_gt *gt)
 {
 	if (GRAPHICS_VER(gt->i915) >= 6)
 		intel_uncore_forcewake_user_put(gt->uncore);
-	intel_gt_pm_put_untracked(gt);
+	intel_gt_pm_put(gt);
 	atomic_dec(&gt->user_wakeref);
 }
 
@@ -290,7 +290,6 @@ static int mtl_drpc(struct seq_file *m)
 		seq_puts(m, "RC6\n");
 		break;
 	default:
-		MISSING_CASE(REG_FIELD_GET(MTL_CC_MASK, gt_core_status));
 		seq_puts(m, "Unknown\n");
 		break;
 	}
@@ -539,7 +538,10 @@ static bool rps_eval(void *data)
 {
 	struct intel_gt *gt = data;
 
-	return HAS_RPS(gt->i915);
+	if (intel_guc_slpc_is_used(&gt->uc.guc))
+		return false;
+	else
+		return HAS_RPS(gt->i915);
 }
 
 DEFINE_INTEL_GT_DEBUGFS_ATTRIBUTE(rps_boost);
@@ -580,7 +582,7 @@ static bool perf_limit_reasons_eval(void *data)
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(perf_limit_reasons_fops, perf_limit_reasons_get,
-			perf_limit_reasons_clear, "%llu\n");
+			perf_limit_reasons_clear, "0x%llx\n");
 
 void intel_gt_pm_debugfs_register(struct intel_gt *gt, struct dentry *root)
 {
