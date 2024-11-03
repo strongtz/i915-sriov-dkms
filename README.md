@@ -41,6 +41,7 @@ You can create up to 7 VFs on Intel UHD Graphics
 1. Clone this repo
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8.8-2-pve proxmox-kernel-6.8.8-2-pve` (for unsigned kernel).
+1. If running a distro based on Ubuntu or Debian other than Proxmox, add `-DRELEASE_UBUNTU=1` or `-DRELEASE_DEBIAN=1` respectively to EXTRA_CFLAGS in the Makefile. 
 1. Change into the root of the cloned repository and run `dkms add .`.
 1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.10.07 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
