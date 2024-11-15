@@ -995,6 +995,7 @@ static int i915_driver_open(struct drm_device *dev, struct drm_file *file)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 /**
  * i915_driver_lastclose - clean up after all DRM clients have exited
  * @dev: DRM device
@@ -1015,6 +1016,7 @@ static void i915_driver_lastclose(struct drm_device *dev)
 
 	vga_switcheroo_process_delayed_switch();
 }
+#endif
 
 static void i915_driver_postclose(struct drm_device *dev, struct drm_file *file)
 {
@@ -1917,7 +1919,9 @@ static const struct drm_driver i915_drm_driver = {
 	    DRIVER_SYNCOBJ_TIMELINE,
 	.release = i915_driver_release,
 	.open = i915_driver_open,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	.lastclose = i915_driver_lastclose,
+#endif
 	.postclose = i915_driver_postclose,
 	.show_fdinfo = PTR_IF(IS_ENABLED(CONFIG_PROC_FS), i915_drm_client_fdinfo),
 

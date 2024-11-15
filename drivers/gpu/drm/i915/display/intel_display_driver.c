@@ -13,6 +13,9 @@
 #include <acpi/video.h>
 #include <drm/display/drm_dp_mst_helper.h>
 #include <drm/drm_atomic_helper.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+#include <drm/drm_client.h>
+#endif
 #include <drm/drm_mode_config.h>
 #include <drm/drm_privacy_screen_consumer.h>
 #include <drm/drm_probe_helper.h>
@@ -98,7 +101,9 @@ void intel_display_driver_init_hw(struct drm_i915_private *i915)
 static const struct drm_mode_config_funcs intel_mode_funcs = {
 	.fb_create = intel_user_framebuffer_create,
 	.get_format_info = intel_fb_get_format_info,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	.output_poll_changed = intel_fbdev_output_poll_changed,
+#endif
 	.mode_valid = intel_mode_valid,
 	.atomic_check = intel_atomic_check,
 	.atomic_commit = intel_atomic_commit,
@@ -367,13 +372,19 @@ int intel_display_driver_probe(struct drm_i915_private *i915)
 
 	intel_overlay_setup(i915);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	ret = intel_fbdev_init(&i915->drm);
 	if (ret)
 		return ret;
+#endif
 
 	/* Only enable hotplug handling once the fbdev is fully set up. */
 	intel_hpd_init(i915);
 	intel_hpd_poll_disable(i915);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+	intel_fbdev_setup(i915);
+#endif
 
 	skl_watermark_ipc_init(i915);
 
@@ -401,6 +412,7 @@ void intel_display_driver_register(struct drm_i915_private *i915)
 
 	intel_display_debugfs_register(i915);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	/*
 	 * Some ports require correctly set-up hpd registers for
 	 * detection to work properly (leading to ghost connected
@@ -410,6 +422,7 @@ void intel_display_driver_register(struct drm_i915_private *i915)
 	 * before the connectors are registered.
 	 */
 	intel_fbdev_initial_config_async(i915);
+#endif
 
 	/*
 	 * We need to coordinate the hotplugs with the asynchronous
@@ -417,6 +430,10 @@ void intel_display_driver_register(struct drm_i915_private *i915)
 	 * fbdev->async_cookie.
 	 */
 	drm_kms_helper_poll_init(&i915->drm);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+	intel_fbdev_setup(i915);
+#endif
 
 	intel_display_device_info_print(DISPLAY_INFO(i915),
 					DISPLAY_RUNTIME_INFO(i915), &p);
@@ -454,8 +471,10 @@ void intel_display_driver_remove_noirq(struct drm_i915_private *i915)
 	 */
 	intel_hpd_poll_fini(i915);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	/* poll work can call into fbdev, hence clean that up afterwards */
 	intel_fbdev_fini(i915);
+#endif
 
 	intel_unregister_dsm_handler();
 
@@ -493,7 +512,12 @@ void intel_display_driver_unregister(struct drm_i915_private *i915)
 	if (!HAS_DISPLAY(i915))
 		return;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	intel_fbdev_unregister(i915);
+#else
+	drm_client_dev_unregister(&i915->drm);
+#endif
+
 	intel_audio_deinit(i915);
 
 	/*

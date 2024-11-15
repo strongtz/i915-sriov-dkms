@@ -24,7 +24,10 @@
  *     David Airlie
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 #include <linux/async.h>
+#endif
 #include <linux/console.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
@@ -39,6 +42,9 @@
 #include <linux/vga_switcheroo.h>
 
 #include <drm/drm_crtc.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+#include <drm/drm_crtc_helper.h>
+#endif
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_gem_framebuffer_helper.h>
@@ -58,7 +64,9 @@ struct intel_fbdev {
 	struct intel_framebuffer *fb;
 	struct i915_vma *vma;
 	unsigned long vma_flags;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	async_cookie_t cookie;
+#endif
 	int preferred_bpp;
 
 	/* Whether or not fbdev hpd processing is temporarily suspended */
@@ -135,6 +143,27 @@ static int intel_fbdev_mmap(struct fb_info *info, struct vm_area_struct *vma)
 	return i915_gem_fb_mmap(obj, vma);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+static void intel_fbdev_fb_destroy(struct fb_info *info)
+{
+	struct drm_fb_helper *fb_helper = info->par;
+	struct intel_fbdev *ifbdev = container_of(fb_helper, struct intel_fbdev, helper);
+	drm_fb_helper_fini(&ifbdev->helper);
+	
+	/*
+	 * We rely on the object-free to release the VMA pinning for
+	 * the info->screen_base mmaping. Leaking the VMA is simpler than
+	 * trying to rectify all the possible error paths leading here.
+	 */
+	intel_unpin_fb_vma(ifbdev->vma, ifbdev->vma_flags);
+	drm_framebuffer_remove(&ifbdev->fb->base);
+
+	drm_client_release(&fb_helper->client);
+	drm_fb_helper_unprepare(&ifbdev->helper);
+	kfree(ifbdev);
+}
+#endif
+
 static const struct fb_ops intelfb_ops = {
 	.owner = THIS_MODULE,
 	__FB_DEFAULT_DEFERRED_OPS_RDWR(intel_fbdev),
@@ -144,6 +173,9 @@ static const struct fb_ops intelfb_ops = {
 	.fb_pan_display = intel_fbdev_pan_display,
 	__FB_DEFAULT_DEFERRED_OPS_DRAW(intel_fbdev),
 	.fb_mmap = intel_fbdev_mmap,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+	.fb_destroy = intel_fbdev_fb_destroy,
+#endif
 };
 
 static int intelfb_alloc(struct drm_fb_helper *helper,
@@ -212,7 +244,9 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	struct intel_framebuffer *intel_fb = ifbdev->fb;
 	struct drm_device *dev = helper->dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	struct pci_dev *pdev = to_pci_dev(dev_priv->drm.dev);
+#endif
 	struct i915_ggtt *ggtt = to_gt(dev_priv)->ggtt;
 	const struct i915_gtt_view view = {
 		.type = I915_GTT_VIEW_NORMAL,
@@ -337,7 +371,10 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	ifbdev->vma_flags = flags;
 
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	vga_switcheroo_client_fb_set(pdev, info);
+#endif
 	return 0;
 
 out_unpin:
@@ -363,6 +400,7 @@ static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
 	.fb_dirty = intelfb_dirty,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 static void intel_fbdev_destroy(struct intel_fbdev *ifbdev)
 {
 	/* We rely on the object-free to release the VMA pinning for
@@ -381,6 +419,7 @@ static void intel_fbdev_destroy(struct intel_fbdev *ifbdev)
 	drm_fb_helper_unprepare(&ifbdev->helper);
 	kfree(ifbdev);
 }
+#endif
 
 /*
  * Build an intel_fbdev struct using a BIOS allocated framebuffer, if possible.
@@ -545,6 +584,7 @@ static void intel_fbdev_suspend_worker(struct work_struct *work)
 				true);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 int intel_fbdev_init(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = to_i915(dev);
@@ -631,7 +671,7 @@ void intel_fbdev_fini(struct drm_i915_private *dev_priv)
 
 	intel_fbdev_destroy(ifbdev);
 }
-
+#endif
 /* Suspends/resumes fbdev processing of incoming HPD events. When resuming HPD
  * processing, fbdev will perform a full connector reprobe if a hotplug event
  * was received while HPD was suspended.
@@ -716,16 +756,26 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous
 set_suspend:
 	intel_fbdev_hpd_set_suspend(dev_priv, state);
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 void intel_fbdev_output_poll_changed(struct drm_device *dev)
+#else
+static int intel_fbdev_output_poll_changed(struct drm_device *dev)
+#endif
 {
 	struct intel_fbdev *ifbdev = to_i915(dev)->display.fbdev.fbdev;
 	bool send_hpd;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	if (!ifbdev)
 		return;
+#else
+	if (!ifbdev)
+		return -EINVAL;
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 	intel_fbdev_sync(ifbdev);
+#endif
 
 	mutex_lock(&ifbdev->hpd_lock);
 	send_hpd = !ifbdev->hpd_suspended;
@@ -734,8 +784,13 @@ void intel_fbdev_output_poll_changed(struct drm_device *dev)
 
 	if (send_hpd && (ifbdev->vma || ifbdev->helper.deferred_setup))
 		drm_fb_helper_hotplug_event(&ifbdev->helper);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+	return 0;
+#endif
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 void intel_fbdev_restore_mode(struct drm_i915_private *dev_priv)
 {
 	struct intel_fbdev *ifbdev = dev_priv->display.fbdev.fbdev;
@@ -750,6 +805,123 @@ void intel_fbdev_restore_mode(struct drm_i915_private *dev_priv)
 	if (drm_fb_helper_restore_fbdev_mode_unlocked(&ifbdev->helper) == 0)
 		intel_fbdev_invalidate(ifbdev);
 }
+#else
+static int intel_fbdev_restore_mode(struct drm_i915_private *dev_priv)
+{
+	struct intel_fbdev *ifbdev = dev_priv->display.fbdev.fbdev;
+	int ret;
+
+	if (!ifbdev)
+		return -EINVAL;
+
+	if (!ifbdev->vma)
+		return -ENOMEM;
+
+	ret = drm_fb_helper_restore_fbdev_mode_unlocked(&ifbdev->helper);
+	if (ret)
+		return ret;
+	intel_fbdev_invalidate(ifbdev);
+	return 0;
+}
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
+/*
+ * Fbdev client and struct drm_client_funcs
+ */
+static void intel_fbdev_client_unregister(struct drm_client_dev *client)
+{
+	struct drm_fb_helper *fb_helper = drm_fb_helper_from_client(client);
+	struct drm_device *dev = fb_helper->dev;
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
+	if (fb_helper->info) {
+		vga_switcheroo_client_fb_set(pdev, NULL);
+		drm_fb_helper_unregister_info(fb_helper);
+	} else {
+		drm_fb_helper_unprepare(fb_helper);
+		drm_client_release(&fb_helper->client);
+		kfree(fb_helper);
+	}
+}
+static int intel_fbdev_client_restore(struct drm_client_dev *client)
+{
+	struct drm_i915_private *dev_priv = to_i915(client->dev);
+	int ret;
+	ret = intel_fbdev_restore_mode(dev_priv);
+	if (ret)
+		return ret;
+	vga_switcheroo_process_delayed_switch();
+	return 0;
+}
+static int intel_fbdev_client_hotplug(struct drm_client_dev *client)
+{
+	struct drm_fb_helper *fb_helper = drm_fb_helper_from_client(client);
+	struct drm_device *dev = client->dev;
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
+	int ret;
+	if (dev->fb_helper)
+		return intel_fbdev_output_poll_changed(dev);
+	ret = drm_fb_helper_init(dev, fb_helper);
+	if (ret)
+		goto err_drm_err;
+	ret = drm_fb_helper_initial_config(fb_helper);
+	if (ret)
+		goto err_drm_fb_helper_fini;
+	vga_switcheroo_client_fb_set(pdev, fb_helper->info);
+	return 0;
+err_drm_fb_helper_fini:
+	drm_fb_helper_fini(fb_helper);
+err_drm_err:
+	drm_err(dev, "Failed to setup i915 fbdev emulation (ret=%d)\n", ret);
+	return ret;
+}
+
+static const struct drm_client_funcs intel_fbdev_client_funcs = {
+	.owner		= THIS_MODULE,
+	.unregister	= intel_fbdev_client_unregister,
+	.restore	= intel_fbdev_client_restore,
+	.hotplug	= intel_fbdev_client_hotplug,
+};
+
+void intel_fbdev_setup(struct drm_i915_private *i915)
+{
+	struct drm_device *dev = &i915->drm;
+	struct intel_fbdev *ifbdev;
+	int ret;
+
+	if (!HAS_DISPLAY(i915))
+		return;
+
+	ifbdev = kzalloc(sizeof(*ifbdev), GFP_KERNEL);
+	if (!ifbdev)
+		return;
+	drm_fb_helper_prepare(dev, &ifbdev->helper, 32, &intel_fb_helper_funcs);
+
+	i915->display.fbdev.fbdev = ifbdev;
+	INIT_WORK(&i915->display.fbdev.suspend_work, intel_fbdev_suspend_worker);
+	mutex_init(&ifbdev->hpd_lock);
+	if (intel_fbdev_init_bios(dev, ifbdev))
+		ifbdev->helper.preferred_bpp = ifbdev->preferred_bpp;
+	else
+		ifbdev->preferred_bpp = ifbdev->helper.preferred_bpp;
+
+	ret = drm_client_init(dev, &ifbdev->helper.client, "intel-fbdev",
+			      &intel_fbdev_client_funcs);
+	if (ret) {
+		drm_err(dev, "Failed to register client: %d\n", ret);
+		goto err_drm_fb_helper_unprepare;
+	}
+
+	drm_client_register(&ifbdev->helper.client);
+
+	return;
+
+err_drm_fb_helper_unprepare:
+	drm_fb_helper_unprepare(&ifbdev->helper);
+	mutex_destroy(&ifbdev->hpd_lock);
+	kfree(ifbdev);
+}
+#endif
 
 struct intel_framebuffer *intel_fbdev_framebuffer(struct intel_fbdev *fbdev)
 {
