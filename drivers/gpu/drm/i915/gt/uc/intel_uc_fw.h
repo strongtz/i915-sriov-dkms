@@ -269,6 +269,11 @@ static inline bool intel_uc_fw_is_preloaded(const struct intel_uc_fw *uc_fw)
 	return __intel_uc_fw_status(uc_fw) == INTEL_UC_FIRMWARE_PRELOADED;
 }
 
+static inline bool intel_uc_fw_is_in_error(struct intel_uc_fw *uc_fw)
+{
+	return intel_uc_fw_status_to_error(__intel_uc_fw_status(uc_fw)) != 0;
+}
+
 static inline bool intel_uc_fw_is_overridden(const struct intel_uc_fw *uc_fw)
 {
 	return uc_fw->user_overridden;
