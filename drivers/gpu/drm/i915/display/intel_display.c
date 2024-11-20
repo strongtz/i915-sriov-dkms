@@ -82,7 +82,9 @@
 #include "intel_dvo.h"
 #include "intel_fb.h"
 #include "intel_fbc.h"
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 #include "intel_fbdev.h"
+#endif
 #include "intel_fdi.h"
 #include "intel_fifo_underrun.h"
 #include "intel_frontbuffer.h"

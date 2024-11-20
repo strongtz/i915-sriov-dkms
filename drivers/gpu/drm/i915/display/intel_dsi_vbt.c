@@ -31,8 +31,13 @@
 #include <linux/pinctrl/machine.h>
 #include <linux/slab.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 #include <asm/unaligned.h>
+#else
+#include <linux/unaligned.h>
+#endif
 
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>

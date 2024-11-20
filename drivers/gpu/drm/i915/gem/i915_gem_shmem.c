@@ -7,6 +7,7 @@
 #include <linux/pagevec.h>
 #include <linux/shmem_fs.h>
 #include <linux/swap.h>
+#include <linux/version.h>
 
 #include <drm/drm_cache.h>
 
@@ -424,7 +425,12 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 	struct address_space *mapping = obj->base.filp->f_mapping;
 	const struct address_space_operations *aops = mapping->a_ops;
 	char __user *user_data = u64_to_user_ptr(arg->data_ptr);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	u64 remain, offset;
+#else
+	u64 remain;
+	loff_t pos;
+#endif
 	unsigned int pg;
 
 	/* Caller already validated user args */
@@ -457,12 +463,21 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 	 */
 
 	remain = arg->size;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	offset = arg->offset;
 	pg = offset_in_page(offset);
+#else
+	pos = arg->offset;
+	pg = offset_in_page(pos);
+#endif
 
 	do {
 		unsigned int len, unwritten;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		struct page *page;
+#else
+		struct folio *folio;
+#endif
 		void *data, *vaddr;
 		int err;
 		char __maybe_unused c;
@@ -480,11 +495,17 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 		if (err)
 			return err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		err = aops->write_begin(obj->base.filp, mapping, offset, len,
 					&page, &data);
+#else
+		err = aops->write_begin(obj->base.filp, mapping, pos, len,
+					&folio, &data);
+#endif
 		if (err < 0)
 			return err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		vaddr = kmap_atomic(page);
 		unwritten = __copy_from_user_inatomic(vaddr + pg,
 						      user_data,
@@ -493,6 +514,16 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 
 		err = aops->write_end(obj->base.filp, mapping, offset, len,
 				      len - unwritten, page, data);
+#else
+		vaddr = kmap_local_folio(folio, offset_in_folio(folio, pos));
+		pagefault_disable();
+		unwritten = __copy_from_user_inatomic(vaddr, user_data, len);
+		pagefault_enable();
+		kunmap_local(vaddr);
+
+		err = aops->write_end(obj->base.filp, mapping, pos, len,
+				      len - unwritten, folio, data);
+#endif
 		if (err < 0)
 			return err;
 
@@ -502,7 +533,11 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 
 		remain -= len;
 		user_data += len;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		offset += len;
+#else
+		pos += len;
+#endif
 		pg = 0;
 	} while (remain);
 
@@ -658,7 +693,11 @@ i915_gem_object_create_shmem_from_data(struct drm_i915_private *dev_priv,
 	struct drm_i915_gem_object *obj;
 	struct file *file;
 	const struct address_space_operations *aops;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	resource_size_t offset;
+#else
+	loff_t pos;
+#endif
 	int err;
 
 	GEM_WARN_ON(IS_DGFX(dev_priv));
@@ -670,29 +709,54 @@ i915_gem_object_create_shmem_from_data(struct drm_i915_private *dev_priv,
 
 	file = obj->base.filp;
 	aops = file->f_mapping->a_ops;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	offset = 0;
+#else
+	pos = 0;
+#endif
 	do {
 		unsigned int len = min_t(typeof(size), size, PAGE_SIZE);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		struct page *page;
 		void *pgdata, *vaddr;
 
 		err = aops->write_begin(file, file->f_mapping, offset, len,
 					&page, &pgdata);
+#else
+		struct folio *folio;
+		void *fsdata;
+
+		err = aops->write_begin(file, file->f_mapping, pos, len,
+					&folio, &fsdata);
+#endif
 		if (err < 0)
 			goto fail;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		vaddr = kmap(page);
 		memcpy(vaddr, data, len);
 		kunmap(page);
+#else
+		memcpy_to_folio(folio, offset_in_folio(folio, pos), data, len);
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		err = aops->write_end(file, file->f_mapping, offset, len, len,
 				      page, pgdata);
+#else
+		err = aops->write_end(file, file->f_mapping, pos, len, len,
+				      folio, fsdata);
+#endif
 		if (err < 0)
 			goto fail;
 
 		size -= len;
 		data += len;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		offset += len;
+#else
+		pos += len;
+#endif
 	} while (size);
 
 	return obj;
