@@ -382,10 +382,6 @@ int intel_display_driver_probe(struct drm_i915_private *i915)
 	intel_hpd_init(i915);
 	intel_hpd_poll_disable(i915);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
-	intel_fbdev_setup(i915);
-#endif
-
 	skl_watermark_ipc_init(i915);
 
 	return 0;
