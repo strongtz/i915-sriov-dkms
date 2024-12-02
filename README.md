@@ -13,12 +13,12 @@ For Arch Linux users, it is available in AUR. [i915-sriov-dkms](https://aur.arch
 
 Tested kernel versions: 
 
-* Proxmox VE Host: `pve-kernel-6.8.12-2-pve`
-* ArchLinux Host: `6.11.5-zen1`
+* Proxmox VE Host: `pve-kernel-6.8.12-4-pve`
+* ArchLinux Host: `6.11.5-zen1` `6.12.1-zen1`
 
 ## Required Kernel Parameters
 ```
-intel_iommu=on i915.enable_guc=3 i915.max_vfs=7
+intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
 ```
 
 ## Creating Virtual Functions (VF)

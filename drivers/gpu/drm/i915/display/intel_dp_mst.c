@@ -1146,31 +1146,15 @@ static void intel_mst_enable_dp(struct intel_atomic_state *state,
 
 	if (first_mst_stream)
 		intel_ddi_wait_for_fec_status(encoder, pipe_config, true);
-#if defined RELEASE_UBUNTU
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 12) || (LINUX_VERSION_CODE == KERNEL_VERSION(6, 8, 12) && EXTRAVERSION_MAJOR < 44)
-	drm_dp_add_payload_part2(&intel_dp->mst_mgr, &state->base,
-				 drm_atomic_get_mst_payload_state(mst_state, connector->port));
-#else
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0) || defined(_CONFIGURE_DRM_DP_ADD_PAYLOAD_PART2_VERSION) && _CONFIGURE_DRM_DP_ADD_PAYLOAD_PART2_VERSION >= KERNEL_VERSION(6, 10, 0)
 	drm_dp_add_payload_part2(&intel_dp->mst_mgr,
 				 drm_atomic_get_mst_payload_state(mst_state, connector->port));
-#endif
-#elif defined RELEASE_DEBIAN && defined EXTRAVERSION_PVE
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 12) || (LINUX_VERSION_CODE == KERNEL_VERSION(6, 8, 12) && EXTRAVERSION_MAJOR < 2)
+#else
 	drm_dp_add_payload_part2(&intel_dp->mst_mgr, &state->base,
 				 drm_atomic_get_mst_payload_state(mst_state, connector->port));
-#else
-	drm_dp_add_payload_part2(&intel_dp->mst_mgr,
-				 drm_atomic_get_mst_payload_state(mst_state, connector->port));
 #endif
-#else
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
-	drm_dp_add_payload_part2(&intel_dp->mst_mgr, &state->base,
-				 drm_atomic_get_mst_payload_state(mst_state, connector->port));
-#else
-	drm_dp_add_payload_part2(&intel_dp->mst_mgr,
-				 drm_atomic_get_mst_payload_state(mst_state, connector->port));
-#endif
-#endif
+
 	if (DISPLAY_VER(dev_priv) >= 14 && pipe_config->fec_enable)
 		intel_de_rmw(dev_priv, MTL_CHICKEN_TRANS(trans), 0,
 			     FECSTALL_DIS_DPTSTREAM_DPTTG);
