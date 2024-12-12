@@ -1,0 +1,5 @@
+0x500858b9	i915_read_mch_val	/home/loot/i915-sriov-dkms/i915	EXPORT_SYMBOL_GPL	
+0x08a7896d	i915_gpu_raise	/home/loot/i915-sriov-dkms/i915	EXPORT_SYMBOL_GPL	
+0x402468e9	i915_gpu_lower	/home/loot/i915-sriov-dkms/i915	EXPORT_SYMBOL_GPL	
+0x05876c69	i915_gpu_busy	/home/loot/i915-sriov-dkms/i915	EXPORT_SYMBOL_GPL	
+0xe7237b0b	i915_gpu_turbo_disable	/home/loot/i915-sriov-dkms/i915	EXPORT_SYMBOL_GPL	

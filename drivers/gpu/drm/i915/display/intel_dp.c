@@ -84,11 +84,6 @@
 #define DP_DSC_MAX_ENC_THROUGHPUT_0		340000
 #define DP_DSC_MAX_ENC_THROUGHPUT_1		400000
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,10,0)
-/* Max DSC line buffer depth supported by HW. */
-#define INTEL_DP_DSC_MAX_LINE_BUF_DEPTH		13
-#endif
-
 /* DP DSC FEC Overhead factor = 1/(0.972261) */
 #define DP_DSC_FEC_OVERHEAD_FACTOR		972261
 
@@ -1485,26 +1480,21 @@ static int intel_dp_dsc_compute_params(struct intel_encoder *encoder,
 
 	vdsc_cfg->convert_rgb = intel_dp->dsc_dpcd[DP_DSC_DEC_COLOR_FORMAT_CAP - DP_DSC_SUPPORT] &
 		DP_DSC_RGB;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+
 	line_buf_depth = drm_dp_dsc_sink_line_buf_depth(intel_dp->dsc_dpcd);
 	if (!line_buf_depth) {
-#else
-		vdsc_cfg->line_buf_depth = min(INTEL_DP_DSC_MAX_LINE_BUF_DEPTH,
-			 drm_dp_dsc_sink_line_buf_depth(intel_dp->dsc_dpcd));
-		if (!vdsc_cfg->line_buf_depth) {
-#endif
 		drm_dbg_kms(&i915->drm,
 			    "DSC Sink Line Buffer Depth invalid\n");
 		return -EINVAL;
 	}
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+
 	if (vdsc_cfg->dsc_version_minor == 2)
 		vdsc_cfg->line_buf_depth = (line_buf_depth == DSC_1_2_MAX_LINEBUF_DEPTH_BITS) ?
 			DSC_1_2_MAX_LINEBUF_DEPTH_VAL : line_buf_depth;
 	else
 		vdsc_cfg->line_buf_depth = (line_buf_depth > DSC_1_1_MAX_LINEBUF_DEPTH_BITS) ?
 			DSC_1_1_MAX_LINEBUF_DEPTH_BITS : line_buf_depth;
-#endif
+
 	vdsc_cfg->block_pred_enable =
 		intel_dp->dsc_dpcd[DP_DSC_BLK_PREDICTION_SUPPORT - DP_DSC_SUPPORT] &
 		DP_DSC_BLK_PREDICTION_IS_SUPPORTED;
@@ -3894,7 +3884,7 @@ intel_dp_mst_hpd_irq(struct intel_dp *intel_dp, u8 *esi, u8 *ack)
 {
 	bool handled = false;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,999)) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,40) && LINUX_VERSION_CODE <= KERNEL_VERSION(6,1,99)) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	drm_dp_mst_hpd_irq_handle_event(&intel_dp->mst_mgr, esi, ack, &handled);
 #else
 	drm_dp_mst_hpd_irq(&intel_dp->mst_mgr, esi, &handled);
@@ -4546,21 +4536,14 @@ intel_dp_update_dfp(struct intel_dp *intel_dp,
 	/* FIXME: Get rid of drm_edid_raw() */
 	edid = drm_edid_raw(drm_edid);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	intel_dp->dfp.max_bpc =
 		drm_dp_downstream_max_bpc(intel_dp->dpcd,
 					  intel_dp->downstream_ports, edid);
-#else
-	intel_dp->dfp.max_bpc =
-		drm_dp_downstream_max_bpc(intel_dp->dpcd,
-					  intel_dp->downstream_ports, drm_edid);
-#endif
 
 	intel_dp->dfp.max_dotclock =
 		drm_dp_downstream_max_dotclock(intel_dp->dpcd,
 					       intel_dp->downstream_ports);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,7,0)
 	intel_dp->dfp.min_tmds_clock =
 		drm_dp_downstream_min_tmds_clock(intel_dp->dpcd,
 						 intel_dp->downstream_ports,
@@ -4569,16 +4552,6 @@ intel_dp_update_dfp(struct intel_dp *intel_dp,
 		drm_dp_downstream_max_tmds_clock(intel_dp->dpcd,
 						 intel_dp->downstream_ports,
 						 edid);
-#else
-	intel_dp->dfp.min_tmds_clock =
-		drm_dp_downstream_min_tmds_clock(intel_dp->dpcd,
-						 intel_dp->downstream_ports,
-						 drm_edid);
-	intel_dp->dfp.max_tmds_clock =
-		drm_dp_downstream_max_tmds_clock(intel_dp->dpcd,
-						 intel_dp->downstream_ports,
-						 drm_edid);
-#endif
 
 	intel_dp->dfp.pcon_max_frl_bw =
 		drm_dp_get_pcon_max_frl_bw(intel_dp->dpcd,
@@ -5144,7 +5117,7 @@ static const struct drm_connector_funcs intel_dp_connector_funcs = {
 	.destroy = intel_connector_destroy,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 	.atomic_duplicate_state = intel_digital_connector_duplicate_state,
-	.oob_hotplug_event = (void *) intel_dp_oob_hotplug_event,
+	.oob_hotplug_event = intel_dp_oob_hotplug_event,
 };
 
 static const struct drm_connector_helper_funcs intel_dp_connector_helper_funcs = {

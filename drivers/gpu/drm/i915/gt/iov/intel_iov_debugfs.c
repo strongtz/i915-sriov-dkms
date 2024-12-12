@@ -3,8 +3,6 @@
  * Copyright © 2022 Intel Corporation
  */
 
-#include <linux/debugfs.h>
-
 #include <drm/drm_print.h>
 
 #include "gt/intel_gt_debugfs.h"
