@@ -4,15 +4,9 @@
  */
 
 #include <linux/shmem_fs.h>
-#include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_tt.h>
-#else
-#include <drm/ttm/ttm_bo_driver.h>
-#include <drm/ttm/ttm_placement.h>
-#endif
 #include <drm/drm_buddy.h>
 
 #include "i915_drv.h"
@@ -71,10 +65,6 @@ static const struct ttm_place sys_placement_flags = {
 static struct ttm_placement i915_sys_placement = {
 	.num_placement = 1,
 	.placement = &sys_placement_flags,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	.num_busy_placement = 1,
-	.busy_placement = &sys_placement_flags,
-#endif
 };
 
 /**
@@ -152,58 +142,31 @@ i915_ttm_place_from_region(const struct intel_memory_region *mr,
 		place->fpfn = offset >> PAGE_SHIFT;
 		WARN_ON(overflows_type(place->fpfn + (size >> PAGE_SHIFT), place->lpfn));
 		place->lpfn = place->fpfn + (size >> PAGE_SHIFT);
-	} else if (mr->io_size && mr->io_size < mr->total) {
+	} else if (resource_size(&mr->io) && resource_size(&mr->io) < mr->total) {
 		if (flags & I915_BO_ALLOC_GPU_ONLY) {
 			place->flags |= TTM_PL_FLAG_TOPDOWN;
 		} else {
 			place->fpfn = 0;
-			WARN_ON(overflows_type(mr->io_size >> PAGE_SHIFT, place->lpfn));
-			place->lpfn = mr->io_size >> PAGE_SHIFT;
+			WARN_ON(overflows_type(resource_size(&mr->io) >> PAGE_SHIFT, place->lpfn));
+			place->lpfn = resource_size(&mr->io) >> PAGE_SHIFT;
 		}
 	}
 }
 
 static void
 i915_ttm_placement_from_obj(const struct drm_i915_gem_object *obj,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-			    struct ttm_place *requested,
-			    struct ttm_place *busy,
-#else
-                            struct ttm_place *places,
-#endif
+			    struct ttm_place *places,
 			    struct ttm_placement *placement)
 {
 	unsigned int num_allowed = obj->mm.n_placements;
 	unsigned int flags = obj->flags;
 	unsigned int i;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	placement->num_placement = 1;
-        i915_ttm_place_from_region(num_allowed ? obj->mm.placements[0] :
-                                   obj->mm.region, requested, obj->bo_offset,
-                                   obj->base.size, flags);
-#else
 	i915_ttm_place_from_region(num_allowed ? obj->mm.placements[0] :
 				   obj->mm.region, &places[0], obj->bo_offset,
 				   obj->base.size, flags);
-	places[0].flags |= TTM_PL_FLAG_DESIRED;
-#endif
 
 	/* Cache this on object? */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	placement->num_busy_placement = num_allowed;
-	for (i = 0; i < placement->num_busy_placement; ++i)
-		i915_ttm_place_from_region(obj->mm.placements[i], busy + i,
-					   obj->bo_offset, obj->base.size, flags);
-
-	if (num_allowed == 0) {
-		*busy = *requested;
-		placement->num_busy_placement = 1;
-	}
-
-	placement->placement = requested;
-	placement->busy_placement = busy;
-#else
 	for (i = 0; i < num_allowed; ++i) {
 		i915_ttm_place_from_region(obj->mm.placements[i],
 					   &places[i + 1], obj->bo_offset,
@@ -213,7 +176,6 @@ i915_ttm_placement_from_obj(const struct drm_i915_gem_object *obj,
 
 	placement->num_placement = num_allowed + 1;
 	placement->placement = places;
-#endif
 }
 
 static int i915_ttm_tt_shmem_populate(struct ttm_device *bdev,
@@ -305,8 +267,6 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *bo,
 {
 	struct drm_i915_private *i915 = container_of(bo->bdev, typeof(*i915),
 						     bdev);
-	struct ttm_resource_manager *man =
-		ttm_manager_type(bo->bdev, bo->resource->mem_type);
 	struct drm_i915_gem_object *obj = i915_ttm_to_gem(bo);
 	unsigned long ccs_pages = 0;
 	enum ttm_caching caching;
@@ -320,8 +280,8 @@ static struct ttm_tt *i915_ttm_tt_create(struct ttm_buffer_object *bo,
 	if (!i915_tt)
 		return NULL;
 
-	if (obj->flags & I915_BO_ALLOC_CPU_CLEAR &&
-	    man->use_tt)
+	if (obj->flags & I915_BO_ALLOC_CPU_CLEAR && (!bo->resource ||
+	    ttm_manager_type(bo->bdev, bo->resource->mem_type)->use_tt))
 		page_flags |= TTM_TT_FLAG_ZERO_ALLOC;
 
 	caching = i915_ttm_select_tt_caching(obj);
@@ -505,7 +465,7 @@ static int i915_ttm_shrink(struct drm_i915_gem_object *obj, unsigned int flags)
 	struct ttm_placement place = {};
 	int ret;
 
-	if (!bo->ttm || bo->resource->mem_type != TTM_PL_SYSTEM)
+	if (!bo->ttm || i915_ttm_cpu_maps_iomem(bo->resource))
 		return 0;
 
 	GEM_BUG_ON(!i915_tt->is_shmem);
@@ -544,7 +504,13 @@ static void i915_ttm_delete_mem_notify(struct ttm_buffer_object *bo)
 {
 	struct drm_i915_gem_object *obj = i915_ttm_to_gem(bo);
 
-	if (bo->resource && !i915_ttm_is_ghost_object(bo)) {
+	/*
+	 * This gets called twice by ttm, so long as we have a ttm resource or
+	 * ttm_tt then we can still safely call this. Due to pipeline-gutting,
+	 * we maybe have NULL bo->resource, but in that case we should always
+	 * have a ttm alive (like if the pages are swapped out).
+	 */
+	if ((bo->resource || bo->ttm) && !i915_ttm_is_ghost_object(bo)) {
 		__i915_gem_object_pages_fini(obj);
 		i915_ttm_free_cached_io_rsgt(obj);
 	}
@@ -681,11 +647,7 @@ bool i915_ttm_resource_mappable(struct ttm_resource *res)
 	if (!i915_ttm_cpu_maps_iomem(res))
 		return true;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0)
 	return bman_res->used_visible_size == PFN_UP(bman_res->base.size);
-#else
-	return bman_res->used_visible_size == bman_res->base.num_pages;
-#endif
 }
 
 static int i915_ttm_io_mem_reserve(struct ttm_device *bdev, struct ttm_resource *mem)
@@ -816,17 +778,16 @@ static int __i915_ttm_get_pages(struct drm_i915_gem_object *obj,
 		.interruptible = true,
 		.no_wait_gpu = false,
 	};
-	int real_num_busy;
+	struct ttm_placement initial_placement;
+	struct ttm_place initial_place;
 	int ret;
 
 	/* First try only the requested placement. No eviction. */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	real_num_busy = fetch_and_zero(&placement->num_busy_placement);
-#else
-	real_num_busy = placement->num_placement;
-	placement->num_placement = 1;
-#endif
-	ret = ttm_bo_validate(bo, placement, &ctx);
+	initial_placement.num_placement = 1;
+	memcpy(&initial_place, placement->placement, sizeof(struct ttm_place));
+	initial_place.flags |= TTM_PL_FLAG_DESIRED;
+	initial_placement.placement = &initial_place;
+	ret = ttm_bo_validate(bo, &initial_placement, &ctx);
 	if (ret) {
 		ret = i915_ttm_err_to_gem(ret);
 		/*
@@ -841,11 +802,6 @@ static int __i915_ttm_get_pages(struct drm_i915_gem_object *obj,
 		 * If the initial attempt fails, allow all accepted placements,
 		 * evicting if necessary.
 		 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-		placement->num_busy_placement = real_num_busy;
-#else
-		placement->num_placement = real_num_busy;
-#endif
 		ret = ttm_bo_validate(bo, placement, &ctx);
 		if (ret)
 			return i915_ttm_err_to_gem(ret);
@@ -879,7 +835,7 @@ static int __i915_ttm_get_pages(struct drm_i915_gem_object *obj,
 
 static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 {
-	struct ttm_place requested, busy[I915_TTM_MAX_PLACEMENTS];
+	struct ttm_place places[I915_TTM_MAX_PLACEMENTS + 1];
 	struct ttm_placement placement;
 
 	/* restricted by sg_alloc_table */
@@ -889,12 +845,7 @@ static int i915_ttm_get_pages(struct drm_i915_gem_object *obj)
 	GEM_BUG_ON(obj->mm.n_placements > I915_TTM_MAX_PLACEMENTS);
 
 	/* Move to the requested placement. */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	i915_ttm_placement_from_obj(obj, &requested, busy, &placement);
-#else
-        struct ttm_place places[I915_TTM_MAX_PLACEMENTS + 1];
-        i915_ttm_placement_from_obj(obj, places, &placement);
-#endif
+	i915_ttm_placement_from_obj(obj, places, &placement);
 
 	return __i915_ttm_get_pages(obj, &placement);
 }
@@ -924,13 +875,7 @@ static int __i915_ttm_migrate(struct drm_i915_gem_object *obj,
 	i915_ttm_place_from_region(mr, &requested, obj->bo_offset,
 				   obj->base.size, flags);
 	placement.num_placement = 1;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	placement.num_busy_placement = 1;
-#endif
 	placement.placement = &requested;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
-	placement.busy_placement = &requested;
-#endif
 
 	ret = __i915_ttm_get_pages(obj, &placement);
 	if (ret)
@@ -1111,7 +1056,27 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 		return VM_FAULT_SIGBUS;
 	}
 
-	if (!i915_ttm_resource_mappable(bo->resource)) {
+	/*
+	 * This must be swapped out with shmem ttm_tt (pipeline-gutting).
+	 * Calling ttm_bo_validate() here with TTM_PL_SYSTEM should only go as
+	 * far as far doing a ttm_bo_move_null(), which should skip all the
+	 * other junk.
+	 */
+	if (!bo->resource) {
+		struct ttm_operation_ctx ctx = {
+			.interruptible = true,
+			.no_wait_gpu = true, /* should be idle already */
+		};
+		int err;
+
+		GEM_BUG_ON(!bo->ttm || !(bo->ttm->page_flags & TTM_TT_FLAG_SWAPPED));
+
+		err = ttm_bo_validate(bo, i915_ttm_sys_placement(), &ctx);
+		if (err) {
+			dma_resv_unlock(bo->base.resv);
+			return VM_FAULT_SIGBUS;
+		}
+	} else if (!i915_ttm_resource_mappable(bo->resource)) {
 		int err = -ENODEV;
 		int i;
 
@@ -1119,7 +1084,7 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 			struct intel_memory_region *mr = obj->mm.placements[i];
 			unsigned int flags;
 
-			if (!mr->io_size && mr->type != INTEL_MEMORY_SYSTEM)
+			if (!resource_size(&mr->io) && mr->type != INTEL_MEMORY_SYSTEM)
 				continue;
 
 			flags = obj->flags;
@@ -1130,8 +1095,9 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 		}
 
 		if (err) {
-			drm_dbg(dev, "Unable to make resource CPU accessible(err = %pe)\n",
-				ERR_PTR(err));
+			drm_dbg_ratelimited(dev,
+					    "Unable to make resource CPU accessible(err = %pe)\n",
+					    ERR_PTR(err));
 			dma_resv_unlock(bo->base.resv);
 			ret = VM_FAULT_SIGBUS;
 			goto out_rpm;
@@ -1165,7 +1131,7 @@ static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)
 		GEM_WARN_ON(!i915_ttm_cpu_maps_iomem(bo->resource));
 	}
 
-	if (wakeref & CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND)
+	if (wakeref && CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND != 0)
 		intel_wakeref_auto(&to_i915(obj->base.dev)->runtime_pm.userfault_wakeref,
 				   msecs_to_jiffies_timeout(CONFIG_DRM_I915_USERFAULT_AUTOSUSPEND));
 
@@ -1303,7 +1269,7 @@ void i915_ttm_bo_destroy(struct ttm_buffer_object *bo)
 	}
 }
 
-/**
+/*
  * __i915_gem_ttm_object_init - Initialize a ttm-backed i915 gem object
  * @mem: The initial memory region for the object.
  * @obj: The gem object.

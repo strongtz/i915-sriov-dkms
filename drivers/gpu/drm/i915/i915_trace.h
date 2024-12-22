@@ -9,14 +9,12 @@
 #include <linux/stringify.h>
 #include <linux/types.h>
 #include <linux/tracepoint.h>
-#include <linux/version.h>
 
 #include <drm/drm_drv.h>
 
 #include "gt/intel_engine.h"
 
 #include "i915_drv.h"
-#include "i915_irq.h"
 
 /* object tracking */
 
@@ -279,7 +277,7 @@ TRACE_EVENT(i915_request_queue,
 			     ),
 
 	    TP_fast_assign(
-			   __entry->dev = rq->engine->i915->drm.primary->index;
+			   __entry->dev = rq->i915->drm.primary->index;
 			   __entry->class = rq->engine->uabi_class;
 			   __entry->instance = rq->engine->uabi_instance;
 			   __entry->ctx = rq->fence.context;
@@ -306,7 +304,7 @@ DECLARE_EVENT_CLASS(i915_request,
 			     ),
 
 	    TP_fast_assign(
-			   __entry->dev = rq->engine->i915->drm.primary->index;
+			   __entry->dev = rq->i915->drm.primary->index;
 			   __entry->class = rq->engine->uabi_class;
 			   __entry->instance = rq->engine->uabi_instance;
 			   __entry->ctx = rq->fence.context;
@@ -355,7 +353,7 @@ TRACE_EVENT(i915_request_in,
 			    ),
 
 	    TP_fast_assign(
-			   __entry->dev = rq->engine->i915->drm.primary->index;
+			   __entry->dev = rq->i915->drm.primary->index;
 			   __entry->class = rq->engine->uabi_class;
 			   __entry->instance = rq->engine->uabi_instance;
 			   __entry->ctx = rq->fence.context;
@@ -384,7 +382,7 @@ TRACE_EVENT(i915_request_out,
 			    ),
 
 	    TP_fast_assign(
-			   __entry->dev = rq->engine->i915->drm.primary->index;
+			   __entry->dev = rq->i915->drm.primary->index;
 			   __entry->class = rq->engine->uabi_class;
 			   __entry->instance = rq->engine->uabi_instance;
 			   __entry->ctx = rq->fence.context;
@@ -625,7 +623,7 @@ TRACE_EVENT(i915_request_wait_begin,
 	     * less desirable.
 	     */
 	    TP_fast_assign(
-			   __entry->dev = rq->engine->i915->drm.primary->index;
+			   __entry->dev = rq->i915->drm.primary->index;
 			   __entry->class = rq->engine->uabi_class;
 			   __entry->instance = rq->engine->uabi_instance;
 			   __entry->ctx = rq->fence.context;
@@ -671,23 +669,6 @@ TRACE_EVENT_CONDITION(i915_reg_rw,
 		(u32)(__entry->val & 0xffffffff),
 		(u32)(__entry->val >> 32))
 );
-
-#if !(LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,0))
-TRACE_EVENT(intel_gpu_freq_change,
-	    TP_PROTO(u32 freq),
-	    TP_ARGS(freq),
-
-	    TP_STRUCT__entry(
-			     __field(u32, freq)
-			     ),
-
-	    TP_fast_assign(
-			   __entry->freq = freq;
-			   ),
-
-	    TP_printk("new_freq=%u", __entry->freq)
-);
-#endif
 
 /**
  * DOC: i915_ppgtt_create and i915_ppgtt_release tracepoints

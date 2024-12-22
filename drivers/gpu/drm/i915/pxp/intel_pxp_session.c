@@ -74,7 +74,7 @@ static int pxp_create_arb_session(struct intel_pxp *pxp)
 
 	ret = pxp_wait_for_session_state(pxp, ARB_SESSION, true);
 	if (ret) {
-		drm_err(&gt->i915->drm, "arb session failed to go in play\n");
+		drm_dbg(&gt->i915->drm, "arb session failed to go in play\n");
 		return ret;
 	}
 	drm_dbg(&gt->i915->drm, "PXP ARB session is alive\n");
@@ -110,7 +110,10 @@ static int pxp_terminate_arb_session_and_global(struct intel_pxp *pxp)
 
 	intel_uncore_write(gt->uncore, KCR_GLOBAL_TERMINATE(pxp->kcr_base), 1);
 
-	intel_pxp_tee_end_arb_fw_session(pxp, ARB_SESSION);
+	if (HAS_ENGINE(gt, GSC0))
+		intel_pxp_gsccs_end_arb_fw_session(pxp, ARB_SESSION);
+	else
+		intel_pxp_tee_end_arb_fw_session(pxp, ARB_SESSION);
 
 	return ret;
 }
@@ -134,8 +137,10 @@ void intel_pxp_terminate(struct intel_pxp *pxp, bool post_invalidation_needs_res
 static void pxp_terminate_complete(struct intel_pxp *pxp)
 {
 	/* Re-create the arb session after teardown handle complete */
-	if (fetch_and_zero(&pxp->hw_state_invalidated))
+	if (fetch_and_zero(&pxp->hw_state_invalidated)) {
+		drm_dbg(&pxp->ctrl_gt->i915->drm, "PXP: creating arb_session after invalidation");
 		pxp_create_arb_session(pxp);
+	}
 
 	complete_all(&pxp->termination);
 }
@@ -153,6 +158,8 @@ static void pxp_session_work(struct work_struct *work)
 
 	if (!events)
 		return;
+
+	drm_dbg(&gt->i915->drm, "PXP: processing event-flags 0x%08x", events);
 
 	if (events & PXP_INVAL_REQUIRED)
 		intel_pxp_invalidate(pxp);

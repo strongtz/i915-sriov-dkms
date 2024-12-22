@@ -15,6 +15,7 @@ int intel_iov_query_bootstrap(struct intel_iov *iov);
 int intel_iov_query_config(struct intel_iov *iov);
 int intel_iov_query_version(struct intel_iov *iov);
 int intel_iov_query_runtime(struct intel_iov *iov, bool early);
+int intel_iov_query_update_ggtt_ptes(struct intel_iov *iov);
 void intel_iov_query_fini(struct intel_iov *iov);
 
 void intel_iov_query_print_config(struct intel_iov *iov, struct drm_printer *p);

@@ -17,8 +17,10 @@
 #include <linux/wait.h>
 #include <uapi/drm/i915_drm.h>
 
+#include "gt/intel_engine_types.h"
 #include "gt/intel_sseu.h"
 #include "i915_reg_defs.h"
+#include "intel_uncore.h"
 #include "intel_wakeref.h"
 
 struct drm_i915_private;
@@ -30,9 +32,41 @@ struct i915_vma;
 struct intel_context;
 struct intel_engine_cs;
 
+enum {
+	PERF_GROUP_OAG = 0,
+	PERF_GROUP_OAM_SAMEDIA_0 = 0,
+
+	PERF_GROUP_MAX,
+	PERF_GROUP_INVALID = U32_MAX,
+};
+
+enum report_header {
+	HDR_32_BIT = 0,
+	HDR_64_BIT,
+};
+
+struct i915_perf_regs {
+	u32 base;
+	i915_reg_t oa_head_ptr;
+	i915_reg_t oa_tail_ptr;
+	i915_reg_t oa_buffer;
+	i915_reg_t oa_ctx_ctrl;
+	i915_reg_t oa_ctrl;
+	i915_reg_t oa_debug;
+	i915_reg_t oa_status;
+	u32 oa_ctrl_counter_format_shift;
+};
+
+enum oa_type {
+	TYPE_OAG,
+	TYPE_OAM,
+};
+
 struct i915_oa_format {
 	u32 format;
 	int size;
+	int type;
+	enum report_header header;
 };
 
 struct i915_oa_reg {
@@ -254,10 +288,10 @@ struct i915_perf_stream {
 		struct i915_vma *vma;
 		u8 *vaddr;
 		u32 last_ctx_id;
-		int size_exponent;
 
 		/**
-		 * @ptr_lock: Locks reads and writes to all head/tail state
+		 * @oa_buffer.ptr_lock: Locks reads and writes to all
+		 * head/tail state
 		 *
 		 * Consider: the head and tail pointer state needs to be read
 		 * consistently from a hrtimer callback (atomic context) and
@@ -279,19 +313,8 @@ struct i915_perf_stream {
 		spinlock_t ptr_lock;
 
 		/**
-		 * @aging_tail: The last HW tail reported by HW. The data
-		 * might not have made it to memory yet though.
-		 */
-		u32 aging_tail;
-
-		/**
-		 * @aging_timestamp: A monotonic timestamp for when the current aging tail pointer
-		 * was read; used to determine when it is old enough to trust.
-		 */
-		u64 aging_timestamp;
-
-		/**
-		 * @head: Although we can always read back the head pointer register,
+		 * @oa_buffer.head: Although we can always read back
+		 * the head pointer register,
 		 * we prefer to avoid trusting the HW state, just to avoid any
 		 * risk that some hardware condition could * somehow bump the
 		 * head pointer unpredictably and cause us to forward the wrong
@@ -300,7 +323,8 @@ struct i915_perf_stream {
 		u32 head;
 
 		/**
-		 * @tail: The last verified tail that can be read by userspace.
+		 * @oa_buffer.tail: The last verified tail that can be
+		 * read by userspace.
 		 */
 		u32 tail;
 	} oa_buffer;
@@ -384,6 +408,30 @@ struct i915_oa_ops {
 	u32 (*oa_hw_tail_read)(struct i915_perf_stream *stream);
 };
 
+struct i915_perf_group {
+	/*
+	 * @exclusive_stream: The stream currently using the OA unit. This is
+	 * sometimes accessed outside a syscall associated to its file
+	 * descriptor.
+	 */
+	struct i915_perf_stream *exclusive_stream;
+
+	/*
+	 * @num_engines: The number of engines using this OA unit.
+	 */
+	u32 num_engines;
+
+	/*
+	 * @regs: OA buffer register group for programming the OA unit.
+	 */
+	struct i915_perf_regs regs;
+
+	/*
+	 * @type: Type of OA unit - OAM, OAG etc.
+	 */
+	enum oa_type type;
+};
+
 struct i915_perf_gt {
 	/*
 	 * Lock associated with anything below within this structure.
@@ -396,12 +444,15 @@ struct i915_perf_gt {
 	 */
 	struct intel_sseu sseu;
 
-	/*
-	 * @exclusive_stream: The stream currently using the OA unit. This is
-	 * sometimes accessed outside a syscall associated to its file
-	 * descriptor.
+	/**
+	 * @num_perf_groups: number of perf groups per gt.
 	 */
-	struct i915_perf_stream *exclusive_stream;
+	u32 num_perf_groups;
+
+	/*
+	 * @group: list of OA groups - one for each OA buffer.
+	 */
+	struct i915_perf_group *group;
 };
 
 struct i915_perf {

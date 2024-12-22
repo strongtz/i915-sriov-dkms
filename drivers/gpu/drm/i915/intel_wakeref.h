@@ -26,7 +26,7 @@ typedef unsigned long intel_wakeref_t;
 #define INTEL_REFTRACK_DEAD_COUNT 16
 #define INTEL_REFTRACK_PRINT_LIMIT 16
 
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_WAKEREF)
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 #define INTEL_WAKEREF_BUG_ON(expr) BUG_ON(expr)
 #else
 #define INTEL_WAKEREF_BUG_ON(expr) BUILD_BUG_ON_INVALID(expr)
@@ -46,7 +46,7 @@ struct intel_wakeref {
 
 	intel_wakeref_t wakeref;
 
-	struct intel_runtime_pm *rpm;
+	struct drm_i915_private *i915;
 	const struct intel_wakeref_ops *ops;
 
 	struct delayed_work work;
@@ -62,14 +62,14 @@ struct intel_wakeref_lockclass {
 };
 
 void __intel_wakeref_init(struct intel_wakeref *wf,
-			  struct intel_runtime_pm *rpm,
+			  struct drm_i915_private *i915,
 			  const struct intel_wakeref_ops *ops,
 			  struct intel_wakeref_lockclass *key,
 			  const char *name);
-#define intel_wakeref_init(wf, rpm, ops, name) do {				\
+#define intel_wakeref_init(wf, i915, ops, name) do {			\
 	static struct intel_wakeref_lockclass __key;			\
 									\
-	__intel_wakeref_init((wf), (rpm), (ops), &__key, name);		\
+	__intel_wakeref_init((wf), (i915), (ops), &__key, name);	\
 } while (0)
 
 int __intel_wakeref_get_first(struct intel_wakeref *wf);
@@ -117,7 +117,7 @@ __intel_wakeref_get(struct intel_wakeref *wf)
 }
 
 /**
- * intel_wakeref_get_if_in_use: Acquire the wakeref
+ * intel_wakeref_get_if_active: Acquire the wakeref
  * @wf: the wakeref
  *
  * Acquire a hold on the wakeref, but only if the wakeref is already
@@ -294,34 +294,8 @@ static inline void intel_ref_tracker_free(struct ref_tracker_dir *dir,
 	ref_tracker_free(dir, &user);
 }
 
-static inline void
-intel_wakeref_tracker_show(struct ref_tracker_dir *dir,
-			   struct drm_printer *p)
-{
-	const size_t buf_size = PAGE_SIZE;
-	char *buf, *sb, *se;
-	size_t count;
-
-	buf = kmalloc(buf_size, GFP_NOWAIT);
-	if (!buf)
-		return;
-
-	count = ref_tracker_dir_snprint(dir, buf, buf_size);
-	if (!count)
-		goto free;
-	/* printk does not like big buffers, so we split it */
-	for (sb = buf; *sb; sb = se + 1) {
-		se = strchrnul(sb, '\n');
-		drm_printf(p, "%.*s", (int)(se - sb + 1), sb);
-		if (!*se)
-			break;
-	}
-	if (count >= buf_size)
-		drm_printf(p, "\n...dropped %zd extra bytes of leak report.\n",
-			   count + 1 - buf_size);
-free:
-	kfree(buf);
-}
+void intel_ref_tracker_show(struct ref_tracker_dir *dir,
+			    struct drm_printer *p);
 
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_WAKEREF)
 
@@ -336,12 +310,6 @@ static inline void intel_wakeref_untrack(struct intel_wakeref *wf,
 	intel_ref_tracker_free(&wf->debug, handle);
 }
 
-static inline void intel_wakeref_show(struct intel_wakeref *wf,
-				      struct drm_printer *p)
-{
-	intel_wakeref_tracker_show(&wf->debug, p);
-}
-
 #else
 
 static inline intel_wakeref_t intel_wakeref_track(struct intel_wakeref *wf)
@@ -354,15 +322,10 @@ static inline void intel_wakeref_untrack(struct intel_wakeref *wf,
 {
 }
 
-static inline void intel_wakeref_show(struct intel_wakeref *wf,
-				      struct drm_printer *p)
-{
-}
-
 #endif
 
 struct intel_wakeref_auto {
-	struct intel_runtime_pm *rpm;
+	struct drm_i915_private *i915;
 	struct timer_list timer;
 	intel_wakeref_t wakeref;
 	spinlock_t lock;
@@ -387,7 +350,7 @@ struct intel_wakeref_auto {
 void intel_wakeref_auto(struct intel_wakeref_auto *wf, unsigned long timeout);
 
 void intel_wakeref_auto_init(struct intel_wakeref_auto *wf,
-			     struct intel_runtime_pm *rpm);
+			     struct drm_i915_private *i915);
 void intel_wakeref_auto_fini(struct intel_wakeref_auto *wf);
 
 #endif /* INTEL_WAKEREF_H */

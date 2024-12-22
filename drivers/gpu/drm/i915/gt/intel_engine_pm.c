@@ -21,7 +21,7 @@ static void intel_gsc_idle_msg_enable(struct intel_engine_cs *engine)
 {
 	struct drm_i915_private *i915 = engine->i915;
 
-	if (IS_METEORLAKE(i915) && engine->id == GSC0) {
+	if (MEDIA_VER(i915) >= 13 && engine->id == GSC0) {
 		intel_uncore_write(engine->gt->uncore,
 				   RC_PSMI_CTRL_GSCCS,
 				   _MASKED_BIT_DISABLE(IDLE_MSG_DISABLE));
@@ -39,7 +39,7 @@ static void dbg_poison_ce(struct intel_context *ce)
 
 	if (ce->state) {
 		struct drm_i915_gem_object *obj = ce->state->obj;
-		int type = i915_coherent_map_type(ce->engine->i915, obj, true);
+		int type = intel_gt_coherent_map_type(ce->engine->gt, obj, true);
 		void *map;
 
 		if (!i915_gem_object_trylock(obj, NULL))
@@ -114,6 +114,12 @@ __queue_and_release_pm(struct i915_request *rq,
 
 	ENGINE_TRACE(engine, "parking\n");
 
+	/*
+	 * Open coded one half of intel_context_enter, which we have to omit
+	 * here (see the large comment below) and because the other part must
+	 * not be called due constructing directly with __i915_request_create
+	 * which increments active count via intel_context_mark_active.
+	 */
 	GEM_BUG_ON(rq->context->active_count != 1);
 	__intel_gt_pm_get(engine->gt);
 	rq->context->wakeref = intel_wakeref_track(&engine->gt->wakeref);
@@ -273,9 +279,6 @@ static int __engine_park(struct intel_wakeref *wf)
 	intel_engine_park_heartbeat(engine);
 	intel_breadcrumbs_park(engine->breadcrumbs);
 
-	/* Must be reset upon idling, or we may miss the busy wakeup. */
-	GEM_BUG_ON(engine->sched_engine->queue_priority_hint != INT_MIN);
-
 	if (engine->park)
 		engine->park(engine);
 
@@ -291,9 +294,7 @@ static const struct intel_wakeref_ops wf_ops = {
 
 void intel_engine_init__pm(struct intel_engine_cs *engine)
 {
-	struct intel_runtime_pm *rpm = engine->uncore->rpm;
-
-	intel_wakeref_init(&engine->wakeref, rpm, &wf_ops, engine->name);
+	intel_wakeref_init(&engine->wakeref, engine->i915, &wf_ops, engine->name);
 	intel_engine_init_heartbeat(engine);
 
 	intel_gsc_idle_msg_enable(engine);

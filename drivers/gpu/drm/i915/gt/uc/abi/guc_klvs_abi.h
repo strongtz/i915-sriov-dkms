@@ -18,6 +18,7 @@
  *  |   |       |   - `GuC Self Config KLVs`_                                  |
  *  |   |       |   - `GuC VGT Policy KLVs`_                                   |
  *  |   |       |   - `GuC VF Configuration KLVs`_                             |
+ *  |   |       |   - `GuC Global Config KLVs`_                                |
  *  |   |       |                                                              |
  *  |   +-------+--------------------------------------------------------------+
  *  |   |  15:0 | **LEN** - length of VALUE (in 32bit dwords)                  |
@@ -31,9 +32,9 @@
  */
 
 #define GUC_KLV_LEN_MIN				1u
-#define GUC_KLV_0_KEY				(0xffff << 16)
-#define GUC_KLV_0_LEN				(0xffff << 0)
-#define GUC_KLV_n_VALUE				(0xffffffff << 0)
+#define GUC_KLV_0_KEY				(0xffffu << 16)
+#define GUC_KLV_0_LEN				(0xffffu << 0)
+#define GUC_KLV_n_VALUE				(0xffffffffu << 0)
 
 /**
  * DOC: GuC Self Config KLVs
@@ -117,6 +118,14 @@ enum {
 	GUC_CONTEXT_POLICIES_KLV_NUM_IDS = 5,
 };
 
+/*
+ * Workaround keys:
+ */
+enum {
+	GUC_WORKAROUND_KLV_SERIALIZED_RA_MODE				= 0x9001,
+	GUC_WORKAROUND_KLV_BLOCK_INTERRUPTS_WHEN_MGSR_BLOCKED		= 0x9002,
+	GUC_WORKAROUND_KLV_AVOID_GFX_CLEAR_WHILE_ACTIVE			= 0x9006,
+};
 /**
  * DOC: GuC VGT Policy KLVs
  *
@@ -124,7 +133,7 @@ enum {
  *
  * _`GUC_KLV_VGT_POLICY_SCHED_IF_IDLE` : 0x8001
  *      This config sets whether strict scheduling is enabled whereby any VF
- *      that doesn’t have work to submit is still allocated a fixed execution
+ *      that doesnâ€™t have work to submit is still allocated a fixed execution
  *      time-slice to ensure active VFs execution is always consitent even
  *      during other VF reprovisiong / rebooting events. Changing this KLV
  *      impacts all VFs and takes effect on the next VF-Switch event.
@@ -134,7 +143,7 @@ enum {
  *
  * _`GUC_KLV_VGT_POLICY_ADVERSE_SAMPLE_PERIOD` : 0x8002
  *      This config sets the sample period for tracking adverse event counters.
- *       A sample period is the period in millisecs during which events are counted.
+ *       A sample period is the period in millisecs during which events are counted
  *       This is applicable for all the VFs.
  *
  *      :0: adverse events are not counted (default)
@@ -148,7 +157,7 @@ enum {
  *      :1: reset
  */
 
-#define GUC_KLV_VGT_POLICY_SCHED_IF_IDLE_KEY		0x8001
+#define GUC_KLV_VGT_POLICY_SCHED_IF_IDLE_KEY 		0x8001
 #define GUC_KLV_VGT_POLICY_SCHED_IF_IDLE_LEN		1u
 
 #define GUC_KLV_VGT_POLICY_ADVERSE_SAMPLE_PERIOD_KEY	0x8002
@@ -188,7 +197,7 @@ enum {
  *      of and this will never be perfectly-exact (accumulated nano-second
  *      granularity) since the GPUs clock time runs off a different crystal
  *      from the CPUs clock. Changing this KLV on a VF that is currently
- *      running a context wont take effect until a new context is scheduled in.
+ *      running a context won't take effect until a new context is scheduled in.
  *      That said, when the PF is changing this value from 0xFFFFFFFF to
  *      something else, it might never take effect if the VF is running an
  *      inifinitely long compute or shader kernel. In such a scenario, the
@@ -260,7 +269,7 @@ enum {
  *      :1-255: number of doorbells (Gen12)
  *
  * _`GUC_KLV_VF_CFG_BEGIN_CONTEXT_ID` : 0x8A0B
- *      Refers to the start index in context array allocated to this VF’s use.
+ *      Refers to the start index in context array allocated to this VFâ€™s use.
  *
  *      :0: (default)
  *      :1-65535: number of contexts (Gen12)
@@ -307,5 +316,19 @@ enum {
 
 #define GUC_KLV_VF_CFG_BEGIN_CONTEXT_ID_KEY	0x8a0b
 #define GUC_KLV_VF_CFG_BEGIN_CONTEXT_ID_LEN	1u
+
+/**
+ * DOC: GuC Global Config KLVs
+ *
+ * Additional `GuC KLV`_ keys available for use with HOST2GUC_SELF_CFG_.
+ *
+ * _`GUC_KLV_GLOBAL_CFG_GMD_ID` : 0x3000
+ *      Contains raw value of the GMD_ID register (0xd8c or 0x380d8c).
+ *      Supported only on platforms with GMD (MTL+).
+ *      Requires VF ABI version 1.2+.
+ */
+
+#define GUC_KLV_GLOBAL_CFG_GMD_ID_KEY			0x3000
+#define GUC_KLV_GLOBAL_CFG_GMD_ID_LEN			1u
 
 #endif /* _ABI_GUC_KLVS_ABI_H */

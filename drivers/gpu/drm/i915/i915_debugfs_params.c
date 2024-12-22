@@ -39,7 +39,8 @@ static int i915_param_int_open(struct inode *inode, struct file *file)
 
 static int notify_guc(struct drm_i915_private *i915)
 {
-	int ret = 0;
+	struct intel_gt *gt;
+	int i, ret = 0;
 
 	/*
 	 * FIXME: This needs to return -EPERM to userland to indicate
@@ -52,8 +53,10 @@ static int notify_guc(struct drm_i915_private *i915)
 	if (IS_SRIOV_VF(i915))
 		return 0;
 
-	if (intel_uc_uses_guc_submission(&to_gt(i915)->uc))
-		ret = intel_guc_global_policies_update(&to_gt(i915)->uc.guc);
+	for_each_gt(gt, i915, i) {
+		if (intel_uc_uses_guc_submission(&gt->uc))
+			ret = intel_guc_global_policies_update(&gt->uc.guc);
+	}
 
 	return ret;
 }

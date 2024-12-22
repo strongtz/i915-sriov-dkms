@@ -601,6 +601,7 @@ static void pf_remove_vfs_device_links(struct drm_i915_private *i915)
 /**
  * i915_sriov_sysfs_update_links - Update links in SR-IOV sysfs tree.
  * @i915: the i915 struct
+ * @add: FIXME missing doc
  *
  * On PF this function will add or remove PCI device links from VFs.
  */

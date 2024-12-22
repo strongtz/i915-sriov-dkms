@@ -54,6 +54,7 @@ static void i915_resize_lmem_bar(struct drm_i915_private *i915, resource_size_t 
 	struct resource *root_res;
 	resource_size_t rebar_size;
 	resource_size_t current_size;
+	intel_wakeref_t wakeref;
 	u32 pci_cmd;
 	int i;
 
@@ -102,15 +103,25 @@ static void i915_resize_lmem_bar(struct drm_i915_private *i915, resource_size_t 
 		return;
 	}
 
-	/* First disable PCI memory decoding references */
-	pci_read_config_dword(pdev, PCI_COMMAND, &pci_cmd);
-	pci_write_config_dword(pdev, PCI_COMMAND,
-			       pci_cmd & ~PCI_COMMAND_MEMORY);
+	/*
+	 * Releasing forcewake during BAR resizing results in later forcewake
+	 * ack timeouts and former can happen any time - it is asynchronous.
+	 * Grabbing all forcewakes prevents it.
+	 */
+	with_intel_runtime_pm(i915->uncore.rpm, wakeref) {
+		intel_uncore_forcewake_get(&i915->uncore, FORCEWAKE_ALL);
 
-	_resize_bar(i915, GEN12_LMEM_BAR, rebar_size);
+		/* First disable PCI memory decoding references */
+		pci_read_config_dword(pdev, PCI_COMMAND, &pci_cmd);
+		pci_write_config_dword(pdev, PCI_COMMAND,
+				       pci_cmd & ~PCI_COMMAND_MEMORY);
 
-	pci_assign_unassigned_bus_resources(pdev->bus);
-	pci_write_config_dword(pdev, PCI_COMMAND, pci_cmd);
+		_resize_bar(i915, GEN12_LMEM_BAR, rebar_size);
+
+		pci_assign_unassigned_bus_resources(pdev->bus);
+		pci_write_config_dword(pdev, PCI_COMMAND, pci_cmd);
+		intel_uncore_forcewake_put(&i915->uncore, FORCEWAKE_ALL);
+	}
 }
 #else
 static void i915_resize_lmem_bar(struct drm_i915_private *i915, resource_size_t lmem_size) {}
@@ -133,8 +144,8 @@ region_lmem_init(struct intel_memory_region *mem)
 	int ret;
 
 	if (!io_mapping_init_wc(&mem->iomap,
-				mem->io_start,
-				mem->io_size))
+				mem->io.start,
+				resource_size(&mem->io)))
 		return -EIO;
 
 	ret = intel_region_ttm_init(mem);
@@ -209,7 +220,7 @@ static struct intel_memory_region *setup_lmem(struct intel_gt *gt)
 		resource_size_t lmem_range;
 		u64 tile_stolen, flat_ccs_base;
 
-		lmem_range = intel_gt_mcr_read_any(&i915->gt0, XEHP_TILE0_ADDR_RANGE) & 0xFFFF;
+		lmem_range = intel_gt_mcr_read_any(to_gt(i915), XEHP_TILE0_ADDR_RANGE) & 0xFFFF;
 		lmem_size = lmem_range >> XEHP_TILE_LMEM_RANGE_SHIFT;
 		lmem_size *= SZ_1G;
 
@@ -229,7 +240,7 @@ static struct intel_memory_region *setup_lmem(struct intel_gt *gt)
 		lmem_size -= tile_stolen;
 	} else {
 		/* Stolen starts from GSMBASE without CCS */
-		lmem_size = intel_uncore_read64(&i915->uncore, GEN12_GSMBASE);
+		lmem_size = intel_uncore_read64(&i915->uncore, GEN6_GSMBASE);
 	}
 
 	i915_resize_lmem_bar(i915, lmem_size);
@@ -261,14 +272,6 @@ static struct intel_memory_region *setup_lmem(struct intel_gt *gt)
 	err = reserve_lowmem_region(uncore, mem);
 	if (err)
 		goto err_region_put;
-
-	drm_dbg(&i915->drm, "Local memory: %pR\n", &mem->region);
-	drm_dbg(&i915->drm, "Local memory IO start: %pa\n",
-		&mem->io_start);
-	drm_info(&i915->drm, "Local memory IO size: %pa\n",
-		 &mem->io_size);
-	drm_info(&i915->drm, "Local memory available: %pa\n",
-		 &lmem_size);
 
 	if (io_size < lmem_size)
 		drm_info(&i915->drm, "Using a reduced BAR size of %lluMiB. Consider enabling 'Resizable BAR' or similar, if available in the BIOS.\n",

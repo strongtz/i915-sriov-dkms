@@ -51,11 +51,6 @@ struct dg2_snps_phy_buf_trans {
 	u8 post_cursor;
 };
 
-struct direct_phy_buf_trans {
-	u8 level;
-	u8 preemph;
-};
-
 union intel_ddi_buf_trans_entry {
 	struct hsw_ddi_buf_trans hsw;
 	struct bxt_ddi_buf_trans bxt;
@@ -63,7 +58,6 @@ union intel_ddi_buf_trans_entry {
 	struct icl_mg_phy_ddi_buf_trans mg;
 	struct tgl_dkl_phy_ddi_buf_trans dkl;
 	struct dg2_snps_phy_buf_trans snps;
-	struct direct_phy_buf_trans direct;
 };
 
 struct intel_ddi_buf_trans {

@@ -20,7 +20,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <linux/vmalloc.h>
 
 #include "i915_drv.h"
 #include "i915_vgpu.h"
@@ -29,6 +28,7 @@
 #include "gt/intel_context.h"
 #include "gt/intel_ring.h"
 #include "gt/shmem_utils.h"
+#include <linux/vmalloc.h>
 
 /**
  * DOC: Intel GVT-g host support
@@ -42,7 +42,7 @@
  * To virtualize GPU resources GVT-g driver depends on hypervisor technology
  * e.g KVM/VFIO/mdev, Xen, etc. to provide resource access trapping capability
  * and be virtualized within GVT-g device module. More architectural design
- * doc is available on https://01.org/group/2230/documentation-list.
+ * doc is available on https://github.com/intel/gvt-linux/wiki.
  */
 
 static LIST_HEAD(intel_gvt_devices);

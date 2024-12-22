@@ -32,11 +32,11 @@ static inline int intel_mmio_bar(int graphics_ver)
 }
 
 #ifdef CONFIG_PCI_IOV
-#define GEN12_VF_GTTMMADR_BAR			(PCI_IOV_RESOURCES + GEN4_GTTMMADR_BAR)
-#define GEN12_VF_LMEM_BAR			(PCI_IOV_RESOURCES + GEN12_LMEM_BAR)
+#define GEN12_VF_GTTMMADR_BAR                  (PCI_IOV_RESOURCES + GEN4_GTTMMADR_BAR)
+#define GEN12_VF_LMEM_BAR                      (PCI_IOV_RESOURCES + GEN12_LMEM_BAR)
 #endif
 
-/* BSM in include/drm/i915_drm.h */
+/* BSM in include/drm/intel/i915_drm.h */
 
 #define MCHBAR_I915				0x44
 #define MCHBAR_I965				0x48

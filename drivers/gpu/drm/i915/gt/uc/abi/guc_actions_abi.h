@@ -59,6 +59,97 @@
 #define HOST2GUC_SELF_CFG_RESPONSE_MSG_0_NUM		GUC_HXG_RESPONSE_MSG_0_DATA0
 
 /**
+ * DOC: HOST2GUC_SET_ENGINE_SCHED
+ *
+ * This H2G action allows to start/stop scheduling on a class engines.
+ *
+ * This G2H message must be sent as `CTB HXG Message`_.
+ *
+ *  +---+-------+--------------------------------------------------------------+
+ *  |   | Bits  | Description                                                  |
+ *  +===+=======+==============================================================+
+ *  | 0 |    31 | ORIGIN = GUC_HXG_ORIGIN_HOST_                                |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 30:28 | TYPE = GUC_HXG_TYPE_REQUEST_                                 |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 27:16 | DATA0 = MBZ                                                  |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   |  15:0 | ACTION = _`GUC_ACTION_HOST2GUC_SET_ENGINE_SCHED` = 0x1003    |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 1 |  31:0 | **ENGINE_CLASS** - Engine Class for which the change in      |
+ *  |   |       |                    Scheduling State is requeste              |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 2 |  31:0 | **STATE** - new state value                                  |
+ *  |   |       |                                                              |
+ *  |   |       |   - _`GUC_SET_ENGINE_SCHED_STATE_DISABLE` = 0                |
+ *  |   |       |   - _`GUC_SET_ENGINE_SCHED_STATE_ENABLE` = 1                 |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 3 |  31:0 | **IMMEDIATE_MODE** - Immediate mode                          |
+ *  |   |       |                                                              |
+ *  |   |       |   - _`GUC_SET_ENGINE_SCHED_IMM_MODE_DISABLE` = 0             |
+ *  |   |       |   - _`GUC_SET_ENGINE_SCHED_IMM_MODE_ENABLE` = 1              |
+ *  +---+-------+--------------------------------------------------------------+
+ *
+ *  +---+-------+--------------------------------------------------------------+
+ *  |   | Bits  | Description                                                  |
+ *  +===+=======+==============================================================+
+ *  | 0 |    31 | ORIGIN = GUC_HXG_ORIGIN_GUC_                                 |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 30:28 | TYPE = GUC_HXG_TYPE_RESPONSE_SUCCESS_                        |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   |  27:0 | DATA0 = MBZ                                                  |
+ *  +---+-------+--------------------------------------------------------------+
+ */
+#define GUC_ACTION_HOST2GUC_SET_ENGINE_SCHED			0x1003
+
+#define HOST2GUC_SET_ENGINE_SCHED_REQUEST_MSG_LEN		(GUC_HXG_REQUEST_MSG_MIN_LEN + 3u)
+#define HOST2GUC_SET_ENGINE_SCHED_REQUEST_MSG_0_MBZ		GUC_HXG_REQUEST_MSG_0_DATA0
+#define HOST2GUC_SET_ENGINE_SCHED_REQUEST_MSG_1_ENGINE_CLASS	GUC_HXG_REQUEST_MSG_n_DATAn
+#define HOST2GUC_SET_ENGINE_SCHED_REQUEST_MSG_2_STATE		GUC_HXG_REQUEST_MSG_n_DATAn
+#define   GUC_SET_ENGINE_SCHED_STATE_DISABLE				0u
+#define   GUC_SET_ENGINE_SCHED_STATE_ENABLE				1u
+#define HOST2GUC_SET_ENGINE_SCHED_REQUEST_MSG_3_IMM_MODE	GUC_HXG_REQUEST_MSG_n_DATAn
+#define   GUC_SET_ENGINE_SCHED_IMM_MODE_DISABLE				0u
+#define   GUC_SET_ENGINE_SCHED_IMM_MODE_ENABLE				1u
+
+#define HOST2GUC_SET_ENGINE_SCHED_RESPONSE_MSG_LEN		GUC_HXG_RESPONSE_MSG_MIN_LEN
+#define HOST2GUC_SET_ENGINE_SCHED_RESPONSE_MSG_0_MBZ		GUC_HXG_RESPONSE_MSG_0_DATA0
+
+/**
+ * DOC: GUC2HOST_SET_ENGINE_SCHED_DONE
+ *
+ * This message is used by the GuC to acknowledge enable/disable scheduling
+ * on particular Engine Class.
+ *
+ * This G2H message must be sent as `CTB HXG Message`_.
+ *
+ *  +---+-------+--------------------------------------------------------------+
+ *  |   | Bits  | Description                                                  |
+ *  +===+=======+==============================================================+
+ *  | 0 |    31 | ORIGIN = GUC_HXG_ORIGIN_GUC_                                 |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 30:28 | TYPE = GUC_HXG_TYPE_EVENT_                                   |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 27:16 | DATA0 = MBZ                                                  |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   |  15:0 | ACTION = _`GUC_ACTION_GUC2HOST_SET_ENGINE_SCHED_DONE` =      |
+ *  |   |       |          0x1004                                              |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 1 |  31:0 | **ENGINE_CLASS** - Engine Class for which the Scheduling was |
+ *  |   |       |                    enabled or disabled                       |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 2 |  31:0 | **IS_RUNNABLE** - Whether the Engines are made runnable or   |
+ *  |   |       |                   not                                        |
+ *  +---+-------+--------------------------------------------------------------+
+ */
+#define GUC_ACTION_GUC2HOST_SET_ENGINE_SCHED_DONE		0x1004
+
+#define GUC2HOST_SET_ENGINE_SCHED_DONE_MSG_LEN			(GUC_HXG_EVENT_MSG_MIN_LEN + 2u)
+#define GUC2HOST_SET_ENGINE_SCHED_DONE_MSG_0_MBZ		GUC_HXG_EVENT_MSG_0_DATA0
+#define GUC2HOST_SET_ENGINE_SCHED_DONE_MSG_1_ENGINE_CLASS	GUC_HXG_EVENT_MSG_n_DATAn
+#define GUC2HOST_SET_ENGINE_SCHED_DONE_MSG_2_IS_RUNNABLE	GUC_HXG_EVENT_MSG_n_DATAn
+
+/**
  * DOC: HOST2GUC_CONTROL_CTB
  *
  * This H2G action allows Vf Host to enable or disable H2G and G2H `CT Buffer`_.
@@ -121,8 +212,6 @@ enum intel_guc_action {
 	INTEL_GUC_ACTION_SCHED_CONTEXT = 0x1000,
 	INTEL_GUC_ACTION_SCHED_CONTEXT_MODE_SET = 0x1001,
 	INTEL_GUC_ACTION_SCHED_CONTEXT_MODE_DONE = 0x1002,
-	INTEL_GUC_ACTION_SCHED_ENGINE_MODE_SET = 0x1003,
-	INTEL_GUC_ACTION_SCHED_ENGINE_MODE_DONE = 0x1004,
 	INTEL_GUC_ACTION_V69_SET_CONTEXT_PRIORITY = 0x1005,
 	INTEL_GUC_ACTION_V69_SET_CONTEXT_EXECUTION_QUANTUM = 0x1006,
 	INTEL_GUC_ACTION_V69_SET_CONTEXT_PREEMPTION_TIMEOUT = 0x1007,
@@ -183,13 +272,12 @@ enum intel_guc_state_capture_event_status {
 
 #define INTEL_GUC_STATE_CAPTURE_EVENT_STATUS_MASK      0x000000FF
 
-#define INTEL_GUC_TLB_INVAL_TYPE_SHIFT 0
-#define INTEL_GUC_TLB_INVAL_MODE_SHIFT 8
-/* Flush PPC or SMRO caches along with TLB invalidation request */
-#define INTEL_GUC_TLB_INVAL_FLUSH_CACHE (1 << 31)
+#define INTEL_GUC_TLB_INVAL_TYPE_MASK	REG_GENMASK(7, 0)
+#define INTEL_GUC_TLB_INVAL_MODE_MASK	REG_GENMASK(11, 8)
+#define INTEL_GUC_TLB_INVAL_FLUSH_CACHE REG_BIT(31)
 
 enum intel_guc_tlb_invalidation_type {
-	INTEL_GUC_TLB_INVAL_FULL = 0x0,
+	INTEL_GUC_TLB_INVAL_ENGINES = 0x0,
 	INTEL_GUC_TLB_INVAL_GUC = 0x3,
 };
 

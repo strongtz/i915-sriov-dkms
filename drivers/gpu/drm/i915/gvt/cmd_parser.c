@@ -49,7 +49,9 @@
 #include "i915_pvinfo.h"
 #include "trace.h"
 
+#include "display/i9xx_plane_regs.h"
 #include "display/intel_display.h"
+#include "display/intel_sprite_regs.h"
 #include "gem/i915_gem_context.h"
 #include "gem/i915_gem_pm.h"
 #include "gt/intel_context.h"
@@ -1313,9 +1315,9 @@ static int gen8_decode_mi_display_flip(struct parser_exec_state *s,
 	info->async_flip = ((dword2 & GENMASK(1, 0)) == 0x1);
 
 	if (info->plane == PLANE_A) {
-		info->ctrl_reg = DSPCNTR(info->pipe);
-		info->stride_reg = DSPSTRIDE(info->pipe);
-		info->surf_reg = DSPSURF(info->pipe);
+		info->ctrl_reg = DSPCNTR(dev_priv, info->pipe);
+		info->stride_reg = DSPSTRIDE(dev_priv, info->pipe);
+		info->surf_reg = DSPSURF(dev_priv, info->pipe);
 	} else if (info->plane == PLANE_B) {
 		info->ctrl_reg = SPRCTL(info->pipe);
 		info->stride_reg = SPRSTRIDE(info->pipe);
@@ -1379,9 +1381,9 @@ static int skl_decode_mi_display_flip(struct parser_exec_state *s,
 	info->surf_val = (dword2 & GENMASK(31, 12)) >> 12;
 	info->async_flip = ((dword2 & GENMASK(1, 0)) == 0x1);
 
-	info->ctrl_reg = DSPCNTR(info->pipe);
-	info->stride_reg = DSPSTRIDE(info->pipe);
-	info->surf_reg = DSPSURF(info->pipe);
+	info->ctrl_reg = DSPCNTR(dev_priv, info->pipe);
+	info->stride_reg = DSPSTRIDE(dev_priv, info->pipe);
+	info->surf_reg = DSPSURF(dev_priv, info->pipe);
 
 	return 0;
 }
@@ -1435,7 +1437,7 @@ static int gen8_update_plane_mmio_from_mi_display_flip(
 	}
 
 	if (info->plane == PLANE_PRIMARY)
-		vgpu_vreg_t(vgpu, PIPE_FLIPCOUNT_G4X(info->pipe))++;
+		vgpu_vreg_t(vgpu, PIPE_FLIPCOUNT_G4X(dev_priv, info->pipe))++;
 
 	if (info->async_flip)
 		intel_vgpu_trigger_virtual_event(vgpu, info->event);
@@ -2833,7 +2835,7 @@ static int command_scan(struct parser_exec_state *s,
 
 static int scan_workload(struct intel_vgpu_workload *workload)
 {
-	unsigned long gma_head, gma_tail, gma_bottom;
+	unsigned long gma_head, gma_tail;
 	struct parser_exec_state s;
 	int ret = 0;
 
@@ -2843,7 +2845,6 @@ static int scan_workload(struct intel_vgpu_workload *workload)
 
 	gma_head = workload->rb_start + workload->rb_head;
 	gma_tail = workload->rb_start + workload->rb_tail;
-	gma_bottom = workload->rb_start +  _RING_CTL_BUF_SIZE(workload->rb_ctl);
 
 	s.buf_type = RING_BUFFER_INSTRUCTION;
 	s.buf_addr_type = GTT_BUFFER;
@@ -2874,7 +2875,7 @@ out:
 static int scan_wa_ctx(struct intel_shadow_wa_ctx *wa_ctx)
 {
 
-	unsigned long gma_head, gma_tail, gma_bottom, ring_size, ring_tail;
+	unsigned long gma_head, gma_tail, ring_size, ring_tail;
 	struct parser_exec_state s;
 	int ret = 0;
 	struct intel_vgpu_workload *workload = container_of(wa_ctx,
@@ -2891,7 +2892,6 @@ static int scan_wa_ctx(struct intel_shadow_wa_ctx *wa_ctx)
 			PAGE_SIZE);
 	gma_head = wa_ctx->indirect_ctx.guest_gma;
 	gma_tail = wa_ctx->indirect_ctx.guest_gma + ring_tail;
-	gma_bottom = wa_ctx->indirect_ctx.guest_gma + ring_size;
 
 	s.buf_type = RING_BUFFER_INSTRUCTION;
 	s.buf_addr_type = GTT_BUFFER;
@@ -3049,7 +3049,7 @@ put_obj:
 
 static int combine_wa_ctx(struct intel_shadow_wa_ctx *wa_ctx)
 {
-	u32 per_ctx_start[CACHELINE_DWORDS] = {0};
+	u32 per_ctx_start[CACHELINE_DWORDS] = {};
 	unsigned char *bb_start_sva;
 
 	if (!wa_ctx->per_ctx.valid)

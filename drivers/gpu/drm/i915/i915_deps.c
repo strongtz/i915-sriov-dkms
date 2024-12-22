@@ -5,13 +5,8 @@
 
 #include <linux/dma-fence.h>
 #include <linux/slab.h>
-#include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 #include <drm/ttm/ttm_bo.h>
-#else
-#include <drm/ttm/ttm_bo_api.h>
-#endif
 
 #include "i915_deps.h"
 
