@@ -38,6 +38,7 @@
 #include <linux/string_helpers.h>
 #include <linux/vga_switcheroo.h>
 #include <linux/vt.h>
+#include <linux/version.h>
 
 #include <drm/drm_aperture.h>
 #include <drm/drm_atomic_helper.h>
@@ -1769,7 +1770,9 @@ static const struct file_operations i915_driver_fops = {
 #ifdef CONFIG_PROC_FS
 	.show_fdinfo = drm_show_fdinfo,
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	.fop_flags = FOP_UNSIGNED_OFFSET,
+#endif
 };
 
 static int

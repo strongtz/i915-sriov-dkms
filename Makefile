@@ -409,7 +409,16 @@ include $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/gvt/Makefile
 #obj-$(CONFIG_DRM_I915) += i915.o
 #obj-$(CONFIG_DRM_I915_GVT_KVMGT) += kvmgt.o
 
-i915-y := $(addprefix drivers/gpu/drm/i915/,$(i915-y))
+
+# ----------------------------------------------------------------------------
+# compat backports
+
+compat-y += \
+	compat/backport-6.12.o 
+
+i915-y := \
+	$(compat-y) \
+	$(addprefix drivers/gpu/drm/i915/,$(i915-y))
 
 # ----------------------------------------------------------------------------
 # common to all modules
