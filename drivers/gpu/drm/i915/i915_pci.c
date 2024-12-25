@@ -22,9 +22,18 @@
  *
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_color_mgmt.h>
 #include <drm/drm_drv.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/i915_pciids.h>
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #include <drm/intel/i915_pciids.h>
+#else
+#include <drm/intel/pciids.h>
+#endif
 
 #include "display/intel_display_driver.h"
 #include "gt/intel_gt_regs.h"
@@ -804,6 +813,86 @@ __diag_pop();
  * and subvendor IDs, we need it to come before the more general IVB
  * PCI ID matches, otherwise we'll use the wrong info struct above.
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const struct pci_device_id pciidlist[] = {
+	INTEL_I830_IDS(&i830_info),
+	INTEL_I845G_IDS(&i845g_info),
+	INTEL_I85X_IDS(&i85x_info),
+	INTEL_I865G_IDS(&i865g_info),
+	INTEL_I915G_IDS(&i915g_info),
+	INTEL_I915GM_IDS(&i915gm_info),
+	INTEL_I945G_IDS(&i945g_info),
+	INTEL_I945GM_IDS(&i945gm_info),
+	INTEL_I965G_IDS(&i965g_info),
+	INTEL_G33_IDS(&g33_info),
+	INTEL_I965GM_IDS(&i965gm_info),
+	INTEL_GM45_IDS(&gm45_info),
+	INTEL_G45_IDS(&g45_info),
+	INTEL_PNV_G_IDS(&pnv_g_info),
+	INTEL_PNV_M_IDS(&pnv_m_info),
+	INTEL_ILK_D_IDS(&ilk_d_info),
+	INTEL_ILK_M_IDS(&ilk_m_info),
+	INTEL_SNB_D_GT1_IDS(&snb_d_gt1_info),
+	INTEL_SNB_D_GT2_IDS(&snb_d_gt2_info),
+	INTEL_SNB_M_GT1_IDS(&snb_m_gt1_info),
+	INTEL_SNB_M_GT2_IDS(&snb_m_gt2_info),
+	INTEL_IVB_Q_IDS(&ivb_q_info), /* must be first IVB */
+	INTEL_IVB_M_GT1_IDS(&ivb_m_gt1_info),
+	INTEL_IVB_M_GT2_IDS(&ivb_m_gt2_info),
+	INTEL_IVB_D_GT1_IDS(&ivb_d_gt1_info),
+	INTEL_IVB_D_GT2_IDS(&ivb_d_gt2_info),
+	INTEL_HSW_GT1_IDS(&hsw_gt1_info),
+	INTEL_HSW_GT2_IDS(&hsw_gt2_info),
+	INTEL_HSW_GT3_IDS(&hsw_gt3_info),
+	INTEL_VLV_IDS(&vlv_info),
+	INTEL_BDW_GT1_IDS(&bdw_gt1_info),
+	INTEL_BDW_GT2_IDS(&bdw_gt2_info),
+	INTEL_BDW_GT3_IDS(&bdw_gt3_info),
+	INTEL_BDW_RSVD_IDS(&bdw_rsvd_info),
+	INTEL_CHV_IDS(&chv_info),
+	INTEL_SKL_GT1_IDS(&skl_gt1_info),
+	INTEL_SKL_GT2_IDS(&skl_gt2_info),
+	INTEL_SKL_GT3_IDS(&skl_gt3_info),
+	INTEL_SKL_GT4_IDS(&skl_gt4_info),
+	INTEL_BXT_IDS(&bxt_info),
+	INTEL_GLK_IDS(&glk_info),
+	INTEL_KBL_GT1_IDS(&kbl_gt1_info),
+	INTEL_KBL_GT2_IDS(&kbl_gt2_info),
+	INTEL_KBL_GT3_IDS(&kbl_gt3_info),
+	INTEL_KBL_GT4_IDS(&kbl_gt3_info),
+	INTEL_AML_KBL_GT2_IDS(&kbl_gt2_info),
+	INTEL_CFL_S_GT1_IDS(&cfl_gt1_info),
+	INTEL_CFL_S_GT2_IDS(&cfl_gt2_info),
+	INTEL_CFL_H_GT1_IDS(&cfl_gt1_info),
+	INTEL_CFL_H_GT2_IDS(&cfl_gt2_info),
+	INTEL_CFL_U_GT2_IDS(&cfl_gt2_info),
+	INTEL_CFL_U_GT3_IDS(&cfl_gt3_info),
+	INTEL_WHL_U_GT1_IDS(&cfl_gt1_info),
+	INTEL_WHL_U_GT2_IDS(&cfl_gt2_info),
+	INTEL_AML_CFL_GT2_IDS(&cfl_gt2_info),
+	INTEL_WHL_U_GT3_IDS(&cfl_gt3_info),
+	INTEL_CML_GT1_IDS(&cml_gt1_info),
+	INTEL_CML_GT2_IDS(&cml_gt2_info),
+	INTEL_CML_U_GT1_IDS(&cml_gt1_info),
+	INTEL_CML_U_GT2_IDS(&cml_gt2_info),
+	INTEL_ICL_IDS(&icl_info),
+	INTEL_EHL_IDS(&ehl_info),
+	INTEL_JSL_IDS(&jsl_info),
+	INTEL_TGL_IDS(&tgl_info),
+	INTEL_RKL_IDS(&rkl_info),
+	INTEL_ADLS_IDS(&adl_s_info),
+	INTEL_ADLP_IDS(&adl_p_info),
+	INTEL_ADLN_IDS(&adl_p_info),
+	INTEL_DG1_IDS(&dg1_info),
+	INTEL_RPLS_IDS(&adl_s_info),
+	INTEL_RPLU_IDS(&adl_p_info),
+	INTEL_RPLP_IDS(&adl_p_info),
+	INTEL_DG2_IDS(&dg2_info),
+	INTEL_ATS_M_IDS(&ats_m_info),
+	INTEL_MTL_IDS(&mtl_info),
+	{}
+};
+#else
 static const struct pci_device_id pciidlist[] = {
 	INTEL_I830_IDS(INTEL_VGA_DEVICE, &i830_info),
 	INTEL_I845G_IDS(INTEL_VGA_DEVICE, &i845g_info),
@@ -882,6 +971,7 @@ static const struct pci_device_id pciidlist[] = {
 	INTEL_MTL_IDS(INTEL_VGA_DEVICE, &mtl_info),
 	{}
 };
+#endif
 MODULE_DEVICE_TABLE(pci, pciidlist);
 
 static void i915_pci_remove(struct pci_dev *pdev)

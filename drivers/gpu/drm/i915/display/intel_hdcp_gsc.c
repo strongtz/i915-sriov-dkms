@@ -3,7 +3,12 @@
  * Copyright 2023, Intel Corporation.
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/i915_hdcp_interface.h>
+#else
 #include <drm/intel/i915_hdcp_interface.h>
+#endif
 
 #include "gem/i915_gem_region.h"
 #include "gt/intel_gt.h"

@@ -31,6 +31,7 @@
 #include <linux/i2c.h>
 #include <linux/slab.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_hdcp_helper.h>
 #include <drm/display/drm_hdmi_helper.h>
@@ -38,7 +39,11 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_edid.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/intel_lpe_audio.h>
+#else
 #include <drm/intel/intel_lpe_audio.h>
+#endif
 
 #include "g4x_hdmi.h"
 #include "i915_drv.h"

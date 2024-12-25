@@ -414,6 +414,7 @@ include $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/gvt/Makefile
 # compat backports
 
 compat-y += \
+	compat/backport-6.11.o \
 	compat/backport-6.12.o 
 
 i915-y := \

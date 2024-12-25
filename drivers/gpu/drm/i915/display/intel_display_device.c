@@ -3,7 +3,15 @@
  * Copyright © 2023 Intel Corporation
  */
 
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/i915_pciids.h>
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #include <drm/intel/i915_pciids.h>
+#else
+#include <drm/intel/pciids.h>
+#endif
 #include <drm/drm_color_mgmt.h>
 #include <linux/pci.h>
 
@@ -481,6 +489,22 @@ static const struct platform_desc vlv_desc = {
 	},
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#undef INTEL_VGA_DEVICE
+#define INTEL_VGA_DEVICE(id, info) (id)
+static const u16 hsw_ult_ids[] = {
+	INTEL_HSW_ULT_GT1_IDS(0),
+	INTEL_HSW_ULT_GT2_IDS(0),
+	INTEL_HSW_ULT_GT3_IDS(0),
+	0
+};
+
+static const u16 hsw_ulx_ids[] = {
+	INTEL_HSW_ULX_GT1_IDS(0),
+	INTEL_HSW_ULX_GT2_IDS(0),
+	0
+};
+#else
 static const u16 hsw_ult_ids[] = {
 	INTEL_HSW_ULT_GT1_IDS(ID),
 	INTEL_HSW_ULT_GT2_IDS(ID),
@@ -493,6 +517,7 @@ static const u16 hsw_ulx_ids[] = {
 	INTEL_HSW_ULX_GT2_IDS(ID),
 	0
 };
+#endif
 
 static const struct platform_desc hsw_desc = {
 	PLATFORM(HASWELL),
@@ -522,6 +547,23 @@ static const struct platform_desc hsw_desc = {
 	},
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 bdw_ult_ids[] = {
+	INTEL_BDW_ULT_GT1_IDS(0),
+	INTEL_BDW_ULT_GT2_IDS(0),
+	INTEL_BDW_ULT_GT3_IDS(0),
+	INTEL_BDW_ULT_RSVD_IDS(0),
+	0
+};
+
+static const u16 bdw_ulx_ids[] = {
+	INTEL_BDW_ULX_GT1_IDS(0),
+	INTEL_BDW_ULX_GT2_IDS(0),
+	INTEL_BDW_ULX_GT3_IDS(0),
+	INTEL_BDW_ULX_RSVD_IDS(0),
+	0
+};
+#else
 static const u16 bdw_ult_ids[] = {
 	INTEL_BDW_ULT_GT1_IDS(ID),
 	INTEL_BDW_ULT_GT2_IDS(ID),
@@ -537,6 +579,7 @@ static const u16 bdw_ulx_ids[] = {
 	INTEL_BDW_ULX_RSVD_IDS(ID),
 	0
 };
+#endif
 
 static const struct platform_desc bdw_desc = {
 	PLATFORM(BROADWELL),
@@ -609,6 +652,20 @@ static const struct intel_display_device_info skl_display = {
 	.__runtime_defaults.fbc_mask = BIT(INTEL_FBC_A),
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 skl_ult_ids[] = {
+	INTEL_SKL_ULT_GT1_IDS(0),
+	INTEL_SKL_ULT_GT2_IDS(0),
+	INTEL_SKL_ULT_GT3_IDS(0),
+	0
+};
+
+static const u16 skl_ulx_ids[] = {
+	INTEL_SKL_ULX_GT1_IDS(0),
+	INTEL_SKL_ULX_GT2_IDS(0),
+	0
+};
+#else
 static const u16 skl_ult_ids[] = {
 	INTEL_SKL_ULT_GT1_IDS(ID),
 	INTEL_SKL_ULT_GT2_IDS(ID),
@@ -621,6 +678,7 @@ static const u16 skl_ulx_ids[] = {
 	INTEL_SKL_ULX_GT2_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step skl_steppings[] = {
 	[0x6] = STEP_G0,
@@ -640,6 +698,21 @@ static const struct platform_desc skl_desc = {
 	STEP_INFO(skl_steppings),
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 kbl_ult_ids[] = {
+	INTEL_KBL_ULT_GT1_IDS(0),
+	INTEL_KBL_ULT_GT2_IDS(0),
+	INTEL_KBL_ULT_GT3_IDS(0),
+	0
+};
+
+static const u16 kbl_ulx_ids[] = {
+	INTEL_KBL_ULX_GT1_IDS(0),
+	INTEL_KBL_ULX_GT2_IDS(0),
+	INTEL_AML_KBL_GT2_IDS(0),
+	0
+};
+#else
 static const u16 kbl_ult_ids[] = {
 	INTEL_KBL_ULT_GT1_IDS(ID),
 	INTEL_KBL_ULT_GT2_IDS(ID),
@@ -653,6 +726,7 @@ static const u16 kbl_ulx_ids[] = {
 	INTEL_AML_KBL_GT2_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step kbl_steppings[] = {
 	[1] = STEP_B0,
@@ -675,6 +749,21 @@ static const struct platform_desc kbl_desc = {
 	STEP_INFO(kbl_steppings),
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 cfl_ult_ids[] = {
+	INTEL_CFL_U_GT2_IDS(0),
+	INTEL_CFL_U_GT3_IDS(0),
+	INTEL_WHL_U_GT1_IDS(0),
+	INTEL_WHL_U_GT2_IDS(0),
+	INTEL_WHL_U_GT3_IDS(0),
+	0
+};
+
+static const u16 cfl_ulx_ids[] = {
+	INTEL_AML_CFL_GT2_IDS(0),
+	0
+};
+#else
 static const u16 cfl_ult_ids[] = {
 	INTEL_CFL_U_GT2_IDS(ID),
 	INTEL_CFL_U_GT3_IDS(ID),
@@ -688,6 +777,7 @@ static const u16 cfl_ulx_ids[] = {
 	INTEL_AML_CFL_GT2_IDS(ID),
 	0
 };
+#endif
 
 static const struct platform_desc cfl_desc = {
 	PLATFORM(COFFEELAKE),
@@ -699,11 +789,19 @@ static const struct platform_desc cfl_desc = {
 	.info = &skl_display,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 cml_ult_ids[] = {
+	INTEL_CML_U_GT1_IDS(0),
+	INTEL_CML_U_GT2_IDS(0),
+	0
+};
+#else
 static const u16 cml_ult_ids[] = {
 	INTEL_CML_U_GT1_IDS(ID),
 	INTEL_CML_U_GT2_IDS(ID),
 	0
 };
+#endif
 
 static const struct platform_desc cml_desc = {
 	PLATFORM(COMETLAKE),
@@ -812,10 +910,17 @@ static const struct platform_desc glk_desc = {
 		BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1), \
 	.__runtime_defaults.fbc_mask = BIT(INTEL_FBC_A)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 icl_port_f_ids[] = {
+	INTEL_ICL_PORT_F_IDS(0),
+	0
+};
+#else
 static const u16 icl_port_f_ids[] = {
 	INTEL_ICL_PORT_F_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step icl_steppings[] = {
 	[7] = STEP_D0,
@@ -901,10 +1006,17 @@ static const struct platform_desc ehl_desc = {
 		BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1), \
 	.__runtime_defaults.fbc_mask = BIT(INTEL_FBC_A)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 tgl_uy_ids[] = {
+	INTEL_TGL_GT2_IDS(0),
+	0
+};
+#else
 static const u16 tgl_uy_ids[] = {
 	INTEL_TGL_GT2_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step tgl_steppings[] = {
 	[0] = STEP_B0,
@@ -977,10 +1089,17 @@ static const struct platform_desc rkl_desc = {
 	STEP_INFO(rkl_steppings),
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 adls_rpls_ids[] = {
+	INTEL_RPLS_IDS(0),
+	0
+};
+#else
 static const u16 adls_rpls_ids[] = {
 	INTEL_RPLS_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step adl_s_steppings[] = {
 	[0x0] = STEP_A0,
@@ -1069,6 +1188,22 @@ static const struct intel_display_device_info xe_lpd_display = {
 		BIT(PORT_TC1) | BIT(PORT_TC2) | BIT(PORT_TC3) | BIT(PORT_TC4),
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 adlp_adln_ids[] = {
+	INTEL_ADLN_IDS(0),
+	0
+};
+
+static const u16 adlp_rplu_ids[] = {
+	INTEL_RPLU_IDS(0),
+	0
+};
+
+static const u16 adlp_rplp_ids[] = {
+	INTEL_RPLP_IDS(0),
+	0
+};
+#else
 static const u16 adlp_adln_ids[] = {
 	INTEL_ADLN_IDS(ID),
 	0
@@ -1083,6 +1218,7 @@ static const u16 adlp_rplp_ids[] = {
 	INTEL_RPLP_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step adl_p_steppings[] = {
 	[0x0] = STEP_A0,
@@ -1125,6 +1261,22 @@ static const struct intel_display_device_info xe_hpd_display = {
 		BIT(PORT_TC1),
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+static const u16 dg2_g10_ids[] = {
+	INTEL_DG2_G10_IDS(0),
+	0
+};
+
+static const u16 dg2_g11_ids[] = {
+	INTEL_DG2_G11_IDS(0),
+	0
+};
+
+static const u16 dg2_g12_ids[] = {
+	INTEL_DG2_G12_IDS(0),
+	0
+};
+#else
 static const u16 dg2_g10_ids[] = {
 	INTEL_DG2_G10_IDS(ID),
 	0
@@ -1139,6 +1291,7 @@ static const u16 dg2_g12_ids[] = {
 	INTEL_DG2_G12_IDS(ID),
 	0
 };
+#endif
 
 static const enum intel_step dg2_g10_steppings[] = {
 	[0x0] = STEP_A0,
@@ -1263,7 +1416,18 @@ __diag_pop();
 static bool has_no_display(struct pci_dev *pdev)
 {
 	static const struct pci_device_id ids[] = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#undef INTEL_VGA_DEVICE
+#define INTEL_VGA_DEVICE(id, info) {		\
+	0x8086,	id,				\
+	~0, ~0,					\
+	0x030000, 0xff0000,			\
+	(unsigned long) info }
+
+		INTEL_IVB_Q_IDS(0),
+#else
 		INTEL_IVB_Q_IDS(INTEL_VGA_DEVICE, 0),
+#endif
 		{}
 	};
 
@@ -1276,6 +1440,55 @@ static const struct {
 	u32 devid;
 	const struct platform_desc *desc;
 } intel_display_ids[] = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#undef INTEL_VGA_DEVICE
+#define INTEL_VGA_DEVICE(id, info) { id, info }
+	INTEL_I830_IDS(&i830_desc),
+	INTEL_I845G_IDS(&i845_desc),
+	INTEL_I85X_IDS(&i85x_desc),
+	INTEL_I865G_IDS(&i865g_desc),
+	INTEL_I915G_IDS(&i915g_desc),
+	INTEL_I915GM_IDS(&i915gm_desc),
+	INTEL_I945G_IDS(&i945g_desc),
+	INTEL_I945GM_IDS(&i945gm_desc),
+	INTEL_I965G_IDS(&i965g_desc),
+	INTEL_G33_IDS(&g33_desc),
+	INTEL_I965GM_IDS(&i965gm_desc),
+	INTEL_GM45_IDS(&gm45_desc),
+	INTEL_G45_IDS(&g45_desc),
+	INTEL_PNV_IDS(&pnv_desc),
+	INTEL_ILK_D_IDS(&ilk_d_desc),
+	INTEL_ILK_M_IDS(&ilk_m_desc),
+	INTEL_SNB_IDS(&snb_desc),
+	INTEL_IVB_IDS(&ivb_desc),
+	INTEL_HSW_IDS(&hsw_desc),
+	INTEL_VLV_IDS(&vlv_desc),
+	INTEL_BDW_IDS(&bdw_desc),
+	INTEL_CHV_IDS(&chv_desc),
+	INTEL_SKL_IDS(&skl_desc),
+	INTEL_BXT_IDS(&bxt_desc),
+	INTEL_GLK_IDS(&glk_desc),
+	INTEL_KBL_IDS(&kbl_desc),
+	INTEL_CFL_IDS(&cfl_desc),
+	INTEL_WHL_IDS(&cfl_desc),
+	INTEL_CML_IDS(&cml_desc),
+	INTEL_ICL_IDS(&icl_desc),
+	INTEL_EHL_IDS(&ehl_desc),
+	INTEL_JSL_IDS(&jsl_desc),
+	INTEL_TGL_IDS(&tgl_desc),
+	INTEL_DG1_IDS(&dg1_desc),
+	INTEL_RKL_IDS(&rkl_desc),
+	INTEL_ADLS_IDS(&adl_s_desc),
+	INTEL_RPLS_IDS(&adl_s_desc),
+	INTEL_ADLP_IDS(&adl_p_desc),
+	INTEL_ADLN_IDS(&adl_p_desc),
+	INTEL_RPLU_IDS(&adl_p_desc),
+	INTEL_RPLP_IDS(&adl_p_desc),
+	INTEL_DG2_IDS(&dg2_desc),
+	INTEL_MTL_IDS(&mtl_desc),
+	INTEL_LNL_IDS(&lnl_desc),
+	INTEL_BMG_IDS(&bmg_desc),
+#else
 	INTEL_I830_IDS(INTEL_DISPLAY_DEVICE, &i830_desc),
 	INTEL_I845G_IDS(INTEL_DISPLAY_DEVICE, &i845_desc),
 	INTEL_I85X_IDS(INTEL_DISPLAY_DEVICE, &i85x_desc),
@@ -1321,6 +1534,7 @@ static const struct {
 	INTEL_MTL_IDS(INTEL_DISPLAY_DEVICE, &mtl_desc),
 	INTEL_LNL_IDS(INTEL_DISPLAY_DEVICE, &lnl_desc),
 	INTEL_BMG_IDS(INTEL_DISPLAY_DEVICE, &bmg_desc),
+#endif
 };
 
 static const struct {

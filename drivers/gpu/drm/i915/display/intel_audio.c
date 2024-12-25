@@ -23,11 +23,16 @@
 
 #include <linux/component.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
 
 #include <drm/drm_edid.h>
 #include <drm/drm_eld.h>
 #include <drm/drm_fixed.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/i915_component.h>
+#else
 #include <drm/intel/i915_component.h>
+#endif
 
 #include "i915_drv.h"
 #include "intel_atomic.h"

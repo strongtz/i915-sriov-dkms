@@ -4,8 +4,14 @@
  */
 
 #include "intel_ggtt_gmch.h"
+#include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+#include <drm/intel-gtt.h>
+#else
 #include <drm/intel/intel-gtt.h>
+#endif
+
 
 #include <linux/agp_backend.h>
 

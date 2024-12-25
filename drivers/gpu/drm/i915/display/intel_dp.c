@@ -33,6 +33,7 @@
 #include <linux/string_helpers.h>
 #include <linux/timekeeping.h>
 #include <linux/types.h>
+#include <linux/version.h>
 
 #include <asm/byteorder.h>
 
@@ -2741,9 +2742,15 @@ static void intel_dp_compute_as_sdp(struct intel_dp *intel_dp,
 	/* Currently only DP_AS_SDP_AVT_FIXED_VTOTAL mode supported */
 	as_sdp->sdp_type = DP_SDP_ADAPTIVE_SYNC;
 	as_sdp->length = 0x9;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+	as_sdp->mode = DP_AS_SDP_AVT_FIXED_VTOTAL;
+	as_sdp->vtotal = adjusted_mode->vtotal;
+	as_sdp->target_rr = 0;
+#endif
 	as_sdp->duration_incr_ms = 0;
 	as_sdp->duration_incr_ms = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
 	if (crtc_state->cmrr.enable) {
 		as_sdp->mode = DP_AS_SDP_FAVT_TRR_REACHED;
 		as_sdp->vtotal = adjusted_mode->vtotal;
@@ -2754,6 +2761,7 @@ static void intel_dp_compute_as_sdp(struct intel_dp *intel_dp,
 		as_sdp->vtotal = adjusted_mode->vtotal;
 		as_sdp->target_rr = 0;
 	}
+#endif
 }
 
 static void intel_dp_compute_vsc_sdp(struct intel_dp *intel_dp,
@@ -4367,8 +4375,10 @@ static ssize_t intel_dp_as_sdp_pack(const struct drm_dp_as_sdp *as_sdp,
 	sdp->db[3] = as_sdp->target_rr & 0xFF;
 	sdp->db[4] = (as_sdp->target_rr >> 8) & 0x3;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
 	if (as_sdp->target_rr_divider)
 		sdp->db[4] |= 0x20;
+#endif
 
 	return length;
 }
@@ -4554,7 +4564,9 @@ int intel_dp_as_sdp_unpack(struct drm_dp_as_sdp *as_sdp,
 	as_sdp->mode = sdp->db[0] & DP_ADAPTIVE_SYNC_SDP_OPERATION_MODE;
 	as_sdp->vtotal = (sdp->db[2] << 8) | sdp->db[1];
 	as_sdp->target_rr = (u64)sdp->db[3] | ((u64)sdp->db[4] & 0x3);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
 	as_sdp->target_rr_divider = sdp->db[4] & 0x20 ? true : false;
+#endif
 
 	return 0;
 }
