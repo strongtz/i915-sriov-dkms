@@ -12,14 +12,13 @@
 #include <linux/string_choices.h>
 #include <uapi/linux/sched/types.h>
 
-#include <drm/display/drm_dsc_helper.h>
 #include <drm/drm_plane.h>
 #include <drm/drm_print.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_vblank_work.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_fixed.h>
-#include <drm/drm_print.h>
+#include <drm/display/drm_dsc_helper.h>
 
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)

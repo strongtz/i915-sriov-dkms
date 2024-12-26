@@ -4,6 +4,7 @@
  */
 
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_bo.h>
@@ -126,7 +127,11 @@ static int i915_ttm_buddy_man_alloc(struct ttm_resource_manager *man,
 	return 0;
 
 err_free_blocks:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+	drm_buddy_free_list(mm, &bman_res->blocks);
+#else
 	drm_buddy_free_list(mm, &bman_res->blocks, 0);
+#endif
 	mutex_unlock(&bman->lock);
 err_free_res:
 	ttm_resource_fini(man, &bman_res->base);
@@ -141,7 +146,11 @@ static void i915_ttm_buddy_man_free(struct ttm_resource_manager *man,
 	struct i915_ttm_buddy_manager *bman = to_buddy_manager(man);
 
 	mutex_lock(&bman->lock);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+	drm_buddy_free_list(&bman->mm, &bman_res->blocks);
+#else
 	drm_buddy_free_list(&bman->mm, &bman_res->blocks, 0);
+#endif
 	bman->visible_avail += bman_res->used_visible_size;
 	mutex_unlock(&bman->lock);
 
@@ -345,7 +354,11 @@ int i915_ttm_buddy_man_fini(struct ttm_device *bdev, unsigned int type)
 	ttm_set_driver_manager(bdev, type, NULL);
 
 	mutex_lock(&bman->lock);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+	drm_buddy_free_list(mm, &bman->reserved);
+#else
 	drm_buddy_free_list(mm, &bman->reserved, 0);
+#endif
 	drm_buddy_fini(mm);
 	bman->visible_avail += bman->visible_reserved;
 	WARN_ON_ONCE(bman->visible_avail != bman->visible_size);

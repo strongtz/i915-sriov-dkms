@@ -4261,7 +4261,11 @@ intel_dp_mst_detect(struct intel_dp *intel_dp)
 	enum drm_dp_mst_mode sink_mst_mode;
 	enum drm_dp_mst_mode mst_detect;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+	sink_mst_mode = drm_dp_read_mst_cap_compat(&intel_dp->aux, intel_dp->dpcd);
+#else
 	sink_mst_mode = drm_dp_read_mst_cap(&intel_dp->aux, intel_dp->dpcd);
+#endif
 
 	mst_detect = intel_dp_mst_mode_choose(intel_dp, sink_mst_mode);
 

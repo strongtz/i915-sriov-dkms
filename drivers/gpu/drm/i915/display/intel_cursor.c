@@ -3,6 +3,7 @@
  * Copyright © 2020 Intel Corporation
  */
 #include <linux/kernel.h>
+#include <linux/version.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic_uapi.h>
@@ -952,6 +953,7 @@ static const struct drm_plane_funcs intel_cursor_plane_funcs = {
 	.format_mod_supported = intel_cursor_format_mod_supported,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
 static void intel_cursor_add_size_hints_property(struct intel_plane *plane)
 {
 	struct drm_i915_private *i915 = to_i915(plane->base.dev);
@@ -973,6 +975,7 @@ static void intel_cursor_add_size_hints_property(struct intel_plane *plane)
 
 	drm_plane_add_size_hints_property(&plane->base, hints, num_hints);
 }
+#endif
 
 struct intel_plane *
 intel_cursor_plane_create(struct drm_i915_private *dev_priv,
@@ -1041,7 +1044,9 @@ intel_cursor_plane_create(struct drm_i915_private *dev_priv,
 						   DRM_MODE_ROTATE_0 |
 						   DRM_MODE_ROTATE_180);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)
 	intel_cursor_add_size_hints_property(cursor);
+#endif
 
 	zpos = DISPLAY_RUNTIME_INFO(dev_priv)->num_sprites[pipe] + 1;
 	drm_plane_create_zpos_immutable_property(&cursor->base, zpos);

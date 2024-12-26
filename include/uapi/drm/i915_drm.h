@@ -4,6 +4,23 @@
 #ifndef _BACKPORT_UAPI_DRM_I915_DRM_H
 #define _BACKPORT_UAPI_DRM_I915_DRM_H
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+/*
+ * Query if kernel allows marking a context to send a Freq hint to SLPC. This
+ * will enable use of the strategies allowed by the SLPC algorithm.
+ */
+#define I915_PARAM_HAS_CONTEXT_FREQ_HINT	59
+
+/*
+ * I915_CONTEXT_PARAM_LOW_LATENCY:
+ *
+ * Mark this context as a low latency workload which requires aggressive GT
+ * frequency scaling. Use I915_PARAM_HAS_CONTEXT_FREQ_HINT to check if the kernel
+ * supports this per context flag.
+ */
+#define I915_CONTEXT_PARAM_LOW_LATENCY		0xe
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 /*
  * I915_CONTEXT_PARAM_CONTEXT_IMAGE:

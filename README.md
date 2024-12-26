@@ -1,4 +1,4 @@
-# Linux i915 driver (dkms module) with SR-IOV support for linux 6.11-6.12
+# Linux i915 driver (dkms module) with SR-IOV support for linux 6.9-6.12
 
 This repo is a code snapshot of the i915 module from https://github.com/intel/mainline-tracking/tree/linux/v6.12 and will randomly merge patches from the linux-stable tree.
 
