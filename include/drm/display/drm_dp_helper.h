@@ -4,6 +4,13 @@
 #ifndef _BACKPORT_DRM_DISPLAY_DRM_DP_HELPER_H
 #define _BACKPORT_DRM_DISPLAY_DRM_DP_HELPER_H
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+void drm_dp_vsc_sdp_log_compat(struct drm_printer *p, const struct drm_dp_vsc_sdp *vsc); // BACKPORT_COMPAT
+int drm_dp_max_dprx_data_rate(int max_link_rate, int max_lanes);
+ssize_t drm_dp_vsc_sdp_pack(const struct drm_dp_vsc_sdp *vsc,
+			    struct dp_sdp *sdp);
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 /**
  * struct drm_dp_as_sdp - drm DP Adaptive Sync SDP

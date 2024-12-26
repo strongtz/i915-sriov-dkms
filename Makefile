@@ -10,8 +10,8 @@ ccflags-y += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
 				-DCONFIG_COMPAT -DCONFIG_PERF_EVENTS -DCONFIG_PCI_IOV \
 				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
 				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP \
-				-DCONFIG_HWMON -DCONFIG_DRM_I915_DP_TUNNEL -DCONFIG_DRM_I915_CAPTURE_ERROR \
-				-DCONFIG_DRM_I915_GVT -DI915
+				-DCONFIG_HWMON -DCONFIG_DRM_I915_CAPTURE_ERROR -DCONFIG_DRM_I915_GVT \
+				-DI915
 
 KBUILD_MODPOST_WARN = 1
 
@@ -414,6 +414,8 @@ include $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/gvt/Makefile
 # compat backports
 
 compat-y += \
+	compat/backport-6.9.o \
+	compat/backport-6.9/drm_dp_tunnel.o \
 	compat/backport-6.10.o \
 	compat/backport-6.11.o \
 	compat/backport-6.12.o 

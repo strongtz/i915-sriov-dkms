@@ -4,6 +4,7 @@
  */
 
 #include <linux/sort.h>
+#include <linux/version.h>
 
 #include "i915_drv.h"
 
@@ -122,7 +123,11 @@ static int __live_idle_pulse(struct intel_engine_cs *engine,
 	GEM_BUG_ON(!llist_empty(&engine->barrier_tasks));
 
 	if (engine_sync_barrier(engine)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		struct drm_printer m = drm_err_printer("pulse");
+#else
 		struct drm_printer m = drm_err_printer(&engine->i915->drm, "pulse");
+#endif
 
 		drm_printf(&m, "%s: no heartbeat pulse?\n", engine->name);
 		intel_engine_dump(engine, &m, "%s", engine->name);
@@ -136,7 +141,11 @@ static int __live_idle_pulse(struct intel_engine_cs *engine,
 	pulse_unlock_wait(p); /* synchronize with the retirement callback */
 
 	if (!i915_active_is_idle(&p->active)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		struct drm_printer m = drm_err_printer("pulse");
+#else
 		struct drm_printer m = drm_err_printer(&engine->i915->drm, "pulse");
+#endif
 
 		drm_printf(&m, "%s: heartbeat pulse did not flush idle tasks\n",
 			   engine->name);

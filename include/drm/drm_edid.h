@@ -1,8 +1,8 @@
 #include <linux/version.h>
 #include_next <drm/drm_edid.h>
 
-#ifndef _BACKPORT_DRM_EDID_H
-#define _BACKPORT_DRM_EDID_H
+#ifndef _BACKPORT_DRM_DRM_EDID_H
+#define _BACKPORT_DRM_DRM_EDID_H
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 struct drm_edid_product_id {

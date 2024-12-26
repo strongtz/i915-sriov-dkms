@@ -31,6 +31,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_dp_helper.h>
 #include <drm/display/drm_dp_tunnel.h>
@@ -4941,9 +4942,17 @@ pipe_config_dp_vsc_sdp_mismatch(struct drm_printer *p, bool fastset,
 	pipe_config_mismatch(p, fastset, crtc, name, "dp sdp");
 
 	drm_printf(p, "expected:\n");
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+	drm_dp_vsc_sdp_log_compat(p, a);
+#else
 	drm_dp_vsc_sdp_log(p, a);
+#endif
 	drm_printf(p, "found:\n");
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+	drm_dp_vsc_sdp_log_compat(p, b);
+#else
 	drm_dp_vsc_sdp_log(p, b);
+#endif
 }
 
 static void
@@ -4955,11 +4964,19 @@ pipe_config_dp_as_sdp_mismatch(struct drm_i915_private *i915,
 	struct drm_printer p;
 
 	if (fastset) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		p = drm_debug_printer(NULL);
+#else
 		p = drm_dbg_printer(&i915->drm, DRM_UT_KMS, NULL);
+#endif
 
 		drm_printf(&p, "fastset requirement not met in %s dp sdp\n", name);
 	} else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		p = drm_err_printer(NULL);
+#else
 		p = drm_err_printer(&i915->drm, NULL);
+#endif
 
 		drm_printf(&p, "mismatch in %s dp sdp\n", name);
 	}
@@ -5058,9 +5075,17 @@ intel_pipe_config_compare(const struct intel_crtc_state *current_config,
 	bool ret = true;
 
 	if (fastset)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		p = drm_debug_printer(NULL);
+#else
 		p = drm_dbg_printer(&dev_priv->drm, DRM_UT_KMS, NULL);
+#endif
 	else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		p = drm_err_printer(NULL);
+#else
 		p = drm_err_printer(&dev_priv->drm, NULL);
+#endif
 
 #define PIPE_CONF_CHECK_X(name) do { \
 	if (current_config->name != pipe_config->name) { \

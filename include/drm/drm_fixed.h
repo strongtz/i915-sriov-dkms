@@ -1,8 +1,8 @@
 #include <linux/version.h>
 #include_next <drm/drm_fixed.h>
 
-#ifndef _BACKPORT_DRM_FIXED_H
-#define _BACKPORT_DRM_FIXED_H
+#ifndef _BACKPORT_DRM_DRM_FIXED_H
+#define _BACKPORT_DRM_DRM_FIXED_H
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
 static inline int fxp_q4_from_int(int val_int)

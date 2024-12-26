@@ -3,6 +3,8 @@
  * Copyright © 2022 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_edid.h>
 #include <drm/drm_eld.h>
 
@@ -196,7 +198,11 @@ void intel_crtc_state_dump(const struct intel_crtc_state *pipe_config,
 	if (!drm_debug_enabled(DRM_UT_KMS))
 		return;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+	p = drm_debug_printer(NULL);
+#else
 	p = drm_dbg_printer(&i915->drm, DRM_UT_KMS, NULL);
+#endif
 
 	drm_printf(&p, "[CRTC:%d:%s] enable: %s [%s]\n",
 		   crtc->base.base.id, crtc->base.name,
@@ -287,7 +293,11 @@ void intel_crtc_state_dump(const struct intel_crtc_state *pipe_config,
 		intel_dump_infoframe(i915, &pipe_config->infoframes.drm);
 	if (pipe_config->infoframes.enable &
 	    intel_hdmi_infoframe_enable(DP_SDP_VSC))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		drm_dp_vsc_sdp_log_compat(&p, &pipe_config->infoframes.vsc);
+#else
 		drm_dp_vsc_sdp_log(&p, &pipe_config->infoframes.vsc);
+#endif
 	if (pipe_config->infoframes.enable &
 	    intel_hdmi_infoframe_enable(DP_SDP_ADAPTIVE_SYNC))
 		drm_dp_as_sdp_log(&p, &pipe_config->infoframes.as_sdp);

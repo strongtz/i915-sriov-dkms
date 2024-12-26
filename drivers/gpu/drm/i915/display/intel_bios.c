@@ -26,6 +26,7 @@
  */
 
 #include <linux/firmware.h>
+#include <linux/version.h>
 
 #include <drm/display/drm_dp_helper.h>
 #include <drm/display/drm_dsc_helper.h>
@@ -672,7 +673,11 @@ static int pnpid_get_panel_type(struct intel_display *display,
 	product_id_nodate.week_of_manufacture = 0;
 	product_id_nodate.year_of_manufacture = 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+	p = drm_debug_printer("EDID");
+#else
 	p = drm_dbg_printer(display->drm, DRM_UT_KMS, "EDID");
+#endif
 	drm_edid_print_product_id(&p, &product_id, true);
 
 	ptrs = bdb_find_section(display, BDB_LFP_DATA_PTRS);
@@ -899,7 +904,11 @@ parse_lfp_data(struct intel_display *display,
 
 	pnp_id = get_lfp_pnp_id(data, ptrs, panel_type);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+	p = drm_debug_printer("Panel");
+#else
 	p = drm_dbg_printer(display->drm, DRM_UT_KMS, "Panel");
+#endif
 	drm_edid_print_product_id(&p, pnp_id, false);
 
 	tail = get_lfp_data_tail(data, ptrs);

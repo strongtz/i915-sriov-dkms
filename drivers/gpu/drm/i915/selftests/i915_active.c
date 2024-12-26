@@ -6,6 +6,7 @@
 
 #include <linux/kref.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include "gem/i915_gem_pm.h"
 #include "gt/intel_gt.h"
@@ -156,7 +157,11 @@ static int live_active_wait(void *arg)
 
 	__i915_active_wait(&active->base, TASK_UNINTERRUPTIBLE);
 	if (!READ_ONCE(active->retired)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		struct drm_printer p = drm_err_printer(__func__);
+#else
 		struct drm_printer p = drm_err_printer(&i915->drm, __func__);
+#endif
 
 		drm_printf(&p, "i915_active not retired after waiting!\n");
 		i915_active_print(&active->base, &p);
@@ -189,7 +194,11 @@ static int live_active_retire(void *arg)
 		err = -EIO;
 
 	if (!READ_ONCE(active->retired)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+		struct drm_printer p = drm_err_printer(__func__);
+#else
 		struct drm_printer p = drm_err_printer(&i915->drm, __func__);
+#endif
 
 		drm_printf(&p, "i915_active not retired after flushing!\n");
 		i915_active_print(&active->base, &p);

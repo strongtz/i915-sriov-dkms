@@ -7,6 +7,8 @@
  * details here.
  */
 
+#include <linux/version.h>
+
 #include <linux/vga_switcheroo.h>
 #include <acpi/video.h>
 #include <drm/display/drm_dp_mst_helper.h>
@@ -528,8 +530,12 @@ int intel_display_driver_probe(struct drm_i915_private *i915)
 void intel_display_driver_register(struct drm_i915_private *i915)
 {
 	struct intel_display *display = &i915->display;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+	struct drm_printer p = drm_debug_printer("i915 display info:");
+#else
 	struct drm_printer p = drm_dbg_printer(&i915->drm, DRM_UT_KMS,
 					       "i915 display info:");
+#endif
 
 	if (!HAS_DISPLAY(i915))
 		return;

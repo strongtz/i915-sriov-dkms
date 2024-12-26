@@ -4,6 +4,22 @@
 #ifndef _BACKPORT_UAPI_DRM_I915_DRM_H
 #define _BACKPORT_UAPI_DRM_I915_DRM_H
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+/**
+ * struct drm_i915_query_guc_submission_version - query GuC submission interface version
+ */
+struct drm_i915_query_guc_submission_version {
+	/** @branch: Firmware branch version. */
+	__u32 branch;
+	/** @major: Firmware major version. */
+	__u32 major;
+	/** @minor: Firmware minor version. */
+	__u32 minor;
+	/** @patch: Firmware patch version. */
+	__u32 patch;
+};
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
 /*
  * Query if kernel allows marking a context to send a Freq hint to SLPC. This

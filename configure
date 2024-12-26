@@ -12,7 +12,7 @@ cat <<EOF > "$KBUILD_EXTMOD/include/config.h"
 
 EOF
 
-for symbol_test in "$KBUILD_EXTMOD"/scripts/*.c
+for symbol_test in "$KBUILD_EXTMOD"/config/*.c
 do
   $CC $CONFIGURE_CFLAGS -c "$symbol_test" -o /dev/null > /dev/null 2>&1
   if [ $? -eq 0 ]; then

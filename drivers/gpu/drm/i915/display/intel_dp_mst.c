@@ -1305,9 +1305,15 @@ static void intel_mst_enable_dp(struct intel_atomic_state *state,
 	if (first_mst_stream)
 		intel_ddi_wait_for_fec_status(encoder, pipe_config, true);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0) || defined(_CONFIGURE_DRM_DP_ADD_PAYLOAD_PART2_VERSION) && _CONFIGURE_DRM_DP_ADD_PAYLOAD_PART2_VERSION >= KERNEL_VERSION(6, 10, 0)
 	ret = drm_dp_add_payload_part2(&intel_dp->mst_mgr,
 				       drm_atomic_get_mst_payload_state(mst_state,
 									connector->port));
+#else
+	ret = drm_dp_add_payload_part2(&intel_dp->mst_mgr, &state->base,
+				       drm_atomic_get_mst_payload_state(mst_state,
+									connector->port));
+#endif
 	if (ret < 0)
 		intel_dp_queue_modeset_retry_for_link(state, &dig_port->base, pipe_config);
 
