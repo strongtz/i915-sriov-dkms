@@ -2,7 +2,7 @@
 /*
  * Copyright © 2023 Intel Corporation
  */
-
+#include <linux/version.h>
 #include <drm/i915_sriov.h>
 
 #include "i915_sriov.h"
@@ -1107,7 +1107,11 @@ int i915_sriov_pause_vf(struct pci_dev *pdev, unsigned int vfid)
 
 	return i915_sriov_pf_pause_vf(i915, vfid);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_pause_vf, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_pause_vf, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_resume_vf - Resume VF.
@@ -1128,7 +1132,11 @@ int i915_sriov_resume_vf(struct pci_dev *pdev, unsigned int vfid)
 
 	return i915_sriov_pf_resume_vf(i915, vfid);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_resume_vf, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_resume_vf, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_wait_vf_flr_done - Wait for VF FLR completion.
@@ -1159,7 +1167,11 @@ int i915_sriov_wait_vf_flr_done(struct pci_dev *pdev, unsigned int vfid)
 
 	return 0;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_wait_vf_flr_done, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_wait_vf_flr_done, "I915_SRIOV_NS");
+#endif
 
 static struct intel_gt *
 sriov_to_gt(struct pci_dev *pdev, unsigned int tile)
@@ -1208,7 +1220,11 @@ i915_sriov_ggtt_size(struct pci_dev *pdev, unsigned int vfid, unsigned int tile)
 
 	return size;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_size, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_size, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_ggtt_save - Save VF GGTT.
@@ -1238,7 +1254,11 @@ ssize_t i915_sriov_ggtt_save(struct pci_dev *pdev, unsigned int vfid, unsigned i
 
 	return intel_iov_state_save_ggtt(&gt->iov, vfid, buf, size);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_save, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_save, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_ggtt_load - Load VF GGTT.
@@ -1267,7 +1287,11 @@ i915_sriov_ggtt_load(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
 
 	return intel_iov_state_restore_ggtt(&gt->iov, vfid, buf, size);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_load, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_load, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_fw_state_size - Get size needed to store GuC FW state.
@@ -1293,7 +1317,11 @@ i915_sriov_fw_state_size(struct pci_dev *pdev, unsigned int vfid, unsigned int t
 
 	return ret;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_size, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_size, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_fw_state_save - Save GuC FW state.
@@ -1322,7 +1350,11 @@ i915_sriov_fw_state_save(struct pci_dev *pdev, unsigned int vfid, unsigned int t
 
 	return ret;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_save, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_save, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_fw_state_load - Load GuC FW state.
@@ -1348,7 +1380,11 @@ i915_sriov_fw_state_load(struct pci_dev *pdev, unsigned int vfid, unsigned int t
 
 	return intel_iov_state_store_guc_migration_state(&gt->iov, vfid, buf, size);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_load, I915_SRIOV_NS);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_load, "I915_SRIOV_NS");
+#endif
 
 /**
  * i915_sriov_pf_clear_vf - Unprovision VF.

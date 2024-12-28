@@ -3,6 +3,7 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <linux/version.h>
 #include <drm/ttm/ttm_tt.h>
 
 #include "i915_deps.h"
@@ -624,7 +625,11 @@ int i915_ttm_move(struct ttm_buffer_object *bo, bool evict,
 
 	/* Populate ttm with pages if needed. Typically system memory. */
 	if (ttm && (dst_man->use_tt || (ttm->page_flags & TTM_TT_FLAG_SWAPPED))) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
+#else
+		ret = ttm_bo_populate(bo, ctx);
+#endif
 		if (ret)
 			return ret;
 	}

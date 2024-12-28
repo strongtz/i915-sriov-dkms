@@ -8,6 +8,7 @@
 #include <linux/highmem.h>
 #include <linux/dma-resv.h>
 #include <linux/module.h>
+#include <linux/version.h>
 
 #include <asm/smp.h>
 
@@ -16,7 +17,11 @@
 #include "i915_gem_object.h"
 #include "i915_scatterlist.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 MODULE_IMPORT_NS(DMA_BUF);
+#else
+MODULE_IMPORT_NS("DMA_BUF");
+#endif
 
 I915_SELFTEST_DECLARE(static bool force_different_devices;)
 
