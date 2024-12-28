@@ -23,12 +23,10 @@
  */
 
 #include <linux/kernel.h>
-#include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
 #include <linux/string.h>
-
-#include <asm/cpufeature.h>
-#endif
+#include <linux/cpufeature.h>
+#include <linux/bug.h>
+#include <linux/build_bug.h>
 #include <asm/fpu/api.h>
 
 #include "i915_memcpy.h"

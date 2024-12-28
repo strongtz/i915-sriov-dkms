@@ -4,12 +4,20 @@
  */
 
 #include "i915_drv.h"
-#include "i915_reg.h"
 
 #include "intel_de.h"
 #include "intel_display.h"
 #include "intel_dkl_phy.h"
 #include "intel_dkl_phy_regs.h"
+
+/**
+ * intel_dkl_phy_init - initialize Dekel PHY
+ * @i915: i915 device instance
+ */
+void intel_dkl_phy_init(struct drm_i915_private *i915)
+{
+	spin_lock_init(&i915->display.dkl.phy_lock);
+}
 
 static void
 dkl_phy_set_hip_idx(struct drm_i915_private *i915, struct intel_dkl_phy_reg reg)

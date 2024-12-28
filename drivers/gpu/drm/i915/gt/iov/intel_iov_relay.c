@@ -62,7 +62,7 @@ static struct device *relay_to_dev(struct intel_iov_relay *relay)
 /*
  * How long should we wait for the response?
  * For default timeout use CONFIG_DRM_I915_HEARTBEAT_INTERVAL like CTB does.
- * If hearbeat interval is not enabled then wait forever.
+ * If heartbeat interval is not enabled then wait forever.
  */
 #define RELAY_TIMEOUT	(CONFIG_DRM_I915_HEARTBEAT_INTERVAL ?: MAX_SCHEDULE_TIMEOUT)
 
@@ -217,7 +217,7 @@ static int relay_send_success(struct intel_iov_relay *relay, u32 target,
  * @data: optional data
  *
  * This utility function will prepare success response message based on
- * given return data and and embed it in relay message for the GuC.
+ * given return data and embed it in relay message for the GuC.
  *
  * This function can only be used by driver running in SR-IOV PF mode.
  *
@@ -279,7 +279,7 @@ static int relay_send_failure(struct intel_iov_relay *relay, u32 target,
  * @err: errno code (must be < 0)
  *
  * This utility function will prepare failure response message based on
- * given error and hint and and embed it in relay message for the GuC.
+ * given error and hint and embed it in relay message for the GuC.
  *
  * This function can only be used by driver running in SR-IOV PF mode.
  *
@@ -307,7 +307,7 @@ int intel_iov_relay_reply_err_to_vf(struct intel_iov_relay *relay, u32 target,
  * @hint: additional optional hint
  *
  * This utility function will prepare failure response message based on
- * given error and hint and and embed it in relay message for the GuC.
+ * given error and hint and embed it in relay message for the GuC.
  *
  * This function can only be used by driver running in SR-IOV PF mode.
  *
@@ -405,8 +405,8 @@ unlink:
  * intel_iov_relay_send_to_vf - Send message to VF.
  * @relay: the Relay struct
  * @target: target VF number
- * @data: request payload data
- * @dat_len: length of the payload data (in dwords, can be 0)
+ * @msg: FIXME missing doc
+ * @len: FIXME missing doc
  * @buf: placeholder for the response message
  * @buf_size: size of the response message placeholder (in dwords)
  *

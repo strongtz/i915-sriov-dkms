@@ -20,7 +20,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-#include <linux/vmalloc.h>
+#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "i915_vgpu.h"
@@ -29,6 +29,7 @@
 #include "gt/intel_context.h"
 #include "gt/intel_ring.h"
 #include "gt/shmem_utils.h"
+#include <linux/vmalloc.h>
 
 /**
  * DOC: Intel GVT-g host support
@@ -42,7 +43,7 @@
  * To virtualize GPU resources GVT-g driver depends on hypervisor technology
  * e.g KVM/VFIO/mdev, Xen, etc. to provide resource access trapping capability
  * and be virtualized within GVT-g device module. More architectural design
- * doc is available on https://01.org/group/2230/documentation-list.
+ * doc is available on https://github.com/intel/gvt-linux/wiki.
  */
 
 static LIST_HEAD(intel_gvt_devices);
@@ -204,7 +205,11 @@ int intel_gvt_set_ops(const struct intel_vgpu_ops *ops)
 
 	return 0;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(intel_gvt_set_ops, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_gvt_set_ops, "I915_GVT");
+#endif
 
 void intel_gvt_clear_ops(const struct intel_vgpu_ops *ops)
 {
@@ -222,7 +227,11 @@ void intel_gvt_clear_ops(const struct intel_vgpu_ops *ops)
 	intel_gvt_ops = NULL;
 	mutex_unlock(&intel_gvt_mutex);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(intel_gvt_clear_ops, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_gvt_clear_ops, "I915_GVT");
+#endif
 
 /**
  * intel_gvt_init - initialize GVT components
@@ -284,40 +293,180 @@ void intel_gvt_resume(struct drm_i915_private *dev_priv)
  * Exported here so that the exports only get created when GVT support is
  * actually enabled.
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_gem_object_alloc, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_object_create_shmem, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_object_init, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_object_ggtt_pin_ww, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_object_pin_map, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_object_set_to_cpu_domain, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(__i915_gem_object_flush_map, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(__i915_gem_object_set_pages, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_gtt_insert, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_prime_export, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_init, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_backoff, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_fini, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_ppgtt_create, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_request_add, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_request_create, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_request_wait, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_reserve_fence, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_unreserve_fence, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(i915_vm_release, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(_i915_vma_move_to_active, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(intel_context_create, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(__intel_context_do_pin, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(__intel_context_do_unpin, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(intel_ring_begin, I915_GVT);
-EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_get, I915_GVT);
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_RUNTIME_PM)
-EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_put, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_alloc, "I915_GVT");
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_create_shmem, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_create_shmem, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_init, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_init, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_ggtt_pin_ww, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_ggtt_pin_ww, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_pin_map, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_pin_map, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_set_to_cpu_domain, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_object_set_to_cpu_domain, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(__i915_gem_object_flush_map, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(__i915_gem_object_flush_map, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(__i915_gem_object_set_pages, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(__i915_gem_object_set_pages, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_gtt_insert, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_gtt_insert, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_prime_export, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_prime_export, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_init, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_init, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_backoff, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_backoff, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_fini, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_gem_ww_ctx_fini, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_ppgtt_create, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_ppgtt_create, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_request_add, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_request_add, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_request_create, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_request_create, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_request_wait, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_request_wait, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_reserve_fence, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_reserve_fence, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_unreserve_fence, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_unreserve_fence, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(i915_vm_release, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_vm_release, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(_i915_vma_move_to_active, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(_i915_vma_move_to_active, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(intel_context_create, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_context_create, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(__intel_context_do_pin, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(__intel_context_do_pin, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(__intel_context_do_unpin, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(__intel_context_do_unpin, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(intel_ring_begin, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_ring_begin, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_get, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_get, "I915_GVT");
+#endif
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_RUNTIME_PM)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_put, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_put, "I915_GVT");
+#endif
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_put_unchecked, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_runtime_pm_put_unchecked, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(intel_uncore_forcewake_for_reg, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_uncore_forcewake_for_reg, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(intel_uncore_forcewake_get, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_uncore_forcewake_get, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(intel_uncore_forcewake_put, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(intel_uncore_forcewake_put, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(shmem_pin_map, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(shmem_pin_map, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(shmem_unpin_map, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(shmem_unpin_map, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(__px_dma, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(__px_dma, "I915_GVT");
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_fence_ops, I915_GVT);
+#else
+EXPORT_SYMBOL_NS_GPL(i915_fence_ops, "I915_GVT");
+#endif

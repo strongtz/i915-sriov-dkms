@@ -8,8 +8,8 @@
 #include "gem/i915_gem_lmem.h"
 
 #include "i915_trace.h"
+#include "intel_gt.h"
 #include "intel_gtt.h"
-#include "intel_tlb.h"
 #include "gen6_ppgtt.h"
 #include "gen8_ppgtt.h"
 
@@ -99,7 +99,7 @@ void
 __set_pd_entry(struct i915_page_directory * const pd,
 	       const unsigned short idx,
 	       struct i915_page_table * const to,
-	       u64 (*encode)(const dma_addr_t, const unsigned int))
+	       u64 (*encode)(const dma_addr_t, const enum i915_cache_level))
 {
 	/* Each thread pre-pins the pd, and we may have a thread per pde. */
 	GEM_BUG_ON(atomic_read(px_used(pd)) > NALLOC * I915_PDES);
@@ -211,8 +211,7 @@ void ppgtt_unbind_vma(struct i915_address_space *vm,
 		return;
 
 	vm->clear_range(vm, vma_res->start, vma_res->vma_size);
-	if (vma_res->tlb)
-		vma_invalidate_tlb(vm, vma_res->tlb);
+	vma_invalidate_tlb(vm, vma_res->tlb);
 }
 
 static unsigned long pd_count(u64 size, int shift)

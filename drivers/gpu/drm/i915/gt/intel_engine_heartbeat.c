@@ -3,6 +3,8 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include "i915_drv.h"
 #include "i915_request.h"
 
@@ -96,7 +98,7 @@ static void heartbeat_commit(struct i915_request *rq,
 static void show_heartbeat(const struct i915_request *rq,
 			   struct intel_engine_cs *engine)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,9,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
 	struct drm_printer p = drm_debug_printer("heartbeat");
 #else
 	struct drm_printer p =
@@ -193,7 +195,7 @@ static void heartbeat(struct work_struct *wrk)
 			 * low latency and no jitter] the chance to naturally
 			 * complete before being preempted.
 			 */
-			attr.priority = 0;
+			attr.priority = I915_PRIORITY_NORMAL;
 			if (rq->sched.attr.priority >= attr.priority)
 				attr.priority = I915_PRIORITY_HEARTBEAT;
 			if (rq->sched.attr.priority >= attr.priority)
@@ -294,6 +296,9 @@ static int __intel_engine_pulse(struct intel_engine_cs *engine)
 
 	heartbeat_commit(rq, &attr);
 	GEM_BUG_ON(rq->sched.attr.priority < I915_PRIORITY_BARRIER);
+
+	/* Ensure the forced pulse gets a full period to execute */
+	next_heartbeat(engine);
 
 	return 0;
 }

@@ -9,7 +9,6 @@
 
 #include <linux/mm_types.h>
 #include <linux/types.h>
-#include <linux/version.h>
 
 struct drm_device;
 struct drm_file;
@@ -30,7 +29,5 @@ void i915_gem_object_release_mmap_gtt(struct drm_i915_gem_object *obj);
 
 void i915_gem_object_runtime_pm_release_mmap_offset(struct drm_i915_gem_object *obj);
 void i915_gem_object_release_mmap_offset(struct drm_i915_gem_object *obj);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 int i915_gem_fb_mmap(struct drm_i915_gem_object *obj, struct vm_area_struct *vma);
-#endif
 #endif

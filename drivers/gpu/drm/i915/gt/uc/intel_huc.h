@@ -53,6 +53,7 @@ struct intel_huc {
 	bool loaded_via_gsc;
 };
 
+int intel_huc_sanitize(struct intel_huc *huc);
 void intel_huc_init_early(struct intel_huc *huc);
 int intel_huc_init(struct intel_huc *huc);
 void intel_huc_fini(struct intel_huc *huc);
@@ -62,18 +63,13 @@ int intel_huc_wait_for_auth_complete(struct intel_huc *huc,
 				     enum intel_huc_authentication_type type);
 bool intel_huc_is_authenticated(struct intel_huc *huc,
 				enum intel_huc_authentication_type type);
+bool intel_huc_is_fully_authenticated(struct intel_huc *huc);
 int intel_huc_check_status(struct intel_huc *huc);
 void intel_huc_update_auth_status(struct intel_huc *huc);
 int intel_huc_fw_load_and_auth_via_gsc_cs(struct intel_huc *huc);
 
-void intel_huc_register_gsc_notifier(struct intel_huc *huc, struct bus_type *bus);
-void intel_huc_unregister_gsc_notifier(struct intel_huc *huc, struct bus_type *bus);
-
-static inline int intel_huc_sanitize(struct intel_huc *huc)
-{
-	intel_uc_fw_sanitize(&huc->fw);
-	return 0;
-}
+void intel_huc_register_gsc_notifier(struct intel_huc *huc, const struct bus_type *bus);
+void intel_huc_unregister_gsc_notifier(struct intel_huc *huc, const struct bus_type *bus);
 
 static inline bool intel_huc_is_supported(const struct intel_huc *huc)
 {
@@ -89,7 +85,7 @@ static inline bool intel_huc_is_used(const struct intel_huc *huc)
 {
 	GEM_BUG_ON(__intel_uc_fw_status(&huc->fw) == INTEL_UC_FIRMWARE_SELECTED);
 	return intel_uc_fw_is_available(&huc->fw) ||
-	       intel_uc_fw_is_preloaded(&huc->fw);
+		intel_uc_fw_is_preloaded(&huc->fw);
 }
 
 static inline bool intel_huc_is_loaded_by_gsc(const struct intel_huc *huc)

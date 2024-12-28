@@ -69,8 +69,6 @@ int intel_iov_provisioning_print_dbs(struct intel_iov *iov, struct drm_printer *
 
 int intel_iov_provisioning_print_available_ggtt(struct intel_iov *iov, struct drm_printer *p);
 
-#if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
 int intel_iov_provisioning_force_vgt_mode(struct intel_iov *iov);
-#endif /* CONFIG_DRM_I915_SELFTEST */
 
 #endif /* __INTEL_IOV_PROVISIONING_H__ */

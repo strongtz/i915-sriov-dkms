@@ -5,7 +5,7 @@
 
 #include "gt/intel_gsc.h"
 #include "gt/intel_gt.h"
-#include "intel_gsc_meu_headers.h"
+#include "intel_gsc_binary_headers.h"
 #include "intel_gsc_uc_heci_cmd_submit.h"
 #include "intel_huc.h"
 #include "intel_huc_fw.h"
@@ -27,7 +27,6 @@ struct mtl_huc_load_msg_out {
 int intel_huc_fw_load_and_auth_via_gsc_cs(struct intel_huc *huc)
 {
 	struct intel_gt *gt = huc_to_gt(huc);
-	struct drm_i915_private *i915 = gt->i915;
 	struct drm_i915_gem_object *obj;
 	struct mtl_huc_load_msg_in *msg_in;
 	struct mtl_huc_load_msg_out *msg_out;
@@ -43,7 +42,7 @@ int intel_huc_fw_load_and_auth_via_gsc_cs(struct intel_huc *huc)
 	pkt_offset = i915_ggtt_offset(huc->heci_pkt);
 
 	pkt_vaddr = i915_gem_object_pin_map_unlocked(obj,
-						     i915_coherent_map_type(i915, obj, true));
+						     intel_gt_coherent_map_type(gt, obj, true));
 	if (IS_ERR(pkt_vaddr))
 		return PTR_ERR(pkt_vaddr);
 
@@ -51,7 +50,7 @@ int intel_huc_fw_load_and_auth_via_gsc_cs(struct intel_huc *huc)
 	msg_out = pkt_vaddr + SZ_4K;
 
 	intel_gsc_uc_heci_cmd_emit_mtl_header(&msg_in->header,
-					      GSC_HECI_MEADDRESS_PXP,
+					      HECI_MEADDRESS_PXP,
 					      sizeof(*msg_in), 0);
 
 	msg_in->huc_in.header.api_version = PXP_APIVER(4, 3);
@@ -59,7 +58,7 @@ int intel_huc_fw_load_and_auth_via_gsc_cs(struct intel_huc *huc)
 	msg_in->huc_in.header.status = 0;
 	msg_in->huc_in.header.buffer_len = sizeof(msg_in->huc_in) -
 					   sizeof(msg_in->huc_in.header);
-	msg_in->huc_in.huc_base_address = huc->fw.dummy.start;
+	msg_in->huc_in.huc_base_address = huc->fw.vma_res.start;
 
 	do {
 		err = intel_gsc_uc_heci_cmd_submit_packet(&gt->uc.gsc,
@@ -70,7 +69,7 @@ int intel_huc_fw_load_and_auth_via_gsc_cs(struct intel_huc *huc)
 			goto out_unpin;
 		}
 
-		if (msg_out->header.flags & GSC_HECI_FLAG_MSG_PENDING) {
+		if (msg_out->header.flags & GSC_OUTFLAG_MSG_PENDING) {
 			msg_in->header.gsc_message_handle = msg_out->header.gsc_message_handle;
 			err = -EBUSY;
 			msleep(50);
@@ -124,7 +123,6 @@ struct mtl_huc_auth_msg_out {
 int intel_huc_fw_auth_via_gsccs(struct intel_huc *huc)
 {
 	struct intel_gt *gt = huc_to_gt(huc);
-	struct drm_i915_private *i915 = gt->i915;
 	struct drm_i915_gem_object *obj;
 	struct mtl_huc_auth_msg_in *msg_in;
 	struct mtl_huc_auth_msg_out *msg_out;
@@ -140,15 +138,15 @@ int intel_huc_fw_auth_via_gsccs(struct intel_huc *huc)
 	pkt_offset = i915_ggtt_offset(huc->heci_pkt);
 
 	pkt_vaddr = i915_gem_object_pin_map_unlocked(obj,
-						     i915_coherent_map_type(i915, obj, true));
+						     intel_gt_coherent_map_type(gt, obj, true));
 	if (IS_ERR(pkt_vaddr))
 		return PTR_ERR(pkt_vaddr);
 
 	msg_in = pkt_vaddr;
-	msg_out = pkt_vaddr + SZ_4K;
+	msg_out = pkt_vaddr + PXP43_HUC_AUTH_INOUT_SIZE;
 
 	intel_gsc_uc_heci_cmd_emit_mtl_header(&msg_in->header,
-					      GSC_HECI_MEADDRESS_PXP,
+					      HECI_MEADDRESS_PXP,
 					      sizeof(*msg_in), 0);
 
 	msg_in->huc_in.header.api_version = PXP_APIVER(4, 3);
@@ -156,19 +154,20 @@ int intel_huc_fw_auth_via_gsccs(struct intel_huc *huc)
 	msg_in->huc_in.header.status = 0;
 	msg_in->huc_in.header.buffer_len = sizeof(msg_in->huc_in) -
 					   sizeof(msg_in->huc_in.header);
-	msg_in->huc_in.huc_base_address = huc->fw.dummy.start;
+	msg_in->huc_in.huc_base_address = huc->fw.vma_res.start;
 	msg_in->huc_in.huc_size = huc->fw.obj->base.size;
 
 	do {
 		err = intel_gsc_uc_heci_cmd_submit_packet(&gt->uc.gsc,
 							  pkt_offset, sizeof(*msg_in),
-							  pkt_offset + SZ_4K, SZ_4K);
+							  pkt_offset + PXP43_HUC_AUTH_INOUT_SIZE,
+							  PXP43_HUC_AUTH_INOUT_SIZE);
 		if (err) {
 			huc_err(huc, "failed to submit GSC request to auth: %d\n", err);
 			goto out_unpin;
 		}
 
-		if (msg_out->header.flags & GSC_HECI_FLAG_MSG_PENDING) {
+		if (msg_out->header.flags & GSC_OUTFLAG_MSG_PENDING) {
 			msg_in->header.gsc_message_handle = msg_out->header.gsc_message_handle;
 			err = -EBUSY;
 			msleep(50);
@@ -203,48 +202,61 @@ out_unpin:
 	return err;
 }
 
-static void get_version_from_meu_manifest(struct intel_uc_fw_ver *ver, const void *data)
+static bool css_valid(const void *data, size_t size)
 {
-	const struct intel_gsc_manifest_header *manifest = data;
+	const struct uc_css_header *css = data;
 
-	ver->major = manifest->fw_version.major;
-	ver->minor = manifest->fw_version.minor;
-	ver->patch = manifest->fw_version.hotfix;
+	if (unlikely(size < sizeof(struct uc_css_header)))
+		return false;
+
+	if (css->module_type != 0x6)
+		return false;
+
+	if (css->module_vendor != PCI_VENDOR_ID_INTEL)
+		return false;
+
+	return true;
 }
 
-static inline u32 entry_offset(const struct intel_gsc_cpt_directory_entry *entry)
+static inline u32 entry_offset(const struct intel_gsc_cpd_entry *entry)
 {
-	return entry->offset & INTEL_GSC_CPT_ENTRY_OFFSET_MASK;
+	return entry->offset & INTEL_GSC_CPD_ENTRY_OFFSET_MASK;
 }
 
-int intel_huc_fw_get_binary_info(struct intel_uc_fw *huc_fw, const void *data)
+int intel_huc_fw_get_binary_info(struct intel_uc_fw *huc_fw, const void *data, size_t size)
 {
 	struct intel_huc *huc = container_of(huc_fw, struct intel_huc, fw);
-	const struct intel_gsc_cpt_directory_header_v2 *header = data;
-	const struct intel_gsc_cpt_directory_entry *entry;
+	const struct intel_gsc_cpd_header_v2 *header = data;
+	const struct intel_gsc_cpd_entry *entry;
+	size_t min_size = sizeof(*header);
 	int i;
 
-	if (!huc_fw->is_meu_binary) {
-		huc_err(huc, "Invalid FW type for MEU parsing\n");
+	if (!huc_fw->has_gsc_headers) {
+		huc_err(huc, "Invalid FW type for GSC header parsing!\n");
 		return -EINVAL;
 	}
 
+	if (size < sizeof(*header)) {
+		huc_err(huc, "FW too small! %zu < %zu\n", size, min_size);
+		return -ENODATA;
+	}
+
 	/*
-	 * The meu HuC binary starts with a directory header, followed by a
-	 * series of entries. Each entry is identified by a name and points to
-	 * a specific section of the binary containing the relevant data.
-	 * The entries we're interested in are
+	 * The GSC-enabled HuC binary starts with a directory header, followed
+	 * by a series of entries. Each entry is identified by a name and
+	 * points to a specific section of the binary containing the relevant
+	 * data. The entries we're interested in are:
 	 * - "HUCP.man": points to the GSC manifest header for the HuC, which
 	 *               contains the version info.
 	 * - "huc_fw": points to the legacy-style binary that can be used for
-	 *             load via the DMA. This entry only exists on binaries for
-	 *             platform that support 2-step HuC load via dma and auth
-	 *             via GSC (like MTL).
+	 *             load via the DMA. This entry only contains a valid CSS
+	 *             on binaries for platforms that support 2-step HuC load
+	 *             via dma and auth via GSC (like MTL).
 	 *
 	 * --------------------------------------------------
-	 * [  intel_gsc_cpt_directory_header_v2             ]
+	 * [  intel_gsc_cpd_header_v2                       ]
 	 * --------------------------------------------------
-	 * [  intel_gsc_cpt_directory_entry[]               ]
+	 * [  intel_gsc_cpd_entry[]                         ]
 	 * [      entry1                                    ]
 	 * [      ...                                       ]
 	 * [      entryX                                    ]
@@ -261,7 +273,7 @@ int intel_huc_fw_get_binary_info(struct intel_uc_fw *huc_fw, const void *data)
 	 * --------------------------------------------------      |   |
 	 * [ intel_gsc_manifest_header                      ]<-----o   |
 	 * [  ...                                           ]          |
-	 * [  intel_gsc_meu_version fw_version              ]          |
+	 * [  intel_gsc_version fw_version                  ]          |
 	 * [  ...                                           ]          |
 	 * --------------------------------------------------          |
 	 *                                                             |
@@ -272,34 +284,44 @@ int intel_huc_fw_get_binary_info(struct intel_uc_fw *huc_fw, const void *data)
 	 * --------------------------------------------------
 	 */
 
-	if (header->header_marker != INTEL_GSC_CPT_HEADER_MARKER) {
-		huc_err(huc, "invalid marker for meu CPT header: 0x%08x!\n",
+	if (header->header_marker != INTEL_GSC_CPD_HEADER_MARKER) {
+		huc_err(huc, "invalid marker for CPD header: 0x%08x!\n",
 			header->header_marker);
 		return -EINVAL;
 	}
 
 	/* we only have binaries with header v2 and entry v1 for now */
 	if (header->header_version != 2 || header->entry_version != 1) {
-		huc_err(huc, "invalid meu CPT header/entry version %u:%u!\n",
+		huc_err(huc, "invalid CPD header/entry version %u:%u!\n",
 			header->header_version, header->entry_version);
 		return -EINVAL;
 	}
 
-	if (header->header_length < sizeof(struct intel_gsc_cpt_directory_header_v2)) {
-		huc_err(huc, "invalid meu CPT header length %u!\n",
+	if (header->header_length < sizeof(struct intel_gsc_cpd_header_v2)) {
+		huc_err(huc, "invalid CPD header length %u!\n",
 			header->header_length);
 		return -EINVAL;
+	}
+
+	min_size = header->header_length + sizeof(*entry) * header->num_of_entries;
+	if (size < min_size) {
+		huc_err(huc, "FW too small! %zu < %zu\n", size, min_size);
+		return -ENODATA;
 	}
 
 	entry = data + header->header_length;
 
 	for (i = 0; i < header->num_of_entries; i++, entry++) {
 		if (strcmp(entry->name, "HUCP.man") == 0)
-			get_version_from_meu_manifest(&huc_fw->file_selected.ver,
-						      data + entry_offset(entry));
+			intel_uc_fw_version_from_gsc_manifest(&huc_fw->file_selected.ver,
+							      data + entry_offset(entry));
 
-		if (strcmp(entry->name, "huc_fw") == 0)
-			huc_fw->dma_start_offset = entry_offset(entry);
+		if (strcmp(entry->name, "huc_fw") == 0) {
+			u32 offset = entry_offset(entry);
+
+			if (offset < size && css_valid(data + offset, size - offset))
+				huc_fw->dma_start_offset = offset;
+		}
 	}
 
 	return 0;

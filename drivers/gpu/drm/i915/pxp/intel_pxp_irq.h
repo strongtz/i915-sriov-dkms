@@ -9,7 +9,6 @@
 #include <linux/types.h>
 
 struct intel_pxp;
-struct intel_gt;
 
 #define GEN12_DISPLAY_PXP_STATE_TERMINATED_INTERRUPT BIT(1)
 #define GEN12_DISPLAY_APP_TERMINATED_PER_FW_REQ_INTERRUPT BIT(2)
@@ -24,8 +23,6 @@ struct intel_gt;
 void intel_pxp_irq_enable(struct intel_pxp *pxp);
 void intel_pxp_irq_disable(struct intel_pxp *pxp);
 void intel_pxp_irq_handler(struct intel_pxp *pxp, u16 iir);
-struct intel_gt *intel_pxp_get_irq_gt(struct intel_pxp *pxp);
-
 #else
 static inline void intel_pxp_irq_handler(struct intel_pxp *pxp, u16 iir)
 {
@@ -37,11 +34,6 @@ static inline void intel_pxp_irq_enable(struct intel_pxp *pxp)
 
 static inline void intel_pxp_irq_disable(struct intel_pxp *pxp)
 {
-}
-
-static inline struct intel_gt *intel_pxp_get_irq_gt(struct intel_pxp *pxp)
-{
-	return NULL;
 }
 #endif
 

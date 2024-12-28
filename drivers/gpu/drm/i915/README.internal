@@ -1,0 +1,12 @@
+This is the i915 client internal enabling tree.
+
+A full documentation including all known best-practices is
+available at:
+
+	  https://gfx-linux.intel.com
+
+Access to documentation is controlled by AGS's group
+"GFX Linux Documentation".
+
+For the current embargoed platforms, see the individual
+README.<platform> files.

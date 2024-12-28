@@ -17,8 +17,5 @@ struct i915_ppgtt *gen8_ppgtt_create(struct intel_gt *gt,
 u64 gen8_ggtt_pte_encode(dma_addr_t addr,
 			 unsigned int pat_index,
 			 u32 flags);
-u64 mtl_ggtt_pte_encode(dma_addr_t addr,
-			unsigned int pat_index,
-			u32 flags);
 
 #endif

@@ -7,6 +7,7 @@
 #include <linux/pagevec.h>
 #include <linux/shmem_fs.h>
 #include <linux/swap.h>
+#include <linux/version.h>
 
 #include <drm/drm_cache.h>
 
@@ -18,7 +19,6 @@
 #include "i915_scatterlist.h"
 #include "i915_trace.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 /*
  * Move folios to appropriate lru and release the batch, decrementing the
  * ref count of those folios.
@@ -60,44 +60,6 @@ void shmem_sg_free_table(struct sg_table *st, struct address_space *mapping,
 
 	sg_free_table(st);
 }
-#else
-/*
- * Move pages to appropriate lru and release the pagevec, decrementing the
- * ref count of those pages.
- */
-static void check_release_pagevec(struct pagevec *pvec)
-{
-	check_move_unevictable_pages(pvec);
-	__pagevec_release(pvec);
-	cond_resched();
-}
-
-void shmem_sg_free_table(struct sg_table *st, struct address_space *mapping,
-			 bool dirty, bool backup)
-{
-	struct sgt_iter sgt_iter;
-	struct pagevec pvec;
-	struct page *page;
-
-	mapping_clear_unevictable(mapping);
-
-	pagevec_init(&pvec);
-	for_each_sgt_page(page, sgt_iter, st) {
-		if (dirty)
-			set_page_dirty(page);
-
-		if (backup)
-			mark_page_accessed(page);
-
-		if (!pagevec_add(&pvec, page))
-			check_release_pagevec(&pvec);
-	}
-	if (pagevec_count(&pvec))
-		check_release_pagevec(&pvec);
-
-	sg_free_table(st);
-}
-#endif
 
 int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 			 size_t size, struct intel_memory_region *mr,
@@ -107,12 +69,7 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 	unsigned int page_count; /* restricted by sg_alloc_table */
 	unsigned long i;
 	struct scatterlist *sg;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,5,0)
-	struct page *page;
-	unsigned long last_pfn = 0;	/* suppress gcc warning */
-#else /* >= 6.5 */
 	unsigned long next_pfn = 0;	/* suppress gcc warning */
-#endif
 	gfp_t noreclaim;
 	int ret;
 
@@ -143,10 +100,8 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 	sg = st->sgl;
 	st->nents = 0;
 	for (i = 0; i < page_count; i++) {
-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,5,0)
 		struct folio *folio;
 		unsigned long nr_pages;
-#endif
 		const unsigned int shrink[] = {
 			I915_SHRINK_BOUND | I915_SHRINK_UNBOUND,
 			0,
@@ -155,7 +110,6 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 
 		do {
 			cond_resched();
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 			folio = shmem_read_folio_gfp(mapping, i, gfp);
 			if (!IS_ERR(folio))
 				break;
@@ -164,16 +118,6 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 				ret = PTR_ERR(folio);
 				goto err_sg;
 			}
-#else
-			page = shmem_read_mapping_page_gfp(mapping, i, gfp);
-			if (!IS_ERR(page))
-				break;
-
-			if (!*s) {
-				ret = PTR_ERR(page);
-				goto err_sg;
-			}
-#endif
 
 			i915_gem_shrink(NULL, i915, 2 * page_count, NULL, *s++);
 
@@ -208,7 +152,6 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 			}
 		} while (1);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,5,0)
 		nr_pages = min_t(unsigned long,
 				folio_nr_pages(folio), page_count - i);
 		if (!i ||
@@ -228,23 +171,6 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 
 		/* Check that the i965g/gm workaround works. */
 		GEM_BUG_ON(gfp & __GFP_DMA32 && next_pfn >= 0x00100000UL);
-#else
-		if (!i ||
-		    sg->length >= max_segment ||
-		    page_to_pfn(page) != last_pfn + 1) {
-			if (i)
-				sg = sg_next(sg);
-
-			st->nents++;
-			sg_set_page(sg, page, PAGE_SIZE, 0);
-		} else {
-			sg->length += PAGE_SIZE;
-		}
-		last_pfn = page_to_pfn(page);
-
-		/* Check that the i965g/gm workaround works. */
-		GEM_BUG_ON(gfp & __GFP_DMA32 && last_pfn >= 0x00100000UL);
-#endif
 	}
 	if (sg) /* loop terminated early; short sg table */
 		sg_mark_end(sg);
@@ -499,7 +425,12 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 	struct address_space *mapping = obj->base.filp->f_mapping;
 	const struct address_space_operations *aops = mapping->a_ops;
 	char __user *user_data = u64_to_user_ptr(arg->data_ptr);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	u64 remain, offset;
+#else
+	u64 remain;
+	loff_t pos;
+#endif
 	unsigned int pg;
 
 	/* Caller already validated user args */
@@ -532,15 +463,24 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 	 */
 
 	remain = arg->size;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	offset = arg->offset;
 	pg = offset_in_page(offset);
+#else
+	pos = arg->offset;
+	pg = offset_in_page(pos);
+#endif
 
 	do {
 		unsigned int len, unwritten;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		struct page *page;
+#else
+		struct folio *folio;
+#endif
 		void *data, *vaddr;
 		int err;
-		char c;
+		char __maybe_unused c;
 
 		len = PAGE_SIZE - pg;
 		if (len > remain)
@@ -555,19 +495,39 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 		if (err)
 			return err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		err = aops->write_begin(obj->base.filp, mapping, offset, len,
 					&page, &data);
+#else
+		err = aops->write_begin(obj->base.filp, mapping, pos, len,
+					&folio, &data);
+#endif
 		if (err < 0)
 			return err;
 
-		vaddr = kmap_atomic(page);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
+		vaddr = kmap_local_page(page);
+#else
+		vaddr = kmap_local_folio(folio, offset_in_folio(folio, pos));
+#endif
+		pagefault_disable();
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		unwritten = __copy_from_user_inatomic(vaddr + pg,
 						      user_data,
 						      len);
-		kunmap_atomic(vaddr);
+#else
+		unwritten = __copy_from_user_inatomic(vaddr, user_data, len);
+#endif
+		pagefault_enable();
+		kunmap_local(vaddr);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		err = aops->write_end(obj->base.filp, mapping, offset, len,
 				      len - unwritten, page, data);
+#else
+		err = aops->write_end(obj->base.filp, mapping, pos, len,
+				      len - unwritten, folio, data);
+#endif
 		if (err < 0)
 			return err;
 
@@ -577,7 +537,11 @@ shmem_pwrite(struct drm_i915_gem_object *obj,
 
 		remain -= len;
 		user_data += len;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		offset += len;
+#else
+		pos += len;
+#endif
 		pg = 0;
 	} while (remain);
 
@@ -687,9 +651,11 @@ static int shmem_object_init(struct intel_memory_region *mem,
 	obj->read_domains = I915_GEM_DOMAIN_CPU;
 
 	/*
-	 * Soft-pinned buffers need to be 1-way coherent from MTL onward
-	 * because GPU is no longer snooping CPU cache by default. Make it
-	 * default setting and let others to modify as needed later
+	 * MTL doesn't snoop CPU cache by default for GPU access (namely
+	 * 1-way coherency). However some UMD's are currently depending on
+	 * that. Make 1-way coherent the default setting for MTL. A follow
+	 * up patch will extend the GEM_CREATE uAPI to allow UMD's specify
+	 * caching mode at BO creation time
 	 */
 	if (HAS_LLC(i915) || (GRAPHICS_VER_FULL(i915) >= IP_VER(12, 70)))
 		/* On some devices, we can have the GPU use the LLC (the CPU
@@ -725,17 +691,21 @@ i915_gem_object_create_shmem(struct drm_i915_private *i915,
 
 /* Allocate a new GEM object and fill it with the supplied data */
 struct drm_i915_gem_object *
-i915_gem_object_create_shmem_from_data(struct drm_i915_private *dev_priv,
+i915_gem_object_create_shmem_from_data(struct drm_i915_private *i915,
 				       const void *data, resource_size_t size)
 {
 	struct drm_i915_gem_object *obj;
 	struct file *file;
 	const struct address_space_operations *aops;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	resource_size_t offset;
+#else
+	loff_t pos;
+#endif
 	int err;
 
-	GEM_WARN_ON(IS_DGFX(dev_priv));
-	obj = i915_gem_object_create_shmem(dev_priv, round_up(size, PAGE_SIZE));
+	GEM_WARN_ON(IS_DGFX(i915));
+	obj = i915_gem_object_create_shmem(i915, round_up(size, PAGE_SIZE));
 	if (IS_ERR(obj))
 		return obj;
 
@@ -743,29 +713,56 @@ i915_gem_object_create_shmem_from_data(struct drm_i915_private *dev_priv,
 
 	file = obj->base.filp;
 	aops = file->f_mapping->a_ops;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	offset = 0;
+#else
+	pos = 0;
+#endif
 	do {
 		unsigned int len = min_t(typeof(size), size, PAGE_SIZE);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		struct page *page;
 		void *pgdata, *vaddr;
+#else
+		struct folio *folio;
+		void *fsdata;
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		err = aops->write_begin(file, file->f_mapping, offset, len,
 					&page, &pgdata);
+#else
+		err = aops->write_begin(file, file->f_mapping, pos, len,
+					&folio, &fsdata);
+#endif
 		if (err < 0)
 			goto fail;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		vaddr = kmap(page);
 		memcpy(vaddr, data, len);
 		kunmap(page);
+#else
+		memcpy_to_folio(folio, offset_in_folio(folio, pos), data, len);
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		err = aops->write_end(file, file->f_mapping, offset, len, len,
 				      page, pgdata);
+#else
+		err = aops->write_end(file, file->f_mapping, pos, len, len,
+				      folio, fsdata);
+#endif
 		if (err < 0)
 			goto fail;
 
 		size -= len;
 		data += len;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 		offset += len;
+#else
+		pos += len;
+#endif
 	} while (size);
 
 	return obj;

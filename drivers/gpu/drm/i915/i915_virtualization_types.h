@@ -10,9 +10,13 @@
  * enum i915_iov_mode - I/O Virtualization mode.
  */
 enum i915_iov_mode {
+	/** @I915_IOV_MODE_NONE: FIXME missing doc */
 	I915_IOV_MODE_NONE = 1,
+	/** @I915_IOV_MODE_GVT_VGPU: FIXME missing doc */
 	I915_IOV_MODE_GVT_VGPU,
+	/** @I915_IOV_MODE_SRIOV_PF: FIXME missing doc */
 	I915_IOV_MODE_SRIOV_PF,
+	/** @I915_IOV_MODE_SRIOV_VF: FIXME missing doc */
 	I915_IOV_MODE_SRIOV_VF,
 };
 

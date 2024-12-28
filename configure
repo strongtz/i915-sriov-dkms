@@ -1,0 +1,21 @@
+#!/bin/sh
+#configure script to determine some symbols of kernel
+
+if [ "$KBUILD_MODULES" != "1" ]; then
+  exit 0 # exit if not building modules
+fi
+
+CONFIGURE_CFLAGS="$KBUILD_CPPFLAGS $KBUILD_CFLAGS $LINUXINCLUDE"
+
+cat <<EOF > "$KBUILD_EXTMOD/include/config.h"
+#include <linux/version.h>
+
+EOF
+
+for symbol_test in "$KBUILD_EXTMOD"/config/*.c
+do
+  $CC $CONFIGURE_CFLAGS -c "$symbol_test" -o /dev/null > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    grep '// \?build success:' "$symbol_test" | sed 's/^.*\/\/ \?build success: *//g' >> "$KBUILD_EXTMOD/include/config.h"
+  fi
+done

@@ -8,6 +8,7 @@
 #include <linux/pagemap.h>
 #include <linux/shmem_fs.h>
 #include <linux/vmalloc.h>
+#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "gem/i915_gem_object.h"
@@ -34,18 +35,21 @@ struct file *shmem_create_from_data(const char *name, void *data, size_t len)
 
 struct file *shmem_create_from_object(struct drm_i915_gem_object *obj)
 {
-	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	enum i915_map_type map_type;
 	struct file *file;
 	void *ptr;
 
 	if (i915_gem_object_is_shmem(obj)) {
 		file = obj->base.filp;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		atomic_long_inc(&file->f_count);
+#else
+		get_file(file);
+#endif
 		return file;
 	}
 
-	map_type = i915_coherent_map_type(i915, obj, true);
+	map_type = i915_gem_object_is_lmem(obj) ? I915_MAP_WC : I915_MAP_WB;
 	ptr = i915_gem_object_pin_map_unlocked(obj, map_type);
 	if (IS_ERR(ptr))
 		return ERR_CAST(ptr);

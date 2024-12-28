@@ -59,6 +59,8 @@ struct intel_context_ops {
 
 	void (*sched_disable)(struct intel_context *ce);
 
+	void (*update_stats)(struct intel_context *ce);
+
 	void (*reset)(struct intel_context *ce);
 	void (*destroy)(struct kref *kref);
 
@@ -97,6 +99,8 @@ struct intel_context {
 	struct i915_address_space *vm;
 	struct i915_gem_context __rcu *gem_context;
 
+	struct file *default_state;
+
 	/*
 	 * @signal_lock protects the list of requests that need signaling,
 	 * @signals. While there are any requests that need signaling,
@@ -128,6 +132,8 @@ struct intel_context {
 #define CONTEXT_PERMA_PIN		11
 #define CONTEXT_IS_PARKING		12
 #define CONTEXT_EXITING			13
+#define CONTEXT_LOW_LATENCY		14
+#define CONTEXT_OWN_STATE		15
 
 	struct {
 		u64 timeout_us;

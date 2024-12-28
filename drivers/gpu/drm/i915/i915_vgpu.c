@@ -77,7 +77,7 @@ void intel_vgpu_detect(struct drm_i915_private *dev_priv)
 
 	/* don't use GRAPHICS_VER() as it might be not ready yet */
 	if (INTEL_INFO(dev_priv)->__runtime.graphics.ip.ver < 6 ||
-	    INTEL_INFO(dev_priv)->__runtime.graphics.ip.ver > 11)
+		INTEL_INFO(dev_priv)->__runtime.graphics.ip.ver > 11)
 		return;
 
 	shared_area = pci_iomap_range(pdev, 0, VGT_PVINFO_PAGE, VGT_PVINFO_SIZE);
