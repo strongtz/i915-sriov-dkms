@@ -1,4 +1,4 @@
-# Linux i915 driver (dkms module) with SR-IOV support for linux 6.9-6.12
+# Linux i915 driver (dkms module) with SR-IOV support for linux 6.8-6.12
 
 This repo is a code snapshot of the i915 module from https://github.com/intel/mainline-tracking/tree/linux/v6.12 and will randomly merge patches from the linux-stable tree.
 
@@ -10,7 +10,7 @@ You need to install this dkms module in **both host and guest!**
 
 For Arch Linux users, it is available in AUR. [i915-sriov-dkms](https://aur.archlinux.org/packages/i915-sriov-dkms-git)
 
-Tested kernel versions: 
+Tested kernel versions: 6.12.6-zen1/6.11.9-arch1/6.10.9-arch1/6.9.10-arch1/6.8.9-arch1 with ArchLinux
 
 
 ## Required Kernel Parameters
@@ -30,9 +30,8 @@ You can create up to 7 VFs on Intel UHD Graphics
 1. Clone this repo
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8.8-2-pve proxmox-kernel-6.8.8-2-pve` (for unsigned kernel).
-1. If running a distro based on Ubuntu or Debian other than Proxmox, add `-DRELEASE_UBUNTU=1` or `-DRELEASE_DEBIAN=1` respectively to EXTRA_CFLAGS in the Makefile. 
 1. Change into the root of the cloned repository and run `dkms add .`.
-1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.12.26 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
+1. Execute the command `dkms install -m i915-sriov-dkms -v 2024.12.28 --force` or `dkms install -m i915-sriov-dkms -v $(cat VERSION) --force` for a version-independent command.
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
