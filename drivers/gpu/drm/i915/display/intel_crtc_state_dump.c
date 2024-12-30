@@ -199,7 +199,7 @@ void intel_crtc_state_dump(const struct intel_crtc_state *pipe_config,
 		return;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
-	p = drm_debug_printer(NULL);
+	p = drm_debug_printer("i915");
 #else
 	p = drm_dbg_printer(&i915->drm, DRM_UT_KMS, NULL);
 #endif
