@@ -64,3 +64,14 @@ I've used Intel gfx version 4316 to get it working. Here's a link to download it
 
 See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567465036
 
+# Credits
+
+Major contributors to this repository are listed below.
+
+* [@strongtz](https://github.com/strongtz) &emsp;_Create the initial dkms module_
+* [@zhtengw](https://github.com/zhtengw) &emsp;_Rebase on the linux-intel-lts (v5.15, v6.1) , support for v6.1~v6.4, participation in 15+ issues_
+* [@bbaa-bbaa](https://github.com/bbaa-bbaa) &emsp;_Rebase on the mainline-tracking linux/v6.12 branch, support for v6.8~v6.13, participation in 10+ issues_
+* [@pasbec](https://github.com/pasbec) &emsp;_Major refactor to the repo, support for (v6.2, v6.5, v6.8), participation in 20+ issues_
+* [@shenwii](https://github.com/shenwii) &emsp;_Support for (v6.7, v6.9)_
+* [@MotherOfTheGracchi](https://github.com/MotherOfTheGracchi) &emsp;_Support for v6.5.3_
+* [@michael-pptf](https://github.com/michael-pptf) &emsp;_Several updates to README.md, participation in 20+ issues_
