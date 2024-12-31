@@ -4965,7 +4965,7 @@ pipe_config_dp_as_sdp_mismatch(struct drm_i915_private *i915,
 
 	if (fastset) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
-		p = drm_debug_printer(NULL);
+		p = drm_debug_printer("i915");
 #else
 		p = drm_dbg_printer(&i915->drm, DRM_UT_KMS, NULL);
 #endif
@@ -5076,7 +5076,7 @@ intel_pipe_config_compare(const struct intel_crtc_state *current_config,
 
 	if (fastset)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
-		p = drm_debug_printer(NULL);
+		p = drm_debug_printer("i915");
 #else
 		p = drm_dbg_printer(&dev_priv->drm, DRM_UT_KMS, NULL);
 #endif
