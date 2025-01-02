@@ -126,5 +126,9 @@ module_exit(i915_exit);
 MODULE_AUTHOR("Tungsten Graphics, Inc.");
 MODULE_AUTHOR("Intel Corporation");
 
+#ifdef DKMS_MODULE_VERSION
+MODULE_VERSION(DKMS_MODULE_VERSION);
+#endif
+
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL and additional rights");

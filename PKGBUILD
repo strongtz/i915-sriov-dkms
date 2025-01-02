@@ -1,26 +1,28 @@
 # Maintainer: Xilin Wu <strongtz@yeah.net>
 
-_pkgbase=i915-sriov-dkms
-pkgname=i915-sriov-dkms-git
+pkgname=i915-sriov-dkms
 pkgver=2024.12.30
 pkgrel=1
 pkgdesc="Linux i915 module patched with SR-IOV support"
 arch=('x86_64')
 url="https://github.com/strongtz/i915-sriov-dkms"
-license=('GPL2')
-depends=('dkms')
+license=('GPL-2.0-only')
 makedepends=('git')
-conflicts=("${_pkgbase}")
+depends=('dkms')
+conflicts=("${pkgname}-git")
+backup=("etc/tmpfiles.d/i915-set-sriov-numvfs.conf")
 install=${pkgname}.install
-source=("git+https://github.com/strongtz/i915-sriov-dkms.git")
-md5sums=('SKIP')
+source=("git+https://github.com/strongtz/i915-sriov-dkms.git" "i915-set-sriov-numvfs.conf")
+sha256sums=('SKIP'
+            'e85e4d4c97cb1f6e825c47ea5e3a9c18f10761714307985f67b58c8e55a1e2c2')
 
 package() {
-  cd "$srcdir/$_pkgbase"
-  # Copy dkms.conf
-  install -Dm644 dkms.conf "${pkgdir}"/usr/src/${_pkgbase}-${pkgver}/dkms.conf
+  cd "$srcdir/$pkgname"
 
   echo "* Copying module into /usr/src..."
-  install -dm755 "${pkgdir}/usr/src/${_pkgbase}-${pkgver}"
-  cp -r ${srcdir}/$_pkgbase/* "${pkgdir}/usr/src/${_pkgbase}-${pkgver}"
+  install -dm755 "${pkgdir}/usr/src/${pkgname}-${pkgver}"
+  cp -r ${srcdir}/$pkgname/{compat,config,drivers,include,Makefile,configure,dkms.conf} "${pkgdir}/usr/src/${pkgname}-${pkgver}"
+
+  cd "$srcdir"
+  install -Dm644 i915-set-sriov-numvfs.conf "${pkgdir}/etc/tmpfiles.d/i915-set-sriov-numvfs.conf"
 }

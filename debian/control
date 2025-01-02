@@ -1,0 +1,15 @@
+Source: i915-sriov-dkms
+Section: kernel
+Priority: optional
+Maintainer: bbaa <bbaa@bbaa.moe>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13), dh-sequence-dkms
+Standards-Version: 2024.12.30
+Homepage: https://github.com/strongtz/i915-sriov-dkms
+
+Package: i915-sriov-dkms
+Architecture: amd64
+Depends:
+  ${misc:Depends}, build-essential
+Description: Linux i915 driver (dkms module) with SR-IOV support
