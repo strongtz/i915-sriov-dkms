@@ -1,0 +1,5 @@
+i915-sriov-dkms (2024.12.30) UNRELEASED; urgency=medium
+
+  * 2024.12.30: backport missing pciids for ADL-N CPU
+
+ -- bbaa bbaa <bbaa@bbaa.moe>  Thu, 2 Jan 2025 17:37:04 +0800

@@ -1,0 +1,168 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  packaging-debian:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential devscripts dh-make dh-dkms dkms
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Packaging
+      working-directory: i915-sriov-dkms
+      run: dpkg-buildpackage -tc
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: debain-package
+        path: "*.deb"
+
+  packaging-archlinux:
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+    - name: Install Dependencies
+      run: |
+        pacman-key --init
+        pacman -Syu --noconfirm git dkms
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Packaging
+      working-directory: i915-sriov-dkms
+      run: |
+        useradd -m user
+        sed -i 's/COMPRESSZST=.*/COMPRESSZST=(zstd -c -T0 --ultra -20 -)/' /etc/makepkg.conf
+        echo "user ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+        chown -R user: .
+        sudo -u user makepkg -s
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: arch-package
+        path: "i915-sriov-dkms/*.pkg*"
+    
+  test-ubuntu-noble:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential linux-generic linux-headers-generic
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Build Module
+      working-directory: i915-sriov-dkms
+      run: |
+        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+
+  test-ubuntu-oracular:
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:24.10
+    steps:
+    - name: Install Dependencies
+      run: |
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential linux-generic linux-headers-generic
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Build Module
+      working-directory: i915-sriov-dkms
+      run: |
+        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+        make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+        
+  test-proxmox:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential
+        sudo sh -c "echo deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription >> /etc/apt/sources.list"
+        sudo apt-get --allow-insecure-repositories update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get --allow-unauthenticated install -y proxmox-archive-keyring
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-default-kernel proxmox-default-headers
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Build Module
+      working-directory: i915-sriov-dkms
+      run: |
+        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s $(dpkg -s proxmox-default-headers | grep "Depends: " | cut -d " " -f2) | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+
+  test-archlinux:
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+    - name: Install Dependencies
+      run: |
+        pacman-key --init
+        pacman -Syu --noconfirm linux linux-headers
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Build Module
+      working-directory: i915-sriov-dkms
+      run: |
+        KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: [packaging-debian, packaging-archlinux, test-ubuntu-noble, test-ubuntu-oracular, test-proxmox, test-archlinux]
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        path: i915-sriov-dkms
+    - name: Check release created
+      working-directory: i915-sriov-dkms
+      run: |
+        VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | grep -o "[0-9]*\.[0-9]*\.[0-9]*")
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        git tag | grep $VERSION && echo "MAKE_RELEASE=0" > $GITHUB_ENV || echo "MAKE_RELEASE=1" >> $GITHUB_ENV 
+    - name: Download artifacts
+      if: ${{ env.MAKE_RELEASE == 1 }}
+      uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
+    - name: Create Release
+      if: ${{ env.MAKE_RELEASE == 1 }}
+      uses: softprops/action-gh-release@v2
+      with:
+        generate_release_notes: true
+        name: ${{ env.VERSION }}
+        tag_name: ${{ env.VERSION }}
+        files: |
+          *.pkg*
+          *.deb
