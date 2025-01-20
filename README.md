@@ -70,7 +70,7 @@ See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567
 Remove the package with `apt remove i915-sriov-dkms`
 ### pacman
 Remove the package with `pacman -R i915-sriov-dkms`
-### Manual
+### manual
 Remove the dkms module with `dkms remove i915-sriov-dkms/2024.12.30`
 
 # Credits
