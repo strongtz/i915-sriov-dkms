@@ -27,13 +27,14 @@ You can create up to 7 VFs on Intel UHD Graphics
 ## Arch Linux Installation Steps (Tested Kernel 6.12.6-zen1)
 
 For Arch Linux users, it is available in AUR. [i915-sriov-dkms](https://aur.archlinux.org/packages/i915-sriov-dkms) 
+
 You also can download the package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases) and install it with `pacman -U`.
 
 ## PVE Host Installation Steps (Tested Kernel 6.8)
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8 proxmox-kernel-6.8` (for unsigned kernel).
-1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)`
-1. Install the deb package with dpkg: `dpkg -i i915-sriov-dkms_2024.12.30_amd64.deb`
+1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
+1. Install the deb package with apt: `apt install ./i915-sriov-dkms_2024.12.30_amd64.deb`
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
@@ -65,8 +66,8 @@ See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567
 1. Reboot the system.
 
 ## Uninstallation
-### dpkg
-Remove the package with `dpkg -r i915-sriov-dkms`
+### apt
+Remove the package with `apt remove i915-sriov-dkms`
 ### pacman
 Remove the package with `pacman -R i915-sriov-dkms`
 ### Manual
