@@ -1,4 +1,4 @@
-# Linux i915 driver (dkms module) with SR-IOV support for linux 6.8-6.12
+# Linux i915 driver (dkms module) with SR-IOV support for linux 6.8-6.13
 
 This repo is a code snapshot of the i915 module from https://github.com/intel/mainline-tracking/tree/linux/v6.12 and will randomly merge patches from the linux-stable tree.
 
@@ -8,7 +8,7 @@ This package is **highly experimental**, you should only use it when you know wh
 
 You need to install this dkms module in **both host and guest!**
 
-Tested kernel versions: 6.12.6-zen1/6.11.9-arch1/6.10.9-arch1/6.9.10-arch1/6.8.9-arch1 with ArchLinux
+Tested kernel versions: 6.12.10-zen1/6.11.9-arch1/6.10.9-arch1/6.9.10-arch1/6.8.9-arch1 with ArchLinux
 
 
 ## Required Kernel Parameters
@@ -59,7 +59,7 @@ See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567
 1. Install the kernel and headers for desired version: `apt install linux-headers-$(uname -r)` / `pacman -S linux-headers`.
 1. Clone the repository: `git clone https://github.com/strongtz/i915-sriov-dkms.git`.
 1. Add the module to DKMS: `dkms add ./i915-sriov-dkms`.
-1. Install the module with DKMS: `dkms install i915-sriov-dkms/2024.12.30`.
+1. Install the module with DKMS: `dkms install i915-sriov-dkms/2025.01.22`.
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u` / for Arch Linux `grub-mkconfig -o /boot/grub/grub.cfg` and `mkinitcpio -P`.
 1. Optionally use `sysfsutils` to set the number of VFs on boot. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
@@ -71,7 +71,7 @@ Remove the package with `apt remove i915-sriov-dkms`
 ### pacman
 Remove the package with `pacman -R i915-sriov-dkms`
 ### manual
-Remove the dkms module with `dkms remove i915-sriov-dkms/2024.12.30`
+Remove the dkms module with `dkms remove i915-sriov-dkms/2025.01.22`
 
 # Credits
 

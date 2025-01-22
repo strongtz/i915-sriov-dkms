@@ -1,7 +1,7 @@
 # Maintainer: Xilin Wu <strongtz@yeah.net>
 
 pkgname=i915-sriov-dkms
-pkgver=2024.12.30
+pkgver=2025.01.22
 pkgrel=1
 pkgdesc="Linux i915 module patched with SR-IOV support"
 arch=('x86_64')
