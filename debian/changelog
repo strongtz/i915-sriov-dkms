@@ -1,3 +1,11 @@
+i915-sriov-dkms (2025.01.22) UNRELEASED; urgency=medium
+
+  * 2025.01.22: Support for kernel v6.13
+  * Merge upstream patches from linux-stable.git (tag v6.12.10)
+  * Add postinst/postrm script to handle initramfs updates
+
+ -- bbaa bbaa <bbaa@bbaa.moe>  Wed, 22 Jan 2025 19:32:09 +0800
+
 i915-sriov-dkms (2024.12.30) UNRELEASED; urgency=medium
 
   * 2024.12.30: backport missing pciids for ADL-N CPU

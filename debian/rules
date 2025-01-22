@@ -28,6 +28,7 @@ override_dh_install:
 	dh_install
 
 override_dh_dkms:
-	dh_dkms -V $(DEB_VERSION_UPSTREAM)
+	dh_dkms -V $(DEB_VERSION_UPSTREAM) -- $(CURDIR)/dkms.conf
+
 
 
