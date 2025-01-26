@@ -52,7 +52,7 @@ You also can download the package from the [releases page](https://github.com/st
 We will need to run the same driver under Linux guests. 
 1. Install build tools
    ```
-   apt install build-* dkms linux-header-$(uname -r) linux-modules-extra-$(uname -r)
+   apt install build-* dkms linux-headers-$(uname -r) linux-modules-extra-$(uname -r)
    ```
 2. Download and install the `.deb`
    ```
