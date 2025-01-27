@@ -34,6 +34,11 @@ You also can download the package from the [releases page](https://github.com/st
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8 proxmox-kernel-6.8` (for unsigned kernel).
 1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
+   ```
+   mkdir /opt/i915-sriov && cd /opt/i915-sriov
+   wget [release_package_url]
+   ```
+   Running it in `/root` might cause issues.
 1. Install the deb package with apt: `apt install ./i915-sriov-dkms_2024.12.30_amd64.deb`
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
@@ -41,12 +46,49 @@ You also can download the package from the [releases page](https://github.com/st
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
 1. Reboot the system.
 1. When the system is back up again, you should see the number of VFs under 02:00.1 - 02:00.7. Again, assuming your iGPU is on 00:02 bus.
-1. You can passthrough the VFs to LXCs or VMs. However, never touch the PF which is 02:00.0 under any circumstances.
+1. You can passthrough the VFs to LXCs or VMs. However, never pass the **PF (02:00.0)** to **VM** which would crash all other VFs.
 
-## Linux Guest Installation Steps (Tested Kernel 6.2)
-We will need to run the same driver under Linux guests. We can repeat the steps for installing the driver. However, when modifying command line defaults, we use `i915.enable_guc=3` instead of `i915.enable_guc=3 i915.max_vfs=7`. Furthermore, we don't need to use `sysfsutils` to create any more VFs since we ARE using a VF.
-Once that's done, update `grub` and `initramfs`, then reboot. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel.
-Optionally, install `vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
+## Linux Guest Installation Steps (Tested Ubuntu 24.04/Kernel 6.8)
+We will need to run the same driver under Linux guests. 
+1. Install build tools
+   ```
+   apt install build-* dkms linux-headers-$(uname -r) linux-modules-extra-$(uname -r)
+   ```
+2. Download and install the `.deb`
+   ```
+   mkdir /opt/i915-sriov && cd /opt/i915-sriov
+   wget [release_package_URL]
+   apt install ./[release_package_name]
+   ```
+3. Blacklist `xe` driver from kernel command line
+   ```
+   nano /etc/default/grub
+   ```
+   ```
+   #find this line and modify, note the double quotes
+   GRUB_CMDLINE_LINUX_DEFAULT="GRUB_CMDLINE_LINUX_DEFAULT="module_blacklist=xe""
+   ```
+4. Alternatively, you can blacklist the xe driver from `modprobe`:
+   ```
+   echo 'blacklist xe' > /etc/modprobe.d/blacklist.conf
+   ```
+5. Enable GuC submission from the kernel driver module:
+   ```
+   echo 'options i915 enable_guc=3' > /etc/modprobe.d/i915.conf
+   ```
+5. Once that's done, update `grub` and `initramfs`, then reboot.
+   ```
+   update-grub
+   update-initramfs -u
+   ```
+7. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel. You should also check if `xe` is blacklisted correctly by running `lspci -nnk` to see which driver is in use by the VF.
+8. Optionally, install `vainfo` by running `apt install vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
+9. If OpenCL is desired:
+   ```
+   apt install intel-opencl-icd
+   apt install clinfo
+   clinfo
+   ```
 ## Windows Guest
 It is required to set the host CPU type in Proxmox to "host". I was able to get it working without further fiddling in the config files but your mileage may vary (i5-12500T with UHD 770).
 I've used Intel gfx version 4316 to get it working. Here's a link to download it.
