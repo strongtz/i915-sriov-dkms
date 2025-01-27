@@ -19,7 +19,7 @@ intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
 ## Creating Virtual Functions (VF)
 
 ```
-echo 2 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs
+echo 1 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs
 ```
 
 You can create up to 7 VFs on Intel UHD Graphics 
@@ -34,13 +34,11 @@ You also can download the package from the [releases page](https://github.com/st
 1. Install build tools: `apt install build-* dkms`
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8 proxmox-kernel-6.8` (for unsigned kernel).
 1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
+   ```sh
+   wget -O /tmp/i915-sriov-dkms_2025.01.22_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.01.22/i915-sriov-dkms_2025.01.22_amd64.deb"
    ```
-   mkdir /opt/i915-sriov && cd /opt/i915-sriov
-   wget [release_package_url]
-   ```
-   Running it in `/root` might cause issues.
-1. Install the deb package with apt: `apt install ./i915-sriov-dkms_2024.12.30_amd64.deb`
-1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
+1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2025.01.22_amd64.deb`
+1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or add to it if you have other arguments there already.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
@@ -56,34 +54,25 @@ We will need to run the same driver under Linux guests.
    ```
 2. Download and install the `.deb`
    ```
-   mkdir /opt/i915-sriov && cd /opt/i915-sriov
-   wget [release_package_URL]
-   apt install ./[release_package_name]
+   wget -O /tmp/i915-sriov-dkms_2025.01.22_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.01.22/i915-sriov-dkms_2025.01.22_amd64.deb"
+   dpkg -i /tmp/i915-sriov-dkms_2025.01.22_amd64.deb
    ```
-3. Blacklist `xe` driver from kernel command line
+3. Update kernel parameters
+   `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `i915.enable_guc=3 module_blacklist=xe`, or add to it if you have other arguments there already.
+
+   Example:
+   ```conf
+   GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on i915.enable_guc=3 module_blacklist=xe"
    ```
-   nano /etc/default/grub
-   ```
-   ```
-   #find this line and modify, note the double quotes
-   GRUB_CMDLINE_LINUX_DEFAULT="GRUB_CMDLINE_LINUX_DEFAULT="module_blacklist=xe""
-   ```
-4. Alternatively, you can blacklist the xe driver from `modprobe`:
-   ```
-   echo 'blacklist xe' > /etc/modprobe.d/blacklist.conf
-   ```
-5. Enable GuC submission from the kernel driver module:
-   ```
-   echo 'options i915 enable_guc=3' > /etc/modprobe.d/i915.conf
-   ```
-5. Once that's done, update `grub` and `initramfs`, then reboot.
+
+4. Once that's done, update `grub` and `initramfs`, then reboot.
    ```
    update-grub
    update-initramfs -u
    ```
-7. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel. You should also check if `xe` is blacklisted correctly by running `lspci -nnk` to see which driver is in use by the VF.
-8. Optionally, install `vainfo` by running `apt install vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
-9. If OpenCL is desired:
+5. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel. You should also check if `xe` is blacklisted correctly by running `lspci -nnk` to see which driver is in use by the VF.
+6. Optionally, install `vainfo` by running `apt install vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
+7. If OpenCL is desired:
    ```
    apt install intel-opencl-icd
    apt install clinfo
@@ -140,8 +129,8 @@ See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567
 1. Reboot the system.
 
 ## Uninstallation
-### apt
-Remove the package with `apt remove i915-sriov-dkms`
+### dpkg
+Remove the package with `dpkg -P i915-sriov-dkms`
 ### pacman
 Remove the package with `pacman -R i915-sriov-dkms`
 ### manual
