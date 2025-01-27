@@ -90,7 +90,10 @@ We will need to run the same driver under Linux guests.
    clinfo
    ```
 ## Windows Guest (Tested with Proxmox 8.3 + Windows 11 24H2 + Intel Driver 32.0.101.6460/32.0.101.6259)
-Thanks for [resiliencer](https://github.com/resiliencer) and his contribution in [#225](https://github.com/strongtz/i915-sriov-dkms/issues/225#issue-2687672590)
+Thanks for [resiliencer](https://github.com/resiliencer) and his contribution in [#225](https://github.com/strongtz/i915-sriov-dkms/issues/225#issue-2687672590).
+
+These steps ensure compatibility across all driver versions. In theory you can install any version and won't be hit by the dreaded `Code 43`.
+
 ### Extract Graphics EFI Firmware
 1. Download [UEFITools](https://github.com/LongSoft/UEFITool/releases) (`UEFITool_NE_A68_win64` for Windows. They supply Linux and Mac binaries, too)
 2. Download BIOS for motherboard (I suspect any motherboard BIOS would work as long as it is for Alder/Raptop Lake Desktop Platform)
