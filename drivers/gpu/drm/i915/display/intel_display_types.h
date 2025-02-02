@@ -50,7 +50,6 @@
 #else
 #include <drm/intel/i915_hdcp_interface.h>
 #endif
-#include <media/cec-notifier.h>
 
 #include "gem/i915_gem_object_types.h" /* for to_intel_bo() */
 #include "i915_vma.h"
@@ -62,6 +61,7 @@
 #include "intel_dpll_mgr.h"
 #include "intel_wm_types.h"
 
+struct cec_notifier;
 struct drm_printer;
 struct __intel_global_objs_state;
 struct intel_ddi_buf_trans;

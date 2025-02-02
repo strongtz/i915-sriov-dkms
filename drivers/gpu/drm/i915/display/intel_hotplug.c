@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <linux/debugfs.h>
 #include <linux/kernel.h>
 
 #include "i915_drv.h"

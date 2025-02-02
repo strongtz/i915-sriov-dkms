@@ -22,6 +22,7 @@
  * IN THE SOFTWARE.
  *
  */
+#include <linux/version.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -197,9 +198,15 @@ static int intel_dp_mst_find_vcpi_slots_for_bpp(struct intel_encoder *encoder,
 		crtc_state->fec_enable = !intel_dp_is_uhbr(crtc_state);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 	mst_state->pbn_div = drm_dp_get_vc_payload_bw(&intel_dp->mst_mgr,
 						      crtc_state->port_clock,
 						      crtc_state->lane_count);
+#else
+	mst_state->pbn_div = drm_dp_get_vc_payload_bw(crtc_state->port_clock,
+						      crtc_state->lane_count);
+#endif
+
 
 	max_dpt_bpp = intel_dp_mst_max_dpt_bpp(crtc_state, dsc);
 	if (max_bpp > max_dpt_bpp) {
