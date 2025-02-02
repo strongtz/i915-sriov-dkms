@@ -12,14 +12,5 @@ fi
 case "$1" in
 	configure)
 		depmod -a
-		if [ -x /usr/sbin/update-initramfs ]; then
-			/usr/sbin/update-initramfs -u
-		elif [ -x /usr/bin/update-initramfs ]; then
-			/usr/bin/update-initramfs -u
-		elif [ -x /sbin/update-initramfs ]; then
-			/sbin/update-initramfs -u
-		elif [ -x /bin/update-initramfs ]; then
-			/bin/update-initramfs -u
-		fi
-		;;
+		update-initramfs -u
 esac
