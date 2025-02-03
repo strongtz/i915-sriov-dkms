@@ -35,9 +35,9 @@ You also can download the package from the [releases page](https://github.com/st
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8 proxmox-kernel-6.8` (for unsigned kernel).
 1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
    ```sh
-   wget -O /tmp/i915-sriov-dkms_2025.01.22_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.01.22/i915-sriov-dkms_2025.01.22_amd64.deb"
+   wget -O /tmp/i915-sriov-dkms_2025.02.03_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.02.03/i915-sriov-dkms_2025.02.03_amd64.deb"
    ```
-1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2025.01.22_amd64.deb`
+1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2025.02.03_amd64.deb`
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or add to it if you have other arguments there already.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
@@ -54,8 +54,8 @@ We will need to run the same driver under Linux guests.
    ```
 2. Download and install the `.deb`
    ```
-   wget -O /tmp/i915-sriov-dkms_2025.01.22_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.01.22/i915-sriov-dkms_2025.01.22_amd64.deb"
-   dpkg -i /tmp/i915-sriov-dkms_2025.01.22_amd64.deb
+   wget -O /tmp/i915-sriov-dkms_2025.02.03_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.02.03/i915-sriov-dkms_2025.02.03_amd64.deb"
+   dpkg -i /tmp/i915-sriov-dkms_2025.02.03_amd64.deb
    ```
 3. Update kernel parameters
    `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `i915.enable_guc=3 module_blacklist=xe`, or add to it if you have other arguments there already.
@@ -122,7 +122,7 @@ See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567
 1. Install the kernel and headers for desired version: `apt install linux-headers-$(uname -r)` / `pacman -S linux-headers`.
 1. Clone the repository: `git clone https://github.com/strongtz/i915-sriov-dkms.git`.
 1. Add the module to DKMS: `dkms add ./i915-sriov-dkms`.
-1. Install the module with DKMS: `dkms install i915-sriov-dkms/2025.01.22`.
+1. Install the module with DKMS: `dkms install i915-sriov-dkms/2025.02.03`.
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7`, or add to it if you have other arguments there already.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u` / for Arch Linux `grub-mkconfig -o /boot/grub/grub.cfg` and `mkinitcpio -P`.
 1. Optionally use `sysfsutils` to set the number of VFs on boot. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`, assuming your iGPU is on 00:02 bus. If not, use `lspci | grep VGA` to find the PCIe bus your iGPU is on.
@@ -134,7 +134,7 @@ Remove the package with `dpkg -P i915-sriov-dkms`
 ### pacman
 Remove the package with `pacman -R i915-sriov-dkms`
 ### manual
-Remove the dkms module with `dkms remove i915-sriov-dkms/2025.01.22`
+Remove the dkms module with `dkms remove i915-sriov-dkms/2025.02.03`
 
 # Credits
 

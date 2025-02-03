@@ -18,7 +18,10 @@ jobs:
         path: i915-sriov-dkms
     - name: Packaging
       working-directory: i915-sriov-dkms
-      run: dpkg-buildpackage -tc
+      run: | 
+        LATEST_VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | sed 's/.*\?"\([^"]*\)".*/\1/')
+        sed -i "s/###LATEST_VERSION###/$LATEST_VERSION/g" debian/control debian/changelog
+        dpkg-buildpackage -tc
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
@@ -177,9 +180,9 @@ jobs:
     - name: Check release created
       working-directory: i915-sriov-dkms
       run: |
-        VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | grep -o "[0-9]*\.[0-9]*\.[0-9]*")
+        VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | sed 's/.*\?"\([^"]*\)".*/\1/')
         echo "VERSION=$VERSION" >> $GITHUB_ENV
-        git tag | grep $VERSION && echo "MAKE_RELEASE=0" > $GITHUB_ENV || echo "MAKE_RELEASE=1" >> $GITHUB_ENV 
+        git rev-parse "$VERSION" && echo "MAKE_RELEASE=0" > $GITHUB_ENV || echo "MAKE_RELEASE=1" >> $GITHUB_ENV 
     - name: Download artifacts
       if: ${{ env.MAKE_RELEASE == 1 }}
       uses: actions/download-artifact@v4
