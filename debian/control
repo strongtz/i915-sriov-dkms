@@ -5,7 +5,7 @@ Maintainer: bbaa <bbaa@bbaa.moe>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13), dh-sequence-dkms
-Standards-Version: 2025.01.22
+Standards-Version: ###LATEST_VERSION###
 Homepage: https://github.com/strongtz/i915-sriov-dkms
 
 Package: i915-sriov-dkms

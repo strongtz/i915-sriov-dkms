@@ -45,6 +45,8 @@
 #include <drm/intel/intel_lpe_audio.h>
 #endif
 
+#include <media/cec-notifier.h>
+
 #include "g4x_hdmi.h"
 #include "i915_drv.h"
 #include "i915_reg.h"

@@ -1895,7 +1895,9 @@ static const struct drm_driver i915_drm_driver = {
 	.fops = &i915_driver_fops,
 	.name = DRIVER_NAME,
 	.desc = DRIVER_DESC,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 	.date = DRIVER_DATE,
+#endif
 	.major = DRIVER_MAJOR,
 	.minor = DRIVER_MINOR,
 	.patchlevel = DRIVER_PATCHLEVEL,

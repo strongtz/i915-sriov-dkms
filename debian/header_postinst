@@ -1,0 +1,12 @@
+#!/bin/sh -e
+
+if [ -n "$DEB_MAINT_PARAMS" ]; then
+	eval set -- "$DEB_MAINT_PARAMS"
+	if [ -z "$1" ] || [ "$1" != "configure" ]; then
+		exit 0
+	fi
+fi
+
+command -v update-initramfs >/dev/null 2>&1 || exit 0
+dkms status -m i915-sriov-dkms -k "${version}" | grep -q installed || exit 0
+update-initramfs -u >&2
