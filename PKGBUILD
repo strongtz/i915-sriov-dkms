@@ -15,7 +15,7 @@ install=${pkgname}.install
 source=("git+https://github.com/strongtz/i915-sriov-dkms.git" "i915-set-sriov-numvfs.conf" "i915-modprobe.conf")
 sha256sums=('SKIP'
             'e85e4d4c97cb1f6e825c47ea5e3a9c18f10761714307985f67b58c8e55a1e2c2'
-            '6660e8f2eeff8712ecf8ad0366d9316e2c8e070d8d81c0f996a3899bb5819a48')
+            '3141f71d0c7212e599ce5d3741f38be26f5b41f534975ac6c3062495b26c6192')
 
 package() {
   cd "$srcdir/$pkgname"
@@ -26,5 +26,5 @@ package() {
 
   cd "$srcdir"
   install -Dm644 i915-set-sriov-numvfs.conf "${pkgdir}/etc/tmpfiles.d/i915-set-sriov-numvfs.conf"
-  install -Dm644 i915-modprobe.conf "${pkgdir}/usr/lib/modprobe.d/i915-sriov-dkms.conf"
+  install -Dm644 i915-modprobe.conf "${pkgdir}/etc/modprobe.d/i915-sriov-dkms.conf"
 }
