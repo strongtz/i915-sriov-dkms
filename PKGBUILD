@@ -10,12 +10,12 @@ license=('GPL-2.0-only')
 makedepends=('git')
 depends=('dkms')
 conflicts=("${pkgname}-git")
-backup=("etc/tmpfiles.d/i915-set-sriov-numvfs.conf")
+backup=("etc/tmpfiles.d/i915-set-sriov-numvfs.conf" "etc/modprobe.d/i915-sriov-dkms.conf")
 install=${pkgname}.install
 source=("git+https://github.com/strongtz/i915-sriov-dkms.git" "i915-set-sriov-numvfs.conf" "i915-modprobe.conf")
 sha256sums=('SKIP'
             'e85e4d4c97cb1f6e825c47ea5e3a9c18f10761714307985f67b58c8e55a1e2c2'
-            '3141f71d0c7212e599ce5d3741f38be26f5b41f534975ac6c3062495b26c6192')
+            '5118bf5cb5b0d903c2eaebfd09882c2cf6268735797d4e5d2bfcda67517467eb')
 
 package() {
   cd "$srcdir/$pkgname"
