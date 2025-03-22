@@ -16,6 +16,14 @@ Tested kernel versions: 6.12.10-zen1/6.11.9-arch1/6.10.9-arch1/6.9.10-arch1/6.8.
 intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
 ```
 
+Besides `intel_iommu=on`, the other 3 parameters could be applied by `modprobe` by putting following content to `/etc/modprobe.d/i915-sriov-dkms.conf`
+
+```
+blacklist xe
+options i915 enable_guc=3
+options i915 max_vfs=7
+```
+
 ## Creating Virtual Functions (VF)
 
 ```
