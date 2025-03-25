@@ -4,7 +4,7 @@
 
 $(shell $(KBUILD_EXTMOD)/configure)
 
-ccflags-y += -DI915
+ccflags-y += -DCONFIG_DRM_I915_GVT -DI915
 
 KBUILD_MODPOST_WARN = 1
 
@@ -394,7 +394,7 @@ i915-$(CONFIG_DRM_I915_SELFTEST) += \
 i915-y += \
 	i915_vgpu.o
 
-i915-$(CONFIG_DRM_I915_GVT) += \
+i915-y += \
 	intel_gvt.o \
 	intel_gvt_mmio_table.o
 include $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/gvt/Makefile
