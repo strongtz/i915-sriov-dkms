@@ -189,4 +189,30 @@ void drm_client_dev_unregister(struct drm_device *dev)
 	}
 	mutex_unlock(&dev->clientlist_mutex);
 }
+
+/**
+ *	sysfs_bin_attr_simple_read - read callback to simply copy from memory.
+ *	@file:	attribute file which is being read.
+ *	@kobj:	object to which the attribute belongs.
+ *	@attr:	attribute descriptor.
+ *	@buf:	destination buffer.
+ *	@off:	offset in bytes from which to read.
+ *	@count:	maximum number of bytes to read.
+ *
+ * Simple ->read() callback for bin_attributes backed by a buffer in memory.
+ * The @private and @size members in struct bin_attribute must be set to the
+ * buffer's location and size before the bin_attribute is created in sysfs.
+ *
+ * Bounds check for @off and @count is done in sysfs_kf_bin_read().
+ * Negative value check for @off is done in vfs_setpos() and default_llseek().
+ *
+ * Returns number of bytes written to @buf.
+ */
+ ssize_t sysfs_bin_attr_simple_read(struct file *file, struct kobject *kobj,
+	struct bin_attribute *attr, char *buf,
+	loff_t off, size_t count)
+{
+memcpy(buf, attr->private + off, count);
+return count;
+}
 #endif

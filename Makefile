@@ -417,6 +417,9 @@ i915-y := \
 	$(compat-y) \
 	$(addprefix drivers/gpu/drm/i915/,$(i915-y))
 
+kvmgt-y := \
+	$(addprefix drivers/gpu/drm/i915/,$(kvmgt-y))
+
 # ----------------------------------------------------------------------------
 # common to all modules
 #
@@ -429,5 +432,6 @@ LINUXINCLUDE := \
 	$(LINUXINCLUDE)
 
 obj-m := i915.o
+obj-m += kvmgt.o
 
 .PHONY: default clean modules load unload install patch
