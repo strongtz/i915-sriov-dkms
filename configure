@@ -11,7 +11,7 @@ module_version=$(grep "^PACKAGE_VERSION" "$KBUILD_EXTMOD/dkms.conf" | grep -o "[
 cat <<EOF > "$KBUILD_EXTMOD/include/config.h"
 #include <linux/version.h>
 
-#define DKMS_MODULE_VERSION "$module_version-sriov.6.12.11"
+#define DKMS_MODULE_VERSION "$module_version-sriov.6.12.20"
 EOF
 
 # conftest

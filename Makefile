@@ -4,14 +4,7 @@
 
 $(shell $(KBUILD_EXTMOD)/configure)
 
-# Configuration
-ccflags-y += -DCONFIG_PM -DCONFIG_DEBUG_FS -DCONFIG_PNP -DCONFIG_PROC_FS \
-				-DCONFIG_MMU_NOTIFIER -DCONFIG_DRM_I915_COMPRESS_ERROR \
-				-DCONFIG_COMPAT -DCONFIG_PERF_EVENTS -DCONFIG_PCI_IOV \
-				-DCONFIG_X86 -DCONFIG_ACPI -DCONFIG_DRM_FBDEV_EMULATION \
-				-DCONFIG_PMIC_OPREGION -DCONFIG_SWIOTLB -DCONFIG_DRM_I915_PXP \
-				-DCONFIG_HWMON -DCONFIG_DRM_I915_CAPTURE_ERROR -DCONFIG_DRM_I915_GVT \
-				-DI915
+ccflags-y += -DCONFIG_DRM_I915_GVT -DI915
 
 KBUILD_MODPOST_WARN = 1
 
@@ -401,7 +394,7 @@ i915-$(CONFIG_DRM_I915_SELFTEST) += \
 i915-y += \
 	i915_vgpu.o
 
-i915-$(CONFIG_DRM_I915_GVT) += \
+i915-y += \
 	intel_gvt.o \
 	intel_gvt_mmio_table.o
 include $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/gvt/Makefile
@@ -424,6 +417,9 @@ i915-y := \
 	$(compat-y) \
 	$(addprefix drivers/gpu/drm/i915/,$(i915-y))
 
+kvmgt-y := \
+	$(addprefix drivers/gpu/drm/i915/,$(kvmgt-y))
+
 # ----------------------------------------------------------------------------
 # common to all modules
 #
@@ -436,5 +432,6 @@ LINUXINCLUDE := \
 	$(LINUXINCLUDE)
 
 obj-m := i915.o
+obj-m += kvmgt.o
 
 .PHONY: default clean modules load unload install patch
