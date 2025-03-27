@@ -1,5 +1,11 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
+  * Fix the module cannot be installed via deb package
+
+ -- bbaa bbaa <bbaa@bbaa.moe>  Wed, 26 Mar 2025 00:07:37 +0800
+
+i915-sriov-dkms (2025.03.26) UNRELEASED; urgency=medium
+
   * Support for 6.14 kernel
   * Merge upstream patches from linux-stable.git (tag v6.12.20)
   * Build kvmgt agaginst the i915 module for compatibility
