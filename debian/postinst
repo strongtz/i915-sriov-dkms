@@ -1,10 +1,8 @@
 #!/bin/sh
 
 if [ "$1" = "configure" ]; then
-	if [ -z "$2" ]; then
-		echo First configuration, installing for all kernels
-		export autoinstall_all_kernels=1
-	fi
+	echo install dkms modules for all kernels
+	export autoinstall_all_kernels=1
 fi
 
 #DEBHELPER#
