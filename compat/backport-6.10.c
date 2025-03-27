@@ -212,7 +212,8 @@ void drm_client_dev_unregister(struct drm_device *dev)
 	struct bin_attribute *attr, char *buf,
 	loff_t off, size_t count)
 {
-memcpy(buf, attr->private + off, count);
-return count;
+	memcpy(buf, attr->private + off, count);
+	return count;
 }
+EXPORT_SYMBOL_NS(sysfs_bin_attr_simple_read, I915_SRIOV_COMPAT);
 #endif
