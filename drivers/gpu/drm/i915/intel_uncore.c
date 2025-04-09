@@ -23,6 +23,7 @@
 
 #include <drm/drm_managed.h>
 #include <linux/pm_runtime.h>
+#include <linux/version.h>
 
 #include "gt/intel_gt.h"
 #include "gt/intel_engine_regs.h"
@@ -2189,8 +2190,12 @@ static int __fw_domain_init(struct intel_uncore *uncore,
 
 	d->mask = BIT(domain_id);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&d->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	d->timer.function = intel_uncore_fw_release_timer;
+#else
+	hrtimer_setup(&d->timer, intel_uncore_fw_release_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#endif
 
 	uncore->fw_domains |= BIT(domain_id);
 

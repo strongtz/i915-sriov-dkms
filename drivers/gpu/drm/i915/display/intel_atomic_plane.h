@@ -7,6 +7,7 @@
 #define __INTEL_ATOMIC_PLANE_H__
 
 #include <linux/types.h>
+#include <linux/version.h>
 
 struct drm_plane;
 struct drm_property;
@@ -19,6 +20,9 @@ struct intel_plane;
 struct intel_plane_state;
 enum plane_id;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+bool intel_plane_can_async_flip(struct intel_plane *plane, u64 modifier);
+#endif
 unsigned int intel_adjusted_rate(const struct drm_rect *src,
 				 const struct drm_rect *dst,
 				 unsigned int rate);

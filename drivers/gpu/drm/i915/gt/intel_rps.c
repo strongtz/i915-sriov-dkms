@@ -166,7 +166,11 @@ static void rps_start_timer(struct intel_rps *rps)
 
 static void rps_stop_timer(struct intel_rps *rps)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	del_timer_sync(&rps->timer);
+#else
+	timer_delete_sync(&rps->timer);
+#endif
 	rps->pm_timestamp = ktime_sub(ktime_get(), rps->pm_timestamp);
 	cancel_work_sync(&rps->work);
 }

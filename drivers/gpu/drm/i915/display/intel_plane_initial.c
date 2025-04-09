@@ -3,6 +3,8 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include "gem/i915_gem_lmem.h"
 #include "gem/i915_gem_region.h"
 #include "i915_drv.h"
@@ -301,8 +303,13 @@ intel_alloc_initial_plane_obj(struct intel_crtc *crtc,
 	mode_cmd.modifier[0] = fb->modifier;
 	mode_cmd.flags = DRM_MODE_FB_MODIFIERS;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (intel_framebuffer_init(to_intel_framebuffer(fb),
 				   vma->obj, &mode_cmd)) {
+#else
+	if (intel_framebuffer_init(to_intel_framebuffer(fb),
+				   intel_bo_to_drm_bo(vma->obj), &mode_cmd)) {
+#endif
 		drm_dbg_kms(&dev_priv->drm, "intel fb init failed\n");
 		goto err_vma;
 	}

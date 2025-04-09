@@ -51,7 +51,9 @@
 #include <drm/intel/i915_hdcp_interface.h>
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #include "gem/i915_gem_object_types.h" /* for to_intel_bo() */
+#endif
 #include "i915_vma.h"
 #include "i915_vma_types.h"
 #include "intel_bios.h"
@@ -153,6 +155,9 @@ struct intel_framebuffer {
 	struct i915_address_space *dpt_vm;
 
 	unsigned int min_alignment;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	unsigned int vtd_guard;
+#endif
 };
 
 enum intel_hotplug_state {
@@ -1557,6 +1562,9 @@ struct intel_plane {
 	enum plane_id id;
 	enum pipe pipe;
 	bool need_async_flip_toggle_wa;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	u8 vtd_guard;
+#endif
 	u32 frontbuffer_bit;
 
 	struct {
@@ -1586,6 +1594,9 @@ struct intel_plane {
 	unsigned int (*max_stride)(struct intel_plane *plane,
 				   u32 pixel_format, u64 modifier,
 				   unsigned int rotation);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	bool (*can_async_flip)(u64 modifier);
+#endif
 	/* Write all non-self arming plane registers */
 	void (*update_noarm)(struct intel_dsb *dsb,
 			     struct intel_plane *plane,
@@ -1635,7 +1646,9 @@ struct intel_watermark_params {
 #define to_intel_framebuffer(fb) \
 	container_of_const((fb), struct intel_framebuffer, base)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #define intel_fb_obj(x) ((x) ? to_intel_bo((x)->obj[0]) : NULL)
+#endif
 
 struct intel_hdmi {
 	i915_reg_t hdmi_reg;

@@ -3,6 +3,7 @@
  * Copyright © 2020 Intel Corporation
  */
 #include <linux/kernel.h>
+#include <linux/version.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_blend.h>
@@ -672,6 +673,13 @@ vlv_primary_disable_flip_done(struct intel_plane *plane)
 	spin_unlock_irq(&i915->irq_lock);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+static bool i9xx_plane_can_async_flip(u64 modifier)
+{
+	return modifier == I915_FORMAT_MOD_X_TILED;
+}
+#endif
+
 static bool i9xx_plane_get_hw_state(struct intel_plane *plane,
 				    enum pipe *pipe)
 {
@@ -770,16 +778,34 @@ i8xx_plane_max_stride(struct intel_plane *plane,
 		return 8 * 1024;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static unsigned int vlv_primary_min_alignment(struct intel_plane *plane,
 					      const struct drm_framebuffer *fb,
 					      int color_plane)
 {
 	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+#else
+unsigned int vlv_plane_min_alignment(struct intel_plane *plane,
+				     const struct drm_framebuffer *fb,
+				     int color_plane)
+{
+	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+	if (intel_plane_can_async_flip(plane, fb->modifier))
+		return 256 * 1024;
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	/* FIXME undocumented so not sure what's actually needed */
+	if (intel_scanout_needs_vtd_wa(i915))
+		return 256 * 1024;
+#endif
 
 	switch (fb->modifier) {
 	case I915_FORMAT_MOD_X_TILED:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		if (HAS_ASYNC_FLIPS(i915))
 			return 256 * 1024;
+#endif
 		return 4 * 1024;
 	case DRM_FORMAT_MOD_LINEAR:
 		return 128 * 1024;
@@ -794,12 +820,23 @@ static unsigned int g4x_primary_min_alignment(struct intel_plane *plane,
 					      int color_plane)
 {
 	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	if (intel_plane_can_async_flip(plane, fb->modifier))
+		return 256 * 1024;
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	if (intel_scanout_needs_vtd_wa(i915))
+		return 256 * 1024;
+#endif
 
 	switch (fb->modifier) {
 	case I915_FORMAT_MOD_X_TILED:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		if (HAS_ASYNC_FLIPS(i915))
 			return 256 * 1024;
 		return 4 * 1024;
+#endif
 	case DRM_FORMAT_MOD_LINEAR:
 		return 4 * 1024;
 	default:
@@ -936,13 +973,23 @@ intel_primary_plane_create(struct drm_i915_private *dev_priv, enum pipe pipe)
 	}
 
 	if (IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		plane->min_alignment = vlv_primary_min_alignment;
+#else
+		plane->min_alignment = vlv_plane_min_alignment;
+#endif
 	else if (DISPLAY_VER(dev_priv) >= 5 || IS_G4X(dev_priv))
 		plane->min_alignment = g4x_primary_min_alignment;
 	else if (DISPLAY_VER(dev_priv) == 4)
 		plane->min_alignment = i965_plane_min_alignment;
 	else
 		plane->min_alignment = i9xx_plane_min_alignment;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	/* FIXME undocumented for VLV/CHV so not sure what's actually needed */
+	if (intel_scanout_needs_vtd_wa(dev_priv))
+		plane->vtd_guard = 128;
+#endif
 
 	if (IS_I830(dev_priv) || IS_I845G(dev_priv)) {
 		plane->update_arm = i830_plane_update_arm;
@@ -954,6 +1001,7 @@ intel_primary_plane_create(struct drm_i915_private *dev_priv, enum pipe pipe)
 	plane->get_hw_state = i9xx_plane_get_hw_state;
 	plane->check_plane = i9xx_plane_check;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	if (IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv)) {
 		plane->async_flip = vlv_primary_async_flip;
 		plane->enable_flip_done = vlv_primary_enable_flip_done;
@@ -972,6 +1020,32 @@ intel_primary_plane_create(struct drm_i915_private *dev_priv, enum pipe pipe)
 		plane->enable_flip_done = ilk_primary_enable_flip_done;
 		plane->disable_flip_done = ilk_primary_disable_flip_done;
 	}
+#else
+	if (HAS_ASYNC_FLIPS(dev_priv)) {
+		if (IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv)) {
+			plane->async_flip = vlv_primary_async_flip;
+			plane->enable_flip_done = vlv_primary_enable_flip_done;
+			plane->disable_flip_done = vlv_primary_disable_flip_done;
+			plane->can_async_flip = i9xx_plane_can_async_flip;
+		} else if (IS_BROADWELL(dev_priv)) {
+			plane->need_async_flip_toggle_wa = true;
+			plane->async_flip = g4x_primary_async_flip;
+			plane->enable_flip_done = bdw_primary_enable_flip_done;
+			plane->disable_flip_done = bdw_primary_disable_flip_done;
+			plane->can_async_flip = i9xx_plane_can_async_flip;
+		} else if (DISPLAY_VER(dev_priv) >= 7) {
+			plane->async_flip = g4x_primary_async_flip;
+			plane->enable_flip_done = ivb_primary_enable_flip_done;
+			plane->disable_flip_done = ivb_primary_disable_flip_done;
+			plane->can_async_flip = i9xx_plane_can_async_flip;
+		} else if (DISPLAY_VER(dev_priv) >= 5) {
+			plane->async_flip = g4x_primary_async_flip;
+			plane->enable_flip_done = ilk_primary_enable_flip_done;
+			plane->disable_flip_done = ilk_primary_disable_flip_done;
+			plane->can_async_flip = i9xx_plane_can_async_flip;
+		}
+	}
+#endif
 
 	modifiers = intel_fb_plane_get_modifiers(dev_priv, INTEL_PLANE_CAP_TILING_X);
 

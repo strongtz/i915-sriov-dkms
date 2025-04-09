@@ -5,6 +5,7 @@
  */
 
 #include <linux/wait_bit.h>
+#include <linux/version.h>
 
 #include "intel_runtime_pm.h"
 #include "intel_wakeref.h"
@@ -163,7 +164,11 @@ void intel_wakeref_auto(struct intel_wakeref_auto *wf, unsigned long timeout)
 	unsigned long flags;
 
 	if (!timeout) {
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 		if (del_timer_sync(&wf->timer))
+	#else
+		if (timer_delete_sync(&wf->timer))
+	#endif
 			wakeref_auto_timeout(&wf->timer);
 		return;
 	}

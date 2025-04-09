@@ -30,6 +30,7 @@
  *    Zhi Wang <zhi.a.wang@intel.com>
  *
  */
+#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "gvt.h"
@@ -286,8 +287,12 @@ static int tbs_sched_init(struct intel_gvt *gvt)
 		return -ENOMEM;
 
 	INIT_LIST_HEAD(&data->lru_runq_head);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&data->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	data->timer.function = tbs_timer_fn;
+#else
+	hrtimer_setup(&data->timer, tbs_timer_fn, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+#endif
 	data->period = GVT_DEFAULT_TIME_SLICE;
 	data->gvt = gvt;
 

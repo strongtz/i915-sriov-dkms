@@ -12,6 +12,7 @@
 #include <linux/types.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
+#include <linux/version.h>
 
 #include <drm/drm_connector.h>
 #include <drm/drm_modeset_lock.h>
@@ -385,7 +386,9 @@ struct intel_display {
 	struct {
 		/* list of fbdev register on this device */
 		struct intel_fbdev *fbdev;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 		struct work_struct suspend_work;
+#endif
 	} fbdev;
 
 	struct {

@@ -216,9 +216,15 @@ static enum drm_connector_status tfp410_detect(struct intel_dvo_device *dvo)
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static enum drm_mode_status tfp410_mode_valid(struct intel_dvo_device *dvo,
 					      struct drm_display_mode *mode)
 {
+#else
+static enum drm_mode_status tfp410_mode_valid(struct intel_dvo_device *dvo,
+					      const struct drm_display_mode *mode)
+{
+#endif
 	return MODE_OK;
 }
 

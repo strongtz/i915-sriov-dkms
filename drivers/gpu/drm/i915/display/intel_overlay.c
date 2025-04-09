@@ -26,6 +26,8 @@
  * Derived from Xorg ddx, xf86-video-intel, src/i830_video.c
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_fourcc.h>
 
 #include "gem/i915_gem_internal.h"
@@ -294,7 +296,11 @@ static void intel_overlay_flip_prepare(struct intel_overlay *overlay,
 	drm_WARN_ON(&overlay->i915->drm, overlay->old_vma);
 
 	if (vma)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		frontbuffer = intel_frontbuffer_get(vma->obj);
+#else
+		frontbuffer = intel_frontbuffer_get(intel_bo_to_drm_bo(vma->obj));
+#endif
 
 	intel_frontbuffer_track(overlay->frontbuffer, frontbuffer,
 				INTEL_FRONTBUFFER_OVERLAY(pipe));
@@ -769,8 +775,13 @@ static struct i915_vma *intel_overlay_pin_fb(struct drm_i915_gem_object *new_bo)
 retry:
 	ret = i915_gem_object_lock(new_bo, &ww);
 	if (!ret) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		vma = i915_gem_object_pin_to_display_plane(new_bo, &ww, 0,
 							   NULL, PIN_MAPPABLE);
+#else
+		vma = i915_gem_object_pin_to_display_plane(new_bo, &ww, 0, 0,
+							   NULL, PIN_MAPPABLE);
+#endif
 		ret = PTR_ERR_OR_ZERO(vma);
 	}
 	if (ret == -EDEADLK) {

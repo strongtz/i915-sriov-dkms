@@ -3,6 +3,7 @@
  * Copyright(c) 2020 Intel Corporation.
  */
 #include <linux/workqueue.h>
+#include <linux/version.h>
 
 #include "gem/i915_gem_context.h"
 
@@ -460,10 +461,19 @@ void intel_pxp_fini_hw(struct intel_pxp *pxp)
 	intel_pxp_irq_disable(pxp);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 int intel_pxp_key_check(struct intel_pxp *pxp,
 			struct drm_i915_gem_object *obj,
 			bool assign)
 {
+#else
+int intel_pxp_key_check(struct intel_pxp *pxp,
+			struct drm_gem_object *_obj,
+			bool assign)
+{
+	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
+#endif
+
 	if (!intel_pxp_is_active(pxp))
 		return -ENODEV;
 

@@ -5,6 +5,7 @@
 
 #include <linux/debugfs.h>
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include <drm/drm_debugfs.h>
 #include <drm/drm_edid.h>
@@ -15,9 +16,12 @@
 #include "i915_irq.h"
 #include "i915_reg.h"
 #include "intel_alpm.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_bo.h"
+#endif
 #include "intel_crtc.h"
-#include "intel_de.h"
 #include "intel_crtc_state_dump.h"
+#include "intel_de.h"
 #include "intel_display_debugfs.h"
 #include "intel_display_debugfs_params.h"
 #include "intel_display_power.h"
@@ -28,6 +32,9 @@
 #include "intel_dp_link_training.h"
 #include "intel_dp_mst.h"
 #include "intel_drrs.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_fb.h"
+#endif
 #include "intel_fbc.h"
 #include "intel_fbdev.h"
 #include "intel_hdcp.h"
@@ -97,7 +104,7 @@ static int i915_gem_framebuffer_info(struct seq_file *m, void *data)
 	struct intel_framebuffer *fbdev_fb = NULL;
 	struct drm_framebuffer *drm_fb;
 
-#ifdef CONFIG_DRM_FBDEV_EMULATION
+#if defined(CONFIG_DRM_FBDEV_EMULATION) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 	fbdev_fb = intel_fbdev_framebuffer(dev_priv->display.fbdev.fbdev);
 	if (fbdev_fb) {
 		seq_printf(m, "fbcon size: %d x %d, depth %d, %d bpp, modifier 0x%llx, refcount %d, obj ",
@@ -107,7 +114,11 @@ static int i915_gem_framebuffer_info(struct seq_file *m, void *data)
 			   fbdev_fb->base.format->cpp[0] * 8,
 			   fbdev_fb->base.modifier,
 			   drm_framebuffer_read_refcount(&fbdev_fb->base));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		i915_debugfs_describe_obj(m, intel_fb_obj(&fbdev_fb->base));
+#else
+		intel_bo_describe(m, intel_fb_bo(&fbdev_fb->base));
+#endif
 		seq_putc(m, '\n');
 	}
 #endif
@@ -125,7 +136,11 @@ static int i915_gem_framebuffer_info(struct seq_file *m, void *data)
 			   fb->base.format->cpp[0] * 8,
 			   fb->base.modifier,
 			   drm_framebuffer_read_refcount(&fb->base));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		i915_debugfs_describe_obj(m, intel_fb_obj(&fb->base));
+#else
+		intel_bo_describe(m, intel_fb_bo(&fb->base));
+#endif
 		seq_putc(m, '\n');
 	}
 	mutex_unlock(&dev_priv->drm.mode_config.fb_lock);

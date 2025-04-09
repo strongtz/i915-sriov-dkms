@@ -7,8 +7,12 @@
 #define _I9XX_PLANE_H_
 
 #include <linux/types.h>
+#include <linux/version.h>
 
 enum pipe;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+struct drm_framebuffer;
+#endif
 struct drm_i915_private;
 struct intel_crtc;
 struct intel_initial_plane_config;
@@ -19,6 +23,11 @@ struct intel_plane_state;
 unsigned int i965_plane_max_stride(struct intel_plane *plane,
 				   u32 pixel_format, u64 modifier,
 				   unsigned int rotation);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+unsigned int vlv_plane_min_alignment(struct intel_plane *plane,
+				     const struct drm_framebuffer *fb,
+				     int colot_plane);
+#endif
 int i9xx_check_plane_surface(struct intel_plane_state *plane_state);
 
 struct intel_plane *

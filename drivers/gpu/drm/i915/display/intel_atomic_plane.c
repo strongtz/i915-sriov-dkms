@@ -33,11 +33,15 @@
 
 #include <linux/dma-fence-chain.h>
 #include <linux/dma-resv.h>
+#include <linux/version.h>
 
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_blend.h>
 #include <drm/drm_fourcc.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include <drm/drm_gem.h>
+#endif
+#include <drm/drm_gem_atomic_helper.h>
 
 #include "i915_config.h"
 #include "i9xx_plane_regs.h"
@@ -153,6 +157,13 @@ bool intel_plane_needs_physical(struct intel_plane *plane)
 	return plane->id == PLANE_CURSOR &&
 		DISPLAY_INFO(i915)->cursor_needs_physical;
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+bool intel_plane_can_async_flip(struct intel_plane *plane, u64 modifier)
+{
+	return plane->can_async_flip && plane->can_async_flip(modifier);
+}
+#endif
 
 unsigned int intel_adjusted_rate(const struct drm_rect *src,
 				 const struct drm_rect *dst,
@@ -1123,8 +1134,13 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 	struct drm_i915_private *dev_priv = to_i915(plane->base.dev);
 	struct intel_plane_state *old_plane_state =
 		intel_atomic_get_old_plane_state(state, plane);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(new_plane_state->hw.fb);
 	struct drm_i915_gem_object *old_obj = intel_fb_obj(old_plane_state->hw.fb);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(new_plane_state->hw.fb);
+	struct drm_gem_object *old_obj = intel_fb_bo(old_plane_state->hw.fb);
+#endif
 	int ret;
 
 	if (old_obj) {
@@ -1144,8 +1160,13 @@ intel_prepare_plane_fb(struct drm_plane *_plane,
 		 * can safely continue.
 		 */
 		if (new_crtc_state && intel_crtc_needs_modeset(new_crtc_state)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 			ret = add_dma_resv_fences(intel_bo_to_drm_bo(old_obj)->resv,
 						  &new_plane_state->uapi);
+#else
+			ret = add_dma_resv_fences(old_obj->resv,
+						  &new_plane_state->uapi);
+#endif
 			if (ret < 0)
 				return ret;
 		}
@@ -1204,8 +1225,12 @@ intel_cleanup_plane_fb(struct drm_plane *plane,
 	struct intel_atomic_state *state =
 		to_intel_atomic_state(old_plane_state->uapi.state);
 	struct drm_i915_private *dev_priv = to_i915(plane->dev);
-	struct drm_i915_gem_object *obj = intel_fb_obj(old_plane_state->hw.fb);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+	struct drm_i915_gem_object *obj = intel_fb_obj(old_plane_state->hw.fb);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(old_plane_state->hw.fb);
+#endif
 	if (!obj)
 		return;
 

@@ -45,8 +45,10 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_rect.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #include "gem/i915_gem_lmem.h"
 #include "gem/i915_gem_object.h"
+#endif
 
 #include "g4x_dp.h"
 #include "g4x_hdmi.h"
@@ -62,6 +64,9 @@
 #include "intel_atomic_plane.h"
 #include "intel_audio.h"
 #include "intel_bw.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_bo.h"
+#endif
 #include "intel_cdclk.h"
 #include "intel_clock_gating.h"
 #include "intel_color.h"
@@ -6238,6 +6243,7 @@ static int intel_async_flip_check_hw(struct intel_atomic_state *state, struct in
 		if (!plane->async_flip)
 			continue;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		/*
 		 * FIXME: This check is kept generic for all platforms.
 		 * Need to verify this for all gen9 platforms to enable
@@ -6274,8 +6280,22 @@ static int intel_async_flip_check_hw(struct intel_atomic_state *state, struct in
 				    new_plane_state->hw.fb->modifier);
 			return -EINVAL;
 		}
+#else
+		if (!intel_plane_can_async_flip(plane, new_plane_state->hw.fb->modifier)) {
+			drm_dbg_kms(&i915->drm,
+				    "[PLANE:%d:%s] Modifier 0x%llx does not support async flip\n",
+				    plane->base.base.id, plane->base.name,
+				    new_plane_state->hw.fb->modifier);
+			return -EINVAL;
+		}
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		if (new_plane_state->hw.fb->format->num_planes > 1) {
+#else
+		if (intel_format_info_is_yuv_semiplanar(new_plane_state->hw.fb->format,
+							new_plane_state->hw.fb->modifier)) {
+#endif
 			drm_dbg_kms(&i915->drm,
 				    "[PLANE:%d:%s] Planar formats do not support async flips\n",
 				    plane->base.base.id, plane->base.name);
@@ -6320,6 +6340,16 @@ static int intel_async_flip_check_hw(struct intel_atomic_state *state, struct in
 				    plane->base.base.id, plane->base.name);
 			return -EINVAL;
 		}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+		if (skl_plane_aux_dist(old_plane_state, 0) !=
+		    skl_plane_aux_dist(new_plane_state, 0)) {
+			drm_dbg_kms(&i915->drm,
+				    "[PLANE:%d:%s] AUX_DIST cannot be changed in async flip\n",
+				    plane->base.base.id, plane->base.name);
+			return -EINVAL;
+		}
+#endif
 
 		if (!drm_rect_equals(&old_plane_state->uapi.src, &new_plane_state->uapi.src) ||
 		    !drm_rect_equals(&old_plane_state->uapi.dst, &new_plane_state->uapi.dst)) {
@@ -7346,10 +7376,17 @@ static void intel_atomic_prepare_plane_clear_colors(struct intel_atomic_state *s
 		 * caller made sure that the object is synced wrt. the related color clear value
 		 * GPU write on it.
 		 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		ret = i915_gem_object_read_from_page(intel_fb_obj(fb),
 						     fb->offsets[cc_plane] + 16,
 						     &plane_state->ccval,
 						     sizeof(plane_state->ccval));
+#else
+		ret = intel_bo_read_from_page(intel_fb_bo(fb),
+					      fb->offsets[cc_plane] + 16,
+					      &plane_state->ccval,
+					      sizeof(plane_state->ccval));
+#endif
 		/* The above could only fail if the FB obj has an unexpected backing store type. */
 		drm_WARN_ON(&i915->drm, ret);
 	}
@@ -8405,5 +8442,9 @@ void intel_hpd_poll_fini(struct drm_i915_private *i915)
 
 bool intel_scanout_needs_vtd_wa(struct drm_i915_private *i915)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	return DISPLAY_VER(i915) >= 6 && i915_vtd_active(i915);
+#else
+	return IS_DISPLAY_VER(i915, 6, 11) && i915_vtd_active(i915);
+#endif
 }

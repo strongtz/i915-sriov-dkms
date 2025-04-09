@@ -3,15 +3,23 @@
  * Copyright © 2021 Intel Corporation
  */
 
-#include <drm/drm_blend.h>
-#include <drm/drm_modeset_helper.h>
+#include <linux/version.h>
 
 #include <linux/dma-fence.h>
 #include <linux/dma-resv.h>
 
+#include <drm/drm_blend.h>
+#include <drm/drm_gem.h>
+#include <drm/drm_modeset_helper.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 #include "gem/i915_gem_object.h"
+#endif
 #include "i915_drv.h"
 #include "intel_atomic_plane.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_bo.h"
+#endif
 #include "intel_display.h"
 #include "intel_display_types.h"
 #include "intel_dpt.h"
@@ -44,6 +52,16 @@ static const struct drm_format_info skl_ccs_formats[] = {
 	  .cpp = { 4, 1, }, .hsub = 8, .vsub = 16, .has_alpha = true, },
 	{ .format = DRM_FORMAT_ABGR8888, .depth = 32, .num_planes = 2,
 	  .cpp = { 4, 1, }, .hsub = 8, .vsub = 16, .has_alpha = true, },
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,13,0)
+	{ .format = DRM_FORMAT_XRGB2101010, .depth = 30, .num_planes = 2,
+	  .cpp = { 4, 1, }, .hsub = 8, .vsub = 16, },
+	{ .format = DRM_FORMAT_XBGR2101010, .depth = 30, .num_planes = 2,
+	  .cpp = { 4, 1, }, .hsub = 8, .vsub = 16, },
+	{ .format = DRM_FORMAT_ARGB2101010, .depth = 30, .num_planes = 2,
+	  .cpp = { 4, 1, }, .hsub = 8, .vsub = 16, .has_alpha = true, },
+	{ .format = DRM_FORMAT_ABGR2101010, .depth = 30, .num_planes = 2,
+	  .cpp = { 4, 1, }, .hsub = 8, .vsub = 16, .has_alpha = true, },
+#endif
 };
 
 /*
@@ -66,6 +84,32 @@ static const struct drm_format_info gen12_ccs_formats[] = {
 	{ .format = DRM_FORMAT_ABGR8888, .depth = 32, .num_planes = 2,
 	  .char_per_block = { 4, 1 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
 	  .hsub = 1, .vsub = 1, .has_alpha = true },
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,13,0)
+	{ .format = DRM_FORMAT_XRGB2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 1 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 1 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 1 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 1 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_XRGB16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 1 }, .block_w = { 1, 1 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 1 }, .block_w = { 1, 1 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 1 }, .block_w = { 1, 1 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 1 }, .block_w = { 1, 1 }, .block_h = { 1, 1 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+#endif
 	{ .format = DRM_FORMAT_YUYV, .num_planes = 2,
 	  .char_per_block = { 2, 1 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
 	  .hsub = 2, .vsub = 1, .is_yuv = true },
@@ -99,6 +143,7 @@ static const struct drm_format_info gen12_ccs_formats[] = {
  * Same as gen12_ccs_formats[] above, but with additional surface used
  * to pass Clear Color information in plane 2 with 64 bits of data.
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 static const struct drm_format_info gen12_ccs_cc_formats[] = {
 	{ .format = DRM_FORMAT_XRGB8888, .depth = 24, .num_planes = 3,
 	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 2 }, .block_h = { 1, 1, 1 },
@@ -128,6 +173,85 @@ static const struct drm_format_info gen12_flat_ccs_cc_formats[] = {
 	  .char_per_block = { 4, 0 }, .block_w = { 1, 2 }, .block_h = { 1, 1 },
 	  .hsub = 1, .vsub = 1, .has_alpha = true },
 };
+#else
+static const struct drm_format_info gen12_ccs_cc_formats[] = {
+	{ .format = DRM_FORMAT_XRGB8888, .depth = 24, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR8888, .depth = 24, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB8888, .depth = 32, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR8888, .depth = 32, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+{ .format = DRM_FORMAT_XRGB2101010, .depth = 30, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR2101010, .depth = 30, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB2101010, .depth = 30, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR2101010, .depth = 30, .num_planes = 3,
+	  .char_per_block = { 4, 1, 0 }, .block_w = { 1, 2, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_XRGB16161616F, .depth = 0, .num_planes = 3,
+	  .char_per_block = { 8, 1, 0 }, .block_w = { 1, 1, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR16161616F, .depth = 0, .num_planes = 3,
+	  .char_per_block = { 8, 1, 0 }, .block_w = { 1, 1, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB16161616F, .depth = 0, .num_planes = 3,
+	  .char_per_block = { 8, 1, 0 }, .block_w = { 1, 1, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR16161616F, .depth = 0, .num_planes = 3,
+	  .char_per_block = { 8, 1, 0 }, .block_w = { 1, 1, 0 }, .block_h = { 1, 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+};
+
+static const struct drm_format_info gen12_flat_ccs_cc_formats[] = {
+	{ .format = DRM_FORMAT_XRGB8888, .depth = 24, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR8888, .depth = 24, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB8888, .depth = 32, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR8888, .depth = 32, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+{ .format = DRM_FORMAT_XRGB2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR2101010, .depth = 30, .num_planes = 2,
+	  .char_per_block = { 4, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_XRGB16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_XBGR16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, },
+	{ .format = DRM_FORMAT_ARGB16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+	{ .format = DRM_FORMAT_ABGR16161616F, .depth = 0, .num_planes = 2,
+	  .char_per_block = { 8, 0 }, .block_w = { 1, 0 }, .block_h = { 1, 0 },
+	  .hsub = 1, .vsub = 1, .has_alpha = true },
+};
+#endif
 
 struct intel_modifier_desc {
 	u64 modifier;
@@ -1237,7 +1361,11 @@ static bool intel_plane_needs_remap(const struct intel_plane_state *plane_state)
 static int convert_plane_offset_to_xy(const struct intel_framebuffer *fb, int color_plane,
 				      int plane_width, int *x, int *y)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(&fb->base);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(&fb->base);
+#endif
 	int ret;
 
 	ret = intel_fb_offset_to_xy(x, y, &fb->base, color_plane);
@@ -1261,8 +1389,13 @@ static int convert_plane_offset_to_xy(const struct intel_framebuffer *fb, int co
 	 * fb layout agrees with the fence layout. We already check that the
 	 * fb stride matches the fence stride elsewhere.
 	 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (color_plane == 0 && i915_gem_object_is_tiled(obj) &&
 	    (*x + plane_width) * fb->base.format->cpp[color_plane] > fb->base.pitches[color_plane]) {
+#else
+	if (color_plane == 0 && intel_bo_is_tiled(obj) &&
+	    (*x + plane_width) * fb->base.format->cpp[color_plane] > fb->base.pitches[color_plane]) {
+#endif
 		drm_dbg_kms(fb->base.dev,
 			    "bad fb plane %d offset: 0x%x\n",
 			    color_plane, fb->base.offsets[color_plane]);
@@ -1579,9 +1712,31 @@ static unsigned int intel_fb_min_alignment(const struct drm_framebuffer *fb)
 	return min_alignment;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+static unsigned int intel_fb_vtd_guard(const struct drm_framebuffer *fb)
+{
+	struct drm_i915_private *i915 = to_i915(fb->dev);
+	struct intel_plane *plane;
+	unsigned int vtd_guard = 0;
+
+	for_each_intel_plane(&i915->drm, plane) {
+		if (!drm_plane_has_format(&plane->base, fb->format->format, fb->modifier))
+			continue;
+
+		vtd_guard = max_t(unsigned int, vtd_guard, plane->vtd_guard);
+	}
+
+	return vtd_guard;
+}
+#endif
+
 int intel_fill_fb_info(struct drm_i915_private *i915, struct intel_framebuffer *fb)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(&fb->base);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(&fb->base);
+#endif
 	u32 gtt_offset_rotated = 0;
 	u32 gtt_offset_remapped = 0;
 	unsigned int max_size = 0;
@@ -1654,17 +1809,62 @@ int intel_fill_fb_info(struct drm_i915_private *i915, struct intel_framebuffer *
 		max_size = max(max_size, offset + size);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (mul_u32_u32(max_size, tile_size) > intel_bo_to_drm_bo(obj)->size) {
 		drm_dbg_kms(&i915->drm,
 			    "fb too big for bo (need %llu bytes, have %zu bytes)\n",
 			    mul_u32_u32(max_size, tile_size), intel_bo_to_drm_bo(obj)->size);
 		return -EINVAL;
 	}
+#else
+	if (mul_u32_u32(max_size, tile_size) > obj->size) {
+		drm_dbg_kms(&i915->drm,
+			    "fb too big for bo (need %llu bytes, have %zu bytes)\n",
+			    mul_u32_u32(max_size, tile_size), obj->size);
+		return -EINVAL;
+	}
+#endif
 
 	fb->min_alignment = intel_fb_min_alignment(&fb->base);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	fb->vtd_guard = intel_fb_vtd_guard(&fb->base);
+#endif
 
 	return 0;
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+unsigned int intel_fb_view_vtd_guard(const struct drm_framebuffer *fb,
+				     const struct intel_fb_view *view,
+				     unsigned int rotation)
+{
+	unsigned int vtd_guard;
+	int color_plane;
+
+	vtd_guard = to_intel_framebuffer(fb)->vtd_guard;
+	if (!vtd_guard)
+		return 0;
+
+	for (color_plane = 0; color_plane < fb->format->num_planes; color_plane++) {
+		unsigned int stride, tile;
+
+		if (intel_fb_is_ccs_aux_plane(fb, color_plane) ||
+		    is_gen12_ccs_cc_plane(fb, color_plane))
+			continue;
+
+		stride = view->color_plane[color_plane].mapping_stride;
+
+		if (drm_rotation_90_or_270(rotation))
+			tile = intel_tile_height(fb, color_plane);
+		else
+			tile = intel_tile_width_bytes(fb, color_plane);
+
+		vtd_guard = max(vtd_guard, DIV_ROUND_UP(stride, tile));
+	}
+
+	return vtd_guard;
+}
+#endif
 
 static void intel_plane_remap_gtt(struct intel_plane_state *plane_state)
 {
@@ -1881,7 +2081,11 @@ static void intel_user_framebuffer_destroy(struct drm_framebuffer *fb)
 
 	intel_frontbuffer_put(intel_fb->frontbuffer);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	intel_fb_bo_framebuffer_fini(intel_fb_obj(fb));
+#else
+	intel_fb_bo_framebuffer_fini(intel_fb_bo(fb));
+#endif
 
 	kfree(intel_fb);
 }
@@ -1890,6 +2094,7 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 						struct drm_file *file,
 						unsigned int *handle)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
 	struct drm_i915_private *i915 = to_i915(intel_bo_to_drm_bo(obj)->dev);
 
@@ -1900,6 +2105,18 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 	}
 
 	return drm_gem_handle_create(file, intel_bo_to_drm_bo(obj), handle);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(fb);
+	struct intel_display *display = to_intel_display(obj->dev);
+
+	if (intel_bo_is_userptr(obj)) {
+		drm_dbg(display->drm,
+			"attempting to use a userptr for a framebuffer, denied\n");
+		return -EINVAL;
+	}
+
+	return drm_gem_handle_create(file, obj, handle);
+#endif
 }
 
 struct frontbuffer_fence_cb {
@@ -1923,7 +2140,11 @@ static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
 					struct drm_clip_rect *clips,
 					unsigned int num_clips)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(fb);
+#endif
 	struct intel_frontbuffer *front = to_intel_frontbuffer(fb);
 	struct dma_fence *fence;
 	struct frontbuffer_fence_cb *cb;
@@ -1932,11 +2153,19 @@ static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
 	if (!atomic_read(&front->bits))
 		return 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (dma_resv_test_signaled(intel_bo_to_drm_bo(obj)->resv, dma_resv_usage_rw(false)))
 		goto flush;
 
 	ret = dma_resv_get_singleton(intel_bo_to_drm_bo(obj)->resv, dma_resv_usage_rw(false),
 				     &fence);
+#else
+	if (dma_resv_test_signaled(obj->resv, dma_resv_usage_rw(false)))
+		goto flush;
+
+	ret = dma_resv_get_singleton(obj->resv, dma_resv_usage_rw(false),
+				     &fence);
+#endif
 	if (ret || !fence)
 		goto flush;
 
@@ -1962,7 +2191,11 @@ static int intel_user_framebuffer_dirty(struct drm_framebuffer *fb,
 	return ret;
 
 flush:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	i915_gem_object_flush_if_display(obj);
+#else
+	intel_bo_flush_if_display(obj);
+#endif
 	intel_frontbuffer_flush(front, ORIGIN_DIRTYFB);
 	return ret;
 }
@@ -1973,11 +2206,22 @@ static const struct drm_framebuffer_funcs intel_fb_funcs = {
 	.dirty = intel_user_framebuffer_dirty,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 			   struct drm_i915_gem_object *obj,
 			   struct drm_mode_fb_cmd2 *mode_cmd)
 {
+#else
+int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
+			   struct drm_gem_object *obj,
+			   struct drm_mode_fb_cmd2 *mode_cmd)
+{
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_private *dev_priv = to_i915(intel_bo_to_drm_bo(obj)->dev);
+#else
+	struct drm_i915_private *dev_priv = to_i915(obj->dev);
+#endif
 	struct drm_framebuffer *fb = &intel_fb->base;
 	u32 max_stride;
 	int ret = -EINVAL;
@@ -2053,7 +2297,11 @@ int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 			}
 		}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		fb->obj[i] = intel_bo_to_drm_bo(obj);
+#else
+		fb->obj[i] = obj;
+#endif
 	}
 
 	ret = intel_fill_fb_info(dev_priv, intel_fb);
@@ -2097,7 +2345,11 @@ intel_user_framebuffer_create(struct drm_device *dev,
 			      const struct drm_mode_fb_cmd2 *user_mode_cmd)
 {
 	struct drm_framebuffer *fb;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj;
+#else
+	struct drm_gem_object *obj;
+#endif
 	struct drm_mode_fb_cmd2 mode_cmd = *user_mode_cmd;
 	struct drm_i915_private *i915 = to_i915(dev);
 
@@ -2106,15 +2358,26 @@ intel_user_framebuffer_create(struct drm_device *dev,
 		return ERR_CAST(obj);
 
 	fb = intel_framebuffer_create(obj, &mode_cmd);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	drm_gem_object_put(intel_bo_to_drm_bo(obj));
+#else
+	drm_gem_object_put(obj);
+#endif
 
 	return fb;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 struct drm_framebuffer *
 intel_framebuffer_create(struct drm_i915_gem_object *obj,
 			 struct drm_mode_fb_cmd2 *mode_cmd)
 {
+#else
+struct drm_framebuffer *
+intel_framebuffer_create(struct drm_gem_object *obj,
+			 struct drm_mode_fb_cmd2 *mode_cmd)
+{
+#endif
 	struct intel_framebuffer *intel_fb;
 	int ret;
 
@@ -2132,3 +2395,10 @@ err:
 	kfree(intel_fb);
 	return ERR_PTR(ret);
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+struct drm_gem_object *intel_fb_bo(const struct drm_framebuffer *fb)
+{
+	return fb ? fb->obj[0] : NULL;
+}
+#endif

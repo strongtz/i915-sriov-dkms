@@ -31,6 +31,7 @@
  */
 
 #include <linux/string_helpers.h>
+#include <linux/version.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_blend.h>
@@ -253,6 +254,7 @@ int vlv_plane_min_cdclk(const struct intel_crtc_state *crtc_state,
 	return DIV_ROUND_UP(pixel_rate * num, den);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static unsigned int vlv_sprite_min_alignment(struct intel_plane *plane,
 					     const struct drm_framebuffer *fb,
 					     int color_plane)
@@ -267,6 +269,7 @@ static unsigned int vlv_sprite_min_alignment(struct intel_plane *plane,
 		return 0;
 	}
 }
+#endif
 
 static u32 vlv_sprite_ctl_crtc(const struct intel_crtc_state *crtc_state)
 {
@@ -995,6 +998,12 @@ static unsigned int g4x_sprite_min_alignment(struct intel_plane *plane,
 					     const struct drm_framebuffer *fb,
 					     int color_plane)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+
+	if (intel_scanout_needs_vtd_wa(i915))
+		return 128 * 1024;
+#endif
 	return 4 * 1024;
 }
 
@@ -1616,8 +1625,18 @@ intel_sprite_plane_create(struct drm_i915_private *dev_priv,
 		plane->get_hw_state = vlv_sprite_get_hw_state;
 		plane->check_plane = vlv_sprite_check;
 		plane->max_stride = i965_plane_max_stride;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		plane->min_alignment = vlv_sprite_min_alignment;
+#else
+		plane->min_alignment = vlv_plane_min_alignment;
+#endif
 		plane->min_cdclk = vlv_plane_min_cdclk;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+		/* FIXME undocumented for VLV/CHV so not sure what's actually needed */
+		if (intel_scanout_needs_vtd_wa(dev_priv))
+			plane->vtd_guard = 128;
+#endif
 
 		if (IS_CHERRYVIEW(dev_priv) && pipe == PIPE_B) {
 			formats = chv_pipe_b_sprite_formats;
@@ -1645,6 +1664,11 @@ intel_sprite_plane_create(struct drm_i915_private *dev_priv,
 
 		plane->min_alignment = g4x_sprite_min_alignment;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+		if (intel_scanout_needs_vtd_wa(dev_priv))
+			plane->vtd_guard = 64;
+#endif
+
 		formats = snb_sprite_formats;
 		num_formats = ARRAY_SIZE(snb_sprite_formats);
 
@@ -1658,6 +1682,11 @@ intel_sprite_plane_create(struct drm_i915_private *dev_priv,
 		plane->max_stride = g4x_sprite_max_stride;
 		plane->min_alignment = g4x_sprite_min_alignment;
 		plane->min_cdclk = g4x_sprite_min_cdclk;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+		if (intel_scanout_needs_vtd_wa(dev_priv))
+			plane->vtd_guard = 64;
+#endif
 
 		if (IS_SANDYBRIDGE(dev_priv)) {
 			formats = snb_sprite_formats;

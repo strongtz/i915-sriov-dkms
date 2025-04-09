@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  *
  */
+#include <linux/version.h>
 
 #include "lib_sw_fence.h"
 
@@ -74,7 +75,11 @@ void timed_fence_init(struct timed_fence *tf, unsigned long expires)
 
 void timed_fence_fini(struct timed_fence *tf)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	if (del_timer_sync(&tf->timer))
+#else
+	if (timer_delete_sync(&tf->timer))
+#endif
 		i915_sw_fence_commit(&tf->fence);
 
 	destroy_timer_on_stack(&tf->timer);

@@ -4,6 +4,7 @@
  */
 
 #include <linux/types.h>
+#include <linux/version.h>
 
 #include "gt/intel_gt.h"
 #include "gt/intel_rps.h"
@@ -231,8 +232,13 @@ static void delayed_huc_load_init(struct intel_huc *huc)
 			   sw_fence_dummy_notify);
 	i915_sw_fence_commit(&huc->delayed_load.fence);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&huc->delayed_load.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	huc->delayed_load.timer.function = huc_delayed_load_timer_callback;
+#else
+	hrtimer_setup(&huc->delayed_load.timer, huc_delayed_load_timer_callback, CLOCK_MONOTONIC,
+		      HRTIMER_MODE_REL);
+#endif
 }
 
 static void delayed_huc_load_fini(struct intel_huc *huc)

@@ -8,8 +8,13 @@
 
 #include <linux/errno.h>
 #include <linux/types.h>
+#include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 struct drm_i915_gem_object;
+#else
+struct drm_gem_object;
+#endif
 struct drm_i915_private;
 struct intel_pxp;
 
@@ -31,9 +36,15 @@ int intel_pxp_get_backend_timeout_ms(struct intel_pxp *pxp);
 int intel_pxp_start(struct intel_pxp *pxp);
 void intel_pxp_end(struct intel_pxp *pxp);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 int intel_pxp_key_check(struct intel_pxp *pxp,
 			struct drm_i915_gem_object *obj,
 			bool assign);
+#else
+int intel_pxp_key_check(struct intel_pxp *pxp,
+			struct drm_gem_object *obj,
+			bool assign);
+#endif
 
 void intel_pxp_invalidate(struct intel_pxp *pxp);
 

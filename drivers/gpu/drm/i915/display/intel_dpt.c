@@ -3,6 +3,8 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include "gem/i915_gem_domain.h"
 #include "gem/i915_gem_internal.h"
 #include "gem/i915_gem_lmem.h"
@@ -242,7 +244,11 @@ void intel_dpt_suspend(struct drm_i915_private *i915)
 struct i915_address_space *
 intel_dpt_create(struct intel_framebuffer *fb)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_gem_object *obj = &intel_fb_obj(&fb->base)->base;
+#else
+	struct drm_gem_object *obj = intel_fb_bo(&fb->base);
+#endif
 	struct drm_i915_private *i915 = to_i915(obj->dev);
 	struct drm_i915_gem_object *dpt_obj;
 	struct i915_address_space *vm;

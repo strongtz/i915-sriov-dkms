@@ -25,6 +25,8 @@
 #ifndef _INTEL_DISPLAY_H_
 #define _INTEL_DISPLAY_H_
 
+#include <linux/version.h>
+
 #include <drm/drm_util.h>
 
 #include "i915_reg_defs.h"
@@ -40,7 +42,9 @@ struct drm_encoder;
 struct drm_file;
 struct drm_format_info;
 struct drm_framebuffer;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 struct drm_i915_gem_object;
+#endif
 struct drm_i915_private;
 struct drm_mode_fb_cmd2;
 struct drm_modeset_acquire_ctx;
@@ -477,9 +481,11 @@ int ilk_get_lanes_required(int target_clock, int link_bw, int bpp);
 void vlv_wait_port_ready(struct drm_i915_private *dev_priv,
 			 struct intel_digital_port *dig_port,
 			 unsigned int expected_mask);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 struct drm_framebuffer *
 intel_framebuffer_create(struct drm_i915_gem_object *obj,
 			 struct drm_mode_fb_cmd2 *mode_cmd);
+#endif
 
 bool intel_fuzzy_clock_check(int clock1, int clock2);
 

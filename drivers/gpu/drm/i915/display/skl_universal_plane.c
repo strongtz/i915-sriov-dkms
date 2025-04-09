@@ -3,6 +3,8 @@
  * Copyright © 2020 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_blend.h>
 #include <drm/drm_damage_helper.h>
@@ -11,6 +13,9 @@
 #include "i915_drv.h"
 #include "i915_reg.h"
 #include "intel_atomic_plane.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_bo.h"
+#endif
 #include "intel_de.h"
 #include "intel_display_irq.h"
 #include "intel_display_types.h"
@@ -345,7 +350,9 @@ static int skl_plane_max_width(const struct drm_framebuffer *fb,
 			return 5120;
 	case I915_FORMAT_MOD_Y_TILED_CCS:
 	case I915_FORMAT_MOD_Yf_TILED_CCS:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 	case I915_FORMAT_MOD_Y_TILED_GEN12_MC_CCS:
+#endif
 		/* FIXME AUX plane? */
 	case I915_FORMAT_MOD_Y_TILED:
 	case I915_FORMAT_MOD_Yf_TILED:
@@ -500,6 +507,81 @@ skl_plane_max_stride(struct intel_plane *plane,
 				max_pixels, max_bytes);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+static bool tgl_plane_can_async_flip(u64 modifier)
+{
+	switch (modifier) {
+	case DRM_FORMAT_MOD_LINEAR:
+	case I915_FORMAT_MOD_X_TILED:
+	case I915_FORMAT_MOD_Y_TILED:
+	case I915_FORMAT_MOD_4_TILED:
+	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS:
+	case I915_FORMAT_MOD_4_TILED_MTL_RC_CCS:
+	case I915_FORMAT_MOD_4_TILED_DG2_RC_CCS:
+	case I915_FORMAT_MOD_4_TILED_BMG_CCS:
+	case I915_FORMAT_MOD_4_TILED_LNL_CCS:
+		return true;
+	case I915_FORMAT_MOD_Y_TILED_GEN12_MC_CCS:
+	case I915_FORMAT_MOD_4_TILED_MTL_MC_CCS:
+	case I915_FORMAT_MOD_4_TILED_DG2_MC_CCS:
+	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS_CC:
+	case I915_FORMAT_MOD_4_TILED_MTL_RC_CCS_CC:
+	case I915_FORMAT_MOD_4_TILED_DG2_RC_CCS_CC:
+		return false;
+	default:
+		return false;
+	}
+}
+
+static bool icl_plane_can_async_flip(u64 modifier)
+{
+	switch (modifier) {
+	case DRM_FORMAT_MOD_LINEAR:
+		/*
+		 * FIXME: Async on Linear buffer is supported on ICL
+		 * but with additional alignment and fbc restrictions
+		 * need to be taken care of.
+		 */
+		return false;
+	case I915_FORMAT_MOD_X_TILED:
+	case I915_FORMAT_MOD_Y_TILED:
+	case I915_FORMAT_MOD_Yf_TILED:
+	case I915_FORMAT_MOD_Y_TILED_CCS:
+	case I915_FORMAT_MOD_Yf_TILED_CCS:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool skl_plane_can_async_flip(u64 modifier)
+{
+	switch (modifier) {
+	case DRM_FORMAT_MOD_LINEAR:
+		return false;
+	case I915_FORMAT_MOD_X_TILED:
+	case I915_FORMAT_MOD_Y_TILED:
+	case I915_FORMAT_MOD_Yf_TILED:
+		return true;
+	case I915_FORMAT_MOD_Y_TILED_CCS:
+	case I915_FORMAT_MOD_Yf_TILED_CCS:
+		/*
+		 * Display WA #0731: skl
+		 * WaDisableRCWithAsyncFlip: skl
+		 * "When render decompression is enabled, hardware
+		 *  internally converts the Async flips to Sync flips."
+		 *
+		 * Display WA #1159: glk
+		 * "Async flip with render compression may result in
+		 *  intermittent underrun corruption."
+		 */
+		return false;
+	default:
+		return false;
+	}
+}
+#endif
+
 static u32 tgl_plane_min_alignment(struct intel_plane *plane,
 				   const struct drm_framebuffer *fb,
 				   int color_plane)
@@ -512,11 +594,23 @@ static u32 tgl_plane_min_alignment(struct intel_plane *plane,
 	if (intel_fb_is_ccs_aux_plane(fb, color_plane))
 		return mult * 4 * 1024;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	/*
+	 * FIXME ADL sees GGTT/DMAR faults with async
+	 * flips unless we align to 16k at least.
+	 * Figure out what's going on here...
+	 */
+	if (IS_ALDERLAKE_P(i915) &&
+	    intel_plane_can_async_flip(plane, fb->modifier))
+		return mult * 16 * 1024;
+#endif
+
 	switch (fb->modifier) {
 	case DRM_FORMAT_MOD_LINEAR:
 	case I915_FORMAT_MOD_X_TILED:
 	case I915_FORMAT_MOD_Y_TILED:
 	case I915_FORMAT_MOD_4_TILED:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 		/*
 		 * FIXME ADL sees GGTT/DMAR faults with async
 		 * flips unless we align to 16k at least.
@@ -524,7 +618,9 @@ static u32 tgl_plane_min_alignment(struct intel_plane *plane,
 		 */
 		if (IS_ALDERLAKE_P(i915) && HAS_ASYNC_FLIPS(i915))
 			return mult * 16 * 1024;
+#endif
 		return mult * 4 * 1024;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	case I915_FORMAT_MOD_Y_TILED_GEN12_MC_CCS:
 	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS:
 	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS_CC:
@@ -536,6 +632,19 @@ static u32 tgl_plane_min_alignment(struct intel_plane *plane,
 	case I915_FORMAT_MOD_4_TILED_DG2_MC_CCS:
 	case I915_FORMAT_MOD_4_TILED_BMG_CCS:
 	case I915_FORMAT_MOD_4_TILED_LNL_CCS:
+#else
+	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS:
+	case I915_FORMAT_MOD_4_TILED_MTL_RC_CCS:
+	case I915_FORMAT_MOD_4_TILED_DG2_RC_CCS:
+	case I915_FORMAT_MOD_Y_TILED_GEN12_MC_CCS:
+	case I915_FORMAT_MOD_4_TILED_MTL_MC_CCS:
+	case I915_FORMAT_MOD_4_TILED_DG2_MC_CCS:
+	case I915_FORMAT_MOD_Y_TILED_GEN12_RC_CCS_CC:
+	case I915_FORMAT_MOD_4_TILED_MTL_RC_CCS_CC:
+	case I915_FORMAT_MOD_4_TILED_DG2_RC_CCS_CC:
+	case I915_FORMAT_MOD_4_TILED_BMG_CCS:
+	case I915_FORMAT_MOD_4_TILED_LNL_CCS:
+#endif
 		/*
 		 * Align to at least 4x1 main surface
 		 * tiles (16K) to match 64B of AUX.
@@ -558,6 +667,10 @@ static u32 skl_plane_min_alignment(struct intel_plane *plane,
 	if (color_plane != 0)
 		return 4 * 1024;
 
+	/*
+	 * VT-d needs at least 256k alignment,
+	 * but that's already covered below.
+	 */
 	switch (fb->modifier) {
 	case DRM_FORMAT_MOD_LINEAR:
 	case I915_FORMAT_MOD_X_TILED:
@@ -1188,9 +1301,15 @@ static u32 skl_plane_surf(const struct intel_plane_state *plane_state,
 	return plane_surf;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static u32 skl_plane_aux_dist(const struct intel_plane_state *plane_state,
 			      int color_plane)
 {
+#else
+u32 skl_plane_aux_dist(const struct intel_plane_state *plane_state,
+		       int color_plane)
+{
+#endif
 	struct drm_i915_private *i915 = to_i915(plane_state->uapi.plane->dev);
 	const struct drm_framebuffer *fb = plane_state->hw.fb;
 	int aux_plane = skl_main_to_aux_plane(fb, color_plane);
@@ -2118,14 +2237,23 @@ static void check_protection(struct intel_plane_state *plane_state)
 	struct intel_plane *plane = to_intel_plane(plane_state->uapi.plane);
 	struct drm_i915_private *i915 = to_i915(plane->base.dev);
 	const struct drm_framebuffer *fb = plane_state->hw.fb;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(fb);
+#endif
 
 	if (DISPLAY_VER(i915) < 11)
 		return;
 
 	plane_state->decrypt = intel_pxp_key_check(i915->pxp, obj, false) == 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	plane_state->force_black = i915_gem_object_is_protected(obj) &&
 		!plane_state->decrypt;
+#else
+	plane_state->force_black = intel_bo_is_protected(obj) &&
+		!plane_state->decrypt;
+#endif
 }
 
 static int skl_plane_check(struct intel_crtc_state *crtc_state,
@@ -2336,6 +2464,7 @@ static bool skl_plane_format_mod_supported(struct drm_plane *_plane,
 	}
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 static bool gen12_plane_format_mod_supported(struct drm_plane *_plane,
 					     u32 format, u64 modifier)
 {
@@ -2387,6 +2516,113 @@ static bool gen12_plane_format_mod_supported(struct drm_plane *_plane,
 		return false;
 	}
 }
+#else
+static bool icl_plane_format_mod_supported(struct drm_plane *_plane,
+					   u32 format, u64 modifier)
+{
+	struct intel_plane *plane = to_intel_plane(_plane);
+
+	if (!intel_fb_plane_supports_modifier(plane, modifier))
+		return false;
+
+	switch (format) {
+	case DRM_FORMAT_XRGB8888:
+	case DRM_FORMAT_XBGR8888:
+	case DRM_FORMAT_ARGB8888:
+	case DRM_FORMAT_ABGR8888:
+	case DRM_FORMAT_XRGB2101010:
+	case DRM_FORMAT_XBGR2101010:
+	case DRM_FORMAT_ARGB2101010:
+	case DRM_FORMAT_ABGR2101010:
+		if (intel_fb_is_ccs_modifier(modifier))
+			return true;
+		fallthrough;
+	case DRM_FORMAT_RGB565:
+	case DRM_FORMAT_YUYV:
+	case DRM_FORMAT_YVYU:
+	case DRM_FORMAT_UYVY:
+	case DRM_FORMAT_VYUY:
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_XYUV8888:
+	case DRM_FORMAT_P010:
+	case DRM_FORMAT_P012:
+	case DRM_FORMAT_P016:
+	case DRM_FORMAT_XVYU2101010:
+		if (modifier == I915_FORMAT_MOD_Yf_TILED)
+			return true;
+		fallthrough;
+	case DRM_FORMAT_C8:
+	case DRM_FORMAT_XBGR16161616F:
+	case DRM_FORMAT_ABGR16161616F:
+	case DRM_FORMAT_XRGB16161616F:
+	case DRM_FORMAT_ARGB16161616F:
+	case DRM_FORMAT_Y210:
+	case DRM_FORMAT_Y212:
+	case DRM_FORMAT_Y216:
+	case DRM_FORMAT_XVYU12_16161616:
+	case DRM_FORMAT_XVYU16161616:
+		if (modifier == DRM_FORMAT_MOD_LINEAR ||
+		    modifier == I915_FORMAT_MOD_X_TILED ||
+		    modifier == I915_FORMAT_MOD_Y_TILED)
+			return true;
+		fallthrough;
+	default:
+		return false;
+	}
+}
+
+static bool tgl_plane_format_mod_supported(struct drm_plane *_plane,
+					   u32 format, u64 modifier)
+{
+	struct intel_plane *plane = to_intel_plane(_plane);
+
+	if (!intel_fb_plane_supports_modifier(plane, modifier))
+		return false;
+
+	switch (format) {
+	case DRM_FORMAT_XRGB8888:
+	case DRM_FORMAT_XBGR8888:
+	case DRM_FORMAT_ARGB8888:
+	case DRM_FORMAT_ABGR8888:
+	case DRM_FORMAT_XRGB2101010:
+	case DRM_FORMAT_XBGR2101010:
+	case DRM_FORMAT_ARGB2101010:
+	case DRM_FORMAT_ABGR2101010:
+	case DRM_FORMAT_XBGR16161616F:
+	case DRM_FORMAT_ABGR16161616F:
+	case DRM_FORMAT_XRGB16161616F:
+	case DRM_FORMAT_ARGB16161616F:
+		if (intel_fb_is_ccs_modifier(modifier))
+			return true;
+		fallthrough;
+	case DRM_FORMAT_YUYV:
+	case DRM_FORMAT_YVYU:
+	case DRM_FORMAT_UYVY:
+	case DRM_FORMAT_VYUY:
+	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_XYUV8888:
+	case DRM_FORMAT_P010:
+	case DRM_FORMAT_P012:
+	case DRM_FORMAT_P016:
+		if (intel_fb_is_mc_ccs_modifier(modifier))
+			return true;
+		fallthrough;
+	case DRM_FORMAT_RGB565:
+	case DRM_FORMAT_XVYU2101010:
+	case DRM_FORMAT_C8:
+	case DRM_FORMAT_Y210:
+	case DRM_FORMAT_Y212:
+	case DRM_FORMAT_Y216:
+	case DRM_FORMAT_XVYU12_16161616:
+	case DRM_FORMAT_XVYU16161616:
+		if (!intel_fb_is_ccs_modifier(modifier))
+			return true;
+		fallthrough;
+	default:
+		return false;
+	}
+}
+#endif
 
 static const struct drm_plane_funcs skl_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
@@ -2397,6 +2633,7 @@ static const struct drm_plane_funcs skl_plane_funcs = {
 	.format_mod_supported = skl_plane_format_mod_supported,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 static const struct drm_plane_funcs gen12_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
 	.disable_plane = drm_atomic_helper_disable_plane,
@@ -2405,6 +2642,25 @@ static const struct drm_plane_funcs gen12_plane_funcs = {
 	.atomic_destroy_state = intel_plane_destroy_state,
 	.format_mod_supported = gen12_plane_format_mod_supported,
 };
+#else
+static const struct drm_plane_funcs icl_plane_funcs = {
+	.update_plane = drm_atomic_helper_update_plane,
+	.disable_plane = drm_atomic_helper_disable_plane,
+	.destroy = intel_plane_destroy,
+	.atomic_duplicate_state = intel_plane_duplicate_state,
+	.atomic_destroy_state = intel_plane_destroy_state,
+	.format_mod_supported = icl_plane_format_mod_supported,
+};
+
+static const struct drm_plane_funcs tgl_plane_funcs = {
+	.update_plane = drm_atomic_helper_update_plane,
+	.disable_plane = drm_atomic_helper_disable_plane,
+	.destroy = intel_plane_destroy,
+	.atomic_duplicate_state = intel_plane_duplicate_state,
+	.atomic_destroy_state = intel_plane_destroy_state,
+	.format_mod_supported = tgl_plane_format_mod_supported,
+};
+#endif
 
 static void
 skl_plane_enable_flip_done(struct intel_plane *plane)
@@ -2428,6 +2684,7 @@ skl_plane_disable_flip_done(struct intel_plane *plane)
 	spin_unlock_irq(&i915->irq_lock);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static bool skl_plane_has_rc_ccs(struct drm_i915_private *i915,
 				 enum pipe pipe, enum plane_id plane_id)
 {
@@ -2444,10 +2701,66 @@ static bool skl_plane_has_rc_ccs(struct drm_i915_private *i915,
 	return pipe != PIPE_C &&
 		(plane_id == PLANE_1 || plane_id == PLANE_2);
 }
+#else
+static bool skl_plane_has_rc_ccs(struct drm_i915_private *i915,
+				 enum pipe pipe, enum plane_id plane_id)
+{
+	return pipe != PIPE_C &&
+		(plane_id == PLANE_1 || plane_id == PLANE_2);
+}
 
+static u8 skl_plane_caps(struct drm_i915_private *i915,
+			 enum pipe pipe, enum plane_id plane_id)
+{
+	u8 caps = INTEL_PLANE_CAP_TILING_X |
+		INTEL_PLANE_CAP_TILING_Y |
+		INTEL_PLANE_CAP_TILING_Yf;
+
+	if (skl_plane_has_rc_ccs(i915, pipe, plane_id))
+		caps |= INTEL_PLANE_CAP_CCS_RC;
+
+	return caps;
+}
+
+static bool glk_plane_has_rc_ccs(struct drm_i915_private *i915,
+				 enum pipe pipe)
+{
+	return pipe != PIPE_C;
+}
+
+static u8 glk_plane_caps(struct drm_i915_private *i915,
+			 enum pipe pipe, enum plane_id plane_id)
+{
+	u8 caps = INTEL_PLANE_CAP_TILING_X |
+		INTEL_PLANE_CAP_TILING_Y |
+		INTEL_PLANE_CAP_TILING_Yf;
+
+	if (glk_plane_has_rc_ccs(i915, pipe))
+		caps |= INTEL_PLANE_CAP_CCS_RC;
+
+	return caps;
+}
+
+static u8 icl_plane_caps(struct drm_i915_private *i915,
+			 enum pipe pipe, enum plane_id plane_id)
+{
+	return INTEL_PLANE_CAP_TILING_X |
+		INTEL_PLANE_CAP_TILING_Y |
+		INTEL_PLANE_CAP_TILING_Yf |
+		INTEL_PLANE_CAP_CCS_RC;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 static bool gen12_plane_has_mc_ccs(struct drm_i915_private *i915,
 				   enum plane_id plane_id)
 {
+#else
+static bool tgl_plane_has_mc_ccs(struct drm_i915_private *i915,
+				 enum plane_id plane_id)
+{
+#endif
 	if (DISPLAY_VER(i915) < 12)
 		return false;
 
@@ -2462,7 +2775,20 @@ static bool gen12_plane_has_mc_ccs(struct drm_i915_private *i915,
 
 	return plane_id < PLANE_6;
 }
+#else
+static bool tgl_plane_has_mc_ccs(struct drm_i915_private *i915,
+				 enum plane_id plane_id)
+{
+	/* Wa_14010477008 */
+	if (IS_DG1(i915) || IS_ROCKETLAKE(i915) ||
+	    (IS_TIGERLAKE(i915) && IS_DISPLAY_STEP(i915, STEP_A0, STEP_D0)))
+		return false;
 
+	return plane_id < PLANE_6;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static u8 skl_get_plane_caps(struct drm_i915_private *i915,
 			     enum pipe pipe, enum plane_id plane_id)
 {
@@ -2484,14 +2810,42 @@ static u8 skl_get_plane_caps(struct drm_i915_private *i915,
 			caps |= INTEL_PLANE_CAP_CCS_RC_CC;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 	if (gen12_plane_has_mc_ccs(i915, plane_id))
 		caps |= INTEL_PLANE_CAP_CCS_MC;
+#else
+	if (tgl_plane_has_mc_ccs(i915, plane_id))
+		caps |= INTEL_PLANE_CAP_CCS_MC;
+#endif
 
 	if (DISPLAY_VER(i915) >= 14 && IS_DGFX(i915))
 		caps |= INTEL_PLANE_CAP_NEED64K_PHYS;
 
 	return caps;
 }
+#else
+static u8 tgl_plane_caps(struct drm_i915_private *i915,
+			 enum pipe pipe, enum plane_id plane_id)
+{
+	struct intel_display *display = &i915->display;
+	u8 caps = INTEL_PLANE_CAP_TILING_X |
+		INTEL_PLANE_CAP_CCS_RC |
+		INTEL_PLANE_CAP_CCS_RC_CC;
+
+	if (HAS_4TILE(i915)) // original HAS_4TILE(display)
+		caps |= INTEL_PLANE_CAP_TILING_4;
+	else
+		caps |= INTEL_PLANE_CAP_TILING_Y;
+
+	if (tgl_plane_has_mc_ccs(i915, plane_id))
+		caps |= INTEL_PLANE_CAP_CCS_MC;
+
+	if (DISPLAY_VER(display) >= 14 && IS_DGFX(i915)) // original display->platform.dgfx
+		caps |= INTEL_PLANE_CAP_NEED64K_PHYS;
+
+	return caps;
+}
+#endif
 
 struct intel_plane *
 skl_universal_plane_create(struct drm_i915_private *dev_priv,
@@ -2506,6 +2860,9 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 	const u32 *formats;
 	int num_formats;
 	int ret;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	u8 caps;
+#endif
 
 	plane = intel_plane_alloc();
 	if (IS_ERR(plane))
@@ -2545,6 +2902,11 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 	else
 		plane->min_alignment = skl_plane_min_alignment;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	if (intel_scanout_needs_vtd_wa(dev_priv))
+		plane->vtd_guard = DISPLAY_VER(dev_priv) >= 10 ? 168 : 136;
+#endif
+
 	if (DISPLAY_VER(dev_priv) >= 11) {
 		plane->update_noarm = icl_plane_update_noarm;
 		plane->update_arm = icl_plane_update_arm;
@@ -2557,11 +2919,24 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 	plane->get_hw_state = skl_plane_get_hw_state;
 	plane->check_plane = skl_plane_check;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	if (plane_id == PLANE_1) {
+#else
+	if (HAS_ASYNC_FLIPS(dev_priv) && plane_id == PLANE_1) {
+#endif
 		plane->need_async_flip_toggle_wa = IS_DISPLAY_VER(dev_priv, 9, 10);
 		plane->async_flip = skl_plane_async_flip;
 		plane->enable_flip_done = skl_plane_enable_flip_done;
 		plane->disable_flip_done = skl_plane_disable_flip_done;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+		if (DISPLAY_VER(dev_priv) >= 12)
+			plane->can_async_flip = tgl_plane_can_async_flip;
+		else if (DISPLAY_VER(dev_priv) == 11)
+			plane->can_async_flip = icl_plane_can_async_flip;
+		else
+			plane->can_async_flip = skl_plane_can_async_flip;
+#endif
 	}
 
 	if (DISPLAY_VER(dev_priv) >= 11)
@@ -2574,18 +2949,46 @@ skl_universal_plane_create(struct drm_i915_private *dev_priv,
 		formats = skl_get_plane_formats(dev_priv, pipe,
 						plane_id, &num_formats);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 	if (DISPLAY_VER(dev_priv) >= 12)
 		plane_funcs = &gen12_plane_funcs;
 	else
 		plane_funcs = &skl_plane_funcs;
+#else
+	if (DISPLAY_VER(dev_priv) >= 12)
+		plane_funcs = &tgl_plane_funcs;
+	else if (DISPLAY_VER(dev_priv) == 11)
+		plane_funcs = &icl_plane_funcs;
+	else
+		plane_funcs = &skl_plane_funcs;
+#endif
 
 	if (plane_id == PLANE_1)
 		plane_type = DRM_PLANE_TYPE_PRIMARY;
 	else
 		plane_type = DRM_PLANE_TYPE_OVERLAY;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	modifiers = intel_fb_plane_get_modifiers(dev_priv,
 						 skl_get_plane_caps(dev_priv, pipe, plane_id));
+#else
+	if (DISPLAY_VER(dev_priv) >= 12)
+		caps = tgl_plane_caps(dev_priv, pipe, plane_id);
+	else if (DISPLAY_VER(dev_priv) == 11)
+		caps = icl_plane_caps(dev_priv, pipe, plane_id);
+	else if (DISPLAY_VER(dev_priv) == 10)
+		caps = glk_plane_caps(dev_priv, pipe, plane_id);
+	else
+		caps = skl_plane_caps(dev_priv, pipe, plane_id);
+
+	/* FIXME: xe has problems with AUX */
+	if (!IS_ENABLED(I915) && !HAS_FLAT_CCS(dev_priv))
+		caps &= ~(INTEL_PLANE_CAP_CCS_RC |
+			  INTEL_PLANE_CAP_CCS_RC_CC |
+			  INTEL_PLANE_CAP_CCS_MC);
+
+	modifiers = intel_fb_plane_get_modifiers(dev_priv, caps);
+#endif
 
 	ret = drm_universal_plane_init(&dev_priv->drm, &plane->base,
 				       0, plane_funcs,

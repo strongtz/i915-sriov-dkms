@@ -1440,12 +1440,21 @@ static int intel_dp_mst_get_modes(struct drm_connector *connector)
 	return intel_dp_mst_get_ddc_modes(connector);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static int
 intel_dp_mst_mode_valid_ctx(struct drm_connector *connector,
 			    struct drm_display_mode *mode,
 			    struct drm_modeset_acquire_ctx *ctx,
 			    enum drm_mode_status *status)
 {
+#else
+static int
+intel_dp_mst_mode_valid_ctx(struct drm_connector *connector,
+			    const struct drm_display_mode *mode,
+			    struct drm_modeset_acquire_ctx *ctx,
+			    enum drm_mode_status *status)
+{
+#endif
 	struct drm_i915_private *dev_priv = to_i915(connector->dev);
 	struct intel_connector *intel_connector = to_intel_connector(connector);
 	struct intel_dp *intel_dp = intel_connector->mst_port;

@@ -5,6 +5,7 @@
  */
 
 #include <linux/pm_runtime.h>
+#include <linux/version.h>
 
 #include "gt/intel_engine.h"
 #include "gt/intel_engine_pm.h"
@@ -1261,8 +1262,12 @@ void i915_pmu_register(struct drm_i915_private *i915)
 	}
 
 	spin_lock_init(&pmu->lock);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&pmu->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	pmu->timer.function = i915_sample;
+#else
+	hrtimer_setup(&pmu->timer, i915_sample, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#endif
 	pmu->cpuhp.cpu = -1;
 	init_rc6(pmu);
 
