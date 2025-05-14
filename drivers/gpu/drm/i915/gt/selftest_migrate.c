@@ -4,6 +4,7 @@
  */
 
 #include <linux/sort.h>
+#include <linux/version.h>
 
 #include "gem/i915_gem_internal.h"
 #include "gem/i915_gem_lmem.h"
@@ -660,7 +661,11 @@ static int live_emit_pte_full_ring(void *arg)
 
 out_rq:
 	i915_request_add(rq); /* GEM_BUG_ON(rq->reserved_space > ring->space)? */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	del_timer_sync(&st.timer);
+#else
+	timer_delete_sync(&st.timer);
+#endif
 	destroy_timer_on_stack(&st.timer);
 out_unpin:
 	intel_context_unpin(ce);

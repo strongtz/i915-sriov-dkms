@@ -14,7 +14,10 @@ struct drm_i915_private;
 struct drm_printer;
 
 #define DRIVER_NAME		"i915"
-#define DRIVER_DESC		"Intel Graphics"
+#define DRIVER_DESC		"\
+Linux i915 driver with SR-IOV support, port from github.com/intel/mainline-tracking.git v6.12 branch\n\
+Homepage: https://github.com/strongtz/i915-sriov-dkms \
+"
 #define DRIVER_DATE		"20230929"
 #define DRIVER_TIMESTAMP	1695980603
 

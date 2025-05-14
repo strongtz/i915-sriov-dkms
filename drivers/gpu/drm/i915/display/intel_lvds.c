@@ -386,9 +386,15 @@ static void intel_lvds_shutdown(struct intel_encoder *encoder)
 }
 
 static enum drm_mode_status
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 intel_lvds_mode_valid(struct drm_connector *_connector,
 		      struct drm_display_mode *mode)
 {
+#else
+intel_lvds_mode_valid(struct drm_connector *_connector,
+		      const struct drm_display_mode *mode)
+{
+#endif
 	struct intel_connector *connector = to_intel_connector(_connector);
 	struct drm_i915_private *i915 = to_i915(connector->base.dev);
 	const struct drm_display_mode *fixed_mode =

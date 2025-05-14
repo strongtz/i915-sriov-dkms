@@ -27,7 +27,9 @@
 #include "intel_vblank.h"
 #include "skl_watermark.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
 #include "gem/i915_gem_object.h"
+#endif
 
 /* Cursor formats */
 static const u32 intel_cursor_formats[] = {
@@ -373,6 +375,12 @@ static unsigned int i9xx_cursor_min_alignment(struct intel_plane *plane,
 					      const struct drm_framebuffer *fb,
 					      int color_plane)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+	struct drm_i915_private *i915 = to_i915(plane->base.dev);
+
+	if (intel_scanout_needs_vtd_wa(i915))
+		return 64 * 1024;
+#endif
 	return 4 * 1024; /* physical for i915/i945 */
 }
 
@@ -1017,6 +1025,11 @@ intel_cursor_plane_create(struct drm_i915_private *dev_priv,
 			cursor->min_alignment = i85x_cursor_min_alignment;
 		else
 			cursor->min_alignment = i9xx_cursor_min_alignment;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+		if (intel_scanout_needs_vtd_wa(dev_priv))
+			cursor->vtd_guard = 2;
+#endif
 
 		cursor->update_arm = i9xx_cursor_update_arm;
 		cursor->disable_arm = i9xx_cursor_disable_arm;

@@ -36,17 +36,30 @@
 #include <linux/sysrq.h>
 #include <linux/tty.h>
 #include <linux/vga_switcheroo.h>
+#include <linux/version.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#include <drm/clients/drm_client_setup.h>
+#endif
 #include <drm/drm_crtc.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fourcc.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include <drm/drm_gem.h>
+#endif
 #include <drm/drm_gem_framebuffer_helper.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#include <drm/drm_managed.h>
+#endif
 
 #include "gem/i915_gem_mman.h"
 #include "gem/i915_gem_object.h"
 
 #include "i915_drv.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_bo.h"
+#endif
 #include "intel_display_types.h"
 #include "intel_fb.h"
 #include "intel_fb_pin.h"
@@ -55,10 +68,13 @@
 #include "intel_frontbuffer.h"
 
 struct intel_fbdev {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	struct drm_fb_helper helper;
+#endif
 	struct intel_framebuffer *fb;
 	struct i915_vma *vma;
 	unsigned long vma_flags;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	int preferred_bpp;
 
 	/* Whether or not fbdev hpd processing is temporarily suspended */
@@ -68,12 +84,22 @@ struct intel_fbdev {
 
 	/* Protects hpd_suspended */
 	struct mutex hpd_lock;
+#endif
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static struct intel_fbdev *to_intel_fbdev(struct drm_fb_helper *fb_helper)
 {
 	return container_of(fb_helper, struct intel_fbdev, helper);
 }
+#else
+static struct intel_fbdev *to_intel_fbdev(struct drm_fb_helper *fb_helper)
+{
+	struct drm_i915_private *i915 = to_i915(fb_helper->client.dev);
+
+	return i915->display.fbdev.fbdev;
+}
+#endif
 
 static struct intel_frontbuffer *to_frontbuffer(struct intel_fbdev *ifbdev)
 {
@@ -126,13 +152,20 @@ static int intel_fbdev_pan_display(struct fb_var_screeninfo *var,
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static int intel_fbdev_mmap(struct fb_info *info, struct vm_area_struct *vma)
 {
 	struct intel_fbdev *fbdev = to_intel_fbdev(info->par);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_gem_object *bo = drm_gem_fb_get_obj(&fbdev->fb->base, 0);
 	struct drm_i915_gem_object *obj = to_intel_bo(bo);
 
 	return i915_gem_fb_mmap(obj, vma);
+#else
+	struct drm_gem_object *obj = drm_gem_fb_get_obj(&fbdev->fb->base, 0);
+
+	return intel_bo_fb_mmap(obj, vma);
+#endif
 }
 
 static void intel_fbdev_fb_destroy(struct fb_info *info)
@@ -154,6 +187,35 @@ static void intel_fbdev_fb_destroy(struct fb_info *info)
 	drm_fb_helper_unprepare(&ifbdev->helper);
 	kfree(ifbdev);
 }
+#else
+static int intel_fbdev_mmap(struct fb_info *info, struct vm_area_struct *vma)
+{
+	struct drm_fb_helper *fb_helper = info->par;
+	struct drm_gem_object *obj = drm_gem_fb_get_obj(fb_helper->fb, 0);
+
+	return intel_bo_fb_mmap(obj, vma);
+}
+
+static void intel_fbdev_fb_destroy(struct fb_info *info)
+{
+	struct drm_fb_helper *fb_helper = info->par;
+	struct intel_fbdev *ifbdev = to_intel_fbdev(fb_helper);
+
+	drm_fb_helper_fini(fb_helper);
+
+	/*
+	 * We rely on the object-free to release the VMA pinning for
+	 * the info->screen_base mmaping. Leaking the VMA is simpler than
+	 * trying to rectify all the possible error paths leading here.
+	 */
+	intel_fb_unpin_vma(ifbdev->vma, ifbdev->vma_flags);
+	drm_framebuffer_remove(fb_helper->fb);
+
+	drm_client_release(&fb_helper->client);
+	drm_fb_helper_unprepare(fb_helper);
+	kfree(fb_helper);
+}
+#endif
 
 __diag_push();
 __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for fb ops");
@@ -172,6 +234,49 @@ static const struct fb_ops intelfb_ops = {
 
 __diag_pop();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+static int intelfb_dirty(struct drm_fb_helper *helper, struct drm_clip_rect *clip)
+{
+	if (!(clip->x1 < clip->x2 && clip->y1 < clip->y2))
+		return 0;
+
+	if (helper->fb->funcs->dirty)
+		return helper->fb->funcs->dirty(helper->fb, NULL, 0, 0, clip, 1);
+
+	return 0;
+}
+
+static void intelfb_restore(struct drm_fb_helper *fb_helper)
+{
+	struct intel_fbdev *ifbdev = to_intel_fbdev(fb_helper);
+
+	intel_fbdev_invalidate(ifbdev);
+}
+
+static void intelfb_set_suspend(struct drm_fb_helper *fb_helper, bool suspend)
+{
+	struct fb_info *info = fb_helper->info;
+
+	/*
+	 * When resuming from hibernation, Linux restores the object's
+	 * content from swap if the buffer is backed by shmemfs. If the
+	 * object is stolen however, it will be full of whatever garbage
+	 * was left in there. Clear it to zero in this case.
+	 */
+	if (!suspend && !intel_bo_is_shmem(intel_fb_bo(fb_helper->fb)))
+		memset_io(info->screen_base, 0, info->screen_size);
+
+	fb_set_suspend(info, suspend);
+}
+
+static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
+	.fb_dirty = intelfb_dirty,
+	.fb_restore = intelfb_restore,
+	.fb_set_suspend = intelfb_set_suspend,
+};
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static int intelfb_create(struct drm_fb_helper *helper,
 			  struct drm_fb_helper_surface_size *sizes)
 {
@@ -187,7 +292,11 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	struct i915_vma *vma;
 	unsigned long flags = 0;
 	bool prealloc = false;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj;
+#else
+	struct drm_gem_object *obj;
+#endif
 	int ret;
 
 	mutex_lock(&ifbdev->hpd_lock);
@@ -209,7 +318,11 @@ static int intelfb_create(struct drm_fb_helper *helper,
 		drm_framebuffer_put(&fb->base);
 		fb = NULL;
 	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (!fb || drm_WARN_ON(dev, !intel_fb_obj(&fb->base))) {
+#else
+	if (!fb || drm_WARN_ON(dev, !intel_fb_bo(&fb->base))) {
+#endif
 		drm_dbg_kms(&dev_priv->drm,
 			    "no BIOS fb, allocating a new one\n");
 		fb = intel_fbdev_fb_alloc(helper, sizes);
@@ -247,7 +360,11 @@ static int intelfb_create(struct drm_fb_helper *helper,
 
 	info->fbops = &intelfb_ops;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	obj = intel_fb_obj(&fb->base);
+#else
+	obj = intel_fb_bo(&fb->base);
+#endif
 
 	ret = intel_fbdev_fb_fill_info(dev_priv, info, obj, vma);
 	if (ret)
@@ -259,7 +376,116 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	 * If the object is stolen however, it will be full of whatever
 	 * garbage was left in there.
 	 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (!i915_gem_object_is_shmem(obj) && !prealloc)
+		memset_io(info->screen_base, 0, info->screen_size);
+#else
+	if (!intel_bo_is_shmem(obj) && !prealloc)
+		memset_io(info->screen_base, 0, info->screen_size);
+#endif
+
+	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
+
+	drm_dbg_kms(&dev_priv->drm, "allocated %dx%d fb: 0x%08x\n",
+		    fb->base.width, fb->base.height,
+		    i915_ggtt_offset(vma));
+	ifbdev->fb = fb;
+	ifbdev->vma = vma;
+	ifbdev->vma_flags = flags;
+
+	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
+
+	return 0;
+
+out_unpin:
+	intel_fb_unpin_vma(vma, flags);
+out_unlock:
+	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
+	return ret;
+}
+#else
+int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
+				   struct drm_fb_helper_surface_size *sizes)
+{
+	struct intel_fbdev *ifbdev = to_intel_fbdev(helper);
+	struct intel_framebuffer *fb = ifbdev->fb;
+	struct drm_device *dev = helper->dev;
+	struct drm_i915_private *dev_priv = to_i915(dev);
+	intel_wakeref_t wakeref;
+	struct fb_info *info;
+	struct i915_vma *vma;
+	unsigned long flags = 0;
+	bool prealloc = false;
+	struct drm_gem_object *obj;
+	int ret;
+
+	ifbdev->fb = NULL;
+
+	if (fb &&
+	    (sizes->fb_width > fb->base.width ||
+	     sizes->fb_height > fb->base.height)) {
+		drm_dbg_kms(&dev_priv->drm,
+			    "BIOS fb too small (%dx%d), we require (%dx%d),"
+			    " releasing it\n",
+			    fb->base.width, fb->base.height,
+			    sizes->fb_width, sizes->fb_height);
+		drm_framebuffer_put(&fb->base);
+		fb = NULL;
+	}
+	if (!fb || drm_WARN_ON(dev, !intel_fb_bo(&fb->base))) {
+		drm_dbg_kms(&dev_priv->drm,
+			    "no BIOS fb, allocating a new one\n");
+		fb = intel_fbdev_fb_alloc(helper, sizes);
+		if (IS_ERR(fb))
+			return PTR_ERR(fb);
+	} else {
+		drm_dbg_kms(&dev_priv->drm, "re-using BIOS fb\n");
+		prealloc = true;
+		sizes->fb_width = fb->base.width;
+		sizes->fb_height = fb->base.height;
+	}
+
+	wakeref = intel_runtime_pm_get(&dev_priv->runtime_pm);
+
+	/* Pin the GGTT vma for our access via info->screen_base.
+	 * This also validates that any existing fb inherited from the
+	 * BIOS is suitable for own access.
+	 */
+	vma = intel_fb_pin_to_ggtt(&fb->base, &fb->normal_view.gtt,
+				   fb->min_alignment, 0,
+				   intel_fb_view_vtd_guard(&fb->base, &fb->normal_view,
+							   DRM_MODE_ROTATE_0),
+				   false, &flags);
+	if (IS_ERR(vma)) {
+		ret = PTR_ERR(vma);
+		goto out_unlock;
+	}
+
+	info = drm_fb_helper_alloc_info(helper);
+	if (IS_ERR(info)) {
+		drm_err(&dev_priv->drm, "Failed to allocate fb_info (%pe)\n", info);
+		ret = PTR_ERR(info);
+		goto out_unpin;
+	}
+
+	helper->funcs = &intel_fb_helper_funcs;
+	helper->fb = &fb->base;
+
+	info->fbops = &intelfb_ops;
+
+	obj = intel_fb_bo(&fb->base);
+
+	ret = intel_fbdev_fb_fill_info(dev_priv, info, obj, vma);
+	if (ret)
+		goto out_unpin;
+
+	drm_fb_helper_fill_info(info, dev->fb_helper, sizes);
+
+	/* If the object is shmemfs backed, it will have given us zeroed pages.
+	 * If the object is stolen however, it will be full of whatever
+	 * garbage was left in there.
+	 */
+	if (!intel_bo_is_shmem(obj) && !prealloc)
 		memset_io(info->screen_base, 0, info->screen_size);
 
 	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
@@ -281,7 +507,9 @@ out_unlock:
 	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
 	return ret;
 }
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static int intelfb_dirty(struct drm_fb_helper *helper, struct drm_clip_rect *clip)
 {
 	if (!(clip->x1 < clip->x2 && clip->y1 < clip->y2))
@@ -297,6 +525,7 @@ static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
 	.fb_probe = intelfb_create,
 	.fb_dirty = intelfb_dirty,
 };
+#endif
 
 /*
  * Build an intel_fbdev struct using a BIOS allocated framebuffer, if possible.
@@ -323,8 +552,12 @@ static bool intel_fbdev_init_bios(struct drm_device *dev,
 			to_intel_plane(crtc->base.primary);
 		struct intel_plane_state *plane_state =
 			to_intel_plane_state(plane->base.state);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		struct drm_i915_gem_object *obj =
 			intel_fb_obj(plane_state->uapi.fb);
+#else
+	struct drm_gem_object *obj = intel_fb_bo(plane_state->uapi.fb);
+#endif
 
 		if (!crtc_state->uapi.active) {
 			drm_dbg_kms(&i915->drm,
@@ -340,6 +573,7 @@ static bool intel_fbdev_init_bios(struct drm_device *dev,
 			continue;
 		}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		if (intel_bo_to_drm_bo(obj)->size > max_size) {
 			drm_dbg_kms(&i915->drm,
 				    "found possible fb from [PLANE:%d:%s]\n",
@@ -348,6 +582,16 @@ static bool intel_fbdev_init_bios(struct drm_device *dev,
 			max_size = intel_bo_to_drm_bo(obj)->size;
 		}
 	}
+#else
+		if (obj->size > max_size) {
+			drm_dbg_kms(&i915->drm,
+				    "found possible fb from [PLANE:%d:%s]\n",
+				    plane->base.base.id, plane->base.name);
+			fb = to_intel_framebuffer(plane_state->uapi.fb);
+			max_size = obj->size;
+		}
+	}
+#endif
 
 	if (!fb) {
 		drm_dbg_kms(&i915->drm,
@@ -421,7 +665,9 @@ static bool intel_fbdev_init_bios(struct drm_device *dev,
 		goto out;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	ifbdev->preferred_bpp = fb->base.format->cpp[0] * 8;
+#endif
 	ifbdev->fb = fb;
 
 	drm_framebuffer_get(&ifbdev->fb->base);
@@ -452,6 +698,7 @@ out:
 	return false;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static void intel_fbdev_suspend_worker(struct work_struct *work)
 {
 	intel_fbdev_set_suspend(&container_of(work,
@@ -535,9 +782,15 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous
 	 * been restored from swap. If the object is stolen however, it will be
 	 * full of whatever garbage was left in there.
 	 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (state == FBINFO_STATE_RUNNING &&
 	    !i915_gem_object_is_shmem(intel_fb_obj(&ifbdev->fb->base)))
 		memset_io(info->screen_base, 0, info->screen_size);
+#else
+	if (state == FBINFO_STATE_RUNNING &&
+	    !intel_bo_is_shmem(intel_fb_bo(&ifbdev->fb->base)))
+		memset_io(info->screen_base, 0, info->screen_size);
+#endif
 
 	drm_fb_helper_set_suspend(&ifbdev->helper, state);
 	console_unlock();
@@ -654,7 +907,26 @@ static const struct drm_client_funcs intel_fbdev_client_funcs = {
 	.restore	= intel_fbdev_client_restore,
 	.hotplug	= intel_fbdev_client_hotplug,
 };
+#else
+static unsigned int intel_fbdev_color_mode(const struct drm_format_info *info)
+{
+	unsigned int bpp;
 
+	if (!info->depth || info->num_planes != 1 || info->has_alpha || info->is_yuv)
+		return 0;
+
+	bpp = drm_format_info_bpp(info, 0);
+
+	switch (bpp) {
+	case 16:
+		return info->depth; // 15 or 16
+	default:
+		return bpp;
+	}
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 void intel_fbdev_setup(struct drm_i915_private *i915)
 {
 	struct drm_device *dev = &i915->drm;
@@ -701,3 +973,34 @@ struct intel_framebuffer *intel_fbdev_framebuffer(struct intel_fbdev *fbdev)
 
 	return to_intel_framebuffer(fbdev->helper.fb);
 }
+#else
+void intel_fbdev_setup(struct drm_i915_private *i915)
+{
+	struct drm_device *dev = &i915->drm;
+	struct intel_fbdev *ifbdev;
+	unsigned int preferred_bpp = 0;
+
+	if (!HAS_DISPLAY(i915))
+		return;
+
+	ifbdev = drmm_kzalloc(dev, sizeof(*ifbdev), GFP_KERNEL);
+	if (!ifbdev)
+		return;
+
+	i915->display.fbdev.fbdev = ifbdev;
+	if (intel_fbdev_init_bios(dev, ifbdev))
+		preferred_bpp = intel_fbdev_color_mode(ifbdev->fb->base.format);
+	if (!preferred_bpp)
+		preferred_bpp = 32;
+
+	drm_client_setup_with_color_mode(dev, preferred_bpp);
+}
+
+struct intel_framebuffer *intel_fbdev_framebuffer(struct intel_fbdev *fbdev)
+{
+	if (!fbdev)
+		return NULL;
+
+	return fbdev->fb;
+}
+#endif

@@ -3,6 +3,8 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include <drm/drm_framebuffer.h>
 
 #include "gem/i915_gem_object.h"
@@ -11,15 +13,30 @@
 #include "intel_fb.h"
 #include "intel_fb_bo.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 void intel_fb_bo_framebuffer_fini(struct drm_i915_gem_object *obj)
 {
 	/* Nothing to do for i915 */
 }
+#else
+void intel_fb_bo_framebuffer_fini(struct drm_gem_object *obj)
+{
+	/* Nothing to do for i915 */
+}
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 int intel_fb_bo_framebuffer_init(struct intel_framebuffer *intel_fb,
 				 struct drm_i915_gem_object *obj,
 				 struct drm_mode_fb_cmd2 *mode_cmd)
 {
+#else
+int intel_fb_bo_framebuffer_init(struct intel_framebuffer *intel_fb,
+				 struct drm_gem_object *_obj,
+				 struct drm_mode_fb_cmd2 *mode_cmd)
+{
+	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
+#endif
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
 	unsigned int tiling, stride;
 
@@ -74,11 +91,19 @@ int intel_fb_bo_framebuffer_init(struct intel_framebuffer *intel_fb,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 struct drm_i915_gem_object *
 intel_fb_bo_lookup_valid_bo(struct drm_i915_private *i915,
 			    struct drm_file *filp,
 			    const struct drm_mode_fb_cmd2 *mode_cmd)
 {
+#else
+struct drm_gem_object *
+intel_fb_bo_lookup_valid_bo(struct drm_i915_private *i915,
+			    struct drm_file *filp,
+			    const struct drm_mode_fb_cmd2 *mode_cmd)
+{
+#endif
 	struct drm_i915_gem_object *obj;
 
 	obj = i915_gem_object_lookup(filp, mode_cmd->handles[0]);
@@ -93,5 +118,9 @@ intel_fb_bo_lookup_valid_bo(struct drm_i915_private *i915,
 		return ERR_PTR(-EREMOTE);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	return obj;
+#else
+	return intel_bo_to_drm_bo(obj);
+#endif
 }

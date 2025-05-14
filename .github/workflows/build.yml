@@ -74,10 +74,10 @@ jobs:
         KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
         sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
-  test-ubuntu-oracular:
+  test-ubuntu-plucky:
     runs-on: ubuntu-24.04
     container:
-      image: ubuntu:24.10
+      image: ubuntu:25.04
     steps:
     - name: Install Dependencies
       run: |
@@ -167,7 +167,7 @@ jobs:
 
   release:
     runs-on: ubuntu-24.04
-    needs: [packaging-debian, packaging-archlinux, test-ubuntu-noble, test-ubuntu-oracular, test-proxmox, test-archlinux]
+    needs: [packaging-debian, packaging-archlinux, test-ubuntu-noble, test-ubuntu-plucky, test-proxmox, test-archlinux]
     permissions:
       contents: write
     steps:

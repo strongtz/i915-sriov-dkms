@@ -7,6 +7,8 @@
  * DOC: display pinning helpers
  */
 
+#include <linux/version.h>
+
 #include "gem/i915_gem_domain.h"
 #include "gem/i915_gem_object.h"
 
@@ -26,7 +28,12 @@ intel_fb_pin_to_dpt(const struct drm_framebuffer *fb,
 {
 	struct drm_device *dev = fb->dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
+#else
+	struct drm_gem_object *_obj = intel_fb_bo(fb);
+	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
+#endif
 	struct i915_gem_ww_ctx ww;
 	struct i915_vma *vma;
 	int ret;
@@ -101,6 +108,7 @@ err:
 	return vma;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 struct i915_vma *
 intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 		     const struct i915_gtt_view *view,
@@ -109,9 +117,25 @@ intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 		     bool uses_fence,
 		     unsigned long *out_flags)
 {
+#else
+struct i915_vma *
+intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
+		     const struct i915_gtt_view *view,
+		     unsigned int alignment,
+		     unsigned int phys_alignment,
+				 unsigned int vtd_guard,
+		     bool uses_fence,
+		     unsigned long *out_flags)
+{
+#endif
 	struct drm_device *dev = fb->dev;
 	struct drm_i915_private *dev_priv = to_i915(dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
+#else
+	struct drm_gem_object *_obj = intel_fb_bo(fb);
+	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
+#endif
 	intel_wakeref_t wakeref;
 	struct i915_gem_ww_ctx ww;
 	struct i915_vma *vma;
@@ -124,6 +148,7 @@ intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 	if (drm_WARN_ON(dev, alignment && !is_power_of_2(alignment)))
 		return ERR_PTR(-EINVAL);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	/* Note that the w/a also requires 64 PTE of padding following the
 	 * bo. We currently fill all unused PTE with the shadow page and so
 	 * we should always have valid PTE following the scanout preventing
@@ -131,6 +156,7 @@ intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 	 */
 	if (intel_scanout_needs_vtd_wa(dev_priv) && alignment < 256 * 1024)
 		alignment = 256 * 1024;
+#endif
 
 	/*
 	 * Global gtt pte registers are special registers which actually forward
@@ -167,8 +193,13 @@ retry:
 	if (ret)
 		goto err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	vma = i915_gem_object_pin_to_display_plane(obj, &ww, alignment,
 						   view, pinctl);
+#else
+	vma = i915_gem_object_pin_to_display_plane(obj, &ww, alignment,
+						   vtd_guard, view, pinctl);
+#endif
 	if (IS_ERR(vma)) {
 		ret = PTR_ERR(vma);
 		goto err_unpin;
@@ -250,6 +281,16 @@ intel_plane_fb_min_phys_alignment(const struct intel_plane_state *plane_state)
 	return plane->min_alignment(plane, fb, 0);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+static unsigned int
+intel_plane_fb_vtd_guard(const struct intel_plane_state *plane_state)
+{
+	return intel_fb_view_vtd_guard(plane_state->hw.fb,
+				       &plane_state->view,
+				       plane_state->hw.rotation);
+}
+#endif
+
 int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 {
 	struct intel_plane *plane = to_intel_plane(plane_state->uapi.plane);
@@ -261,6 +302,9 @@ int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 		vma = intel_fb_pin_to_ggtt(&fb->base, &plane_state->view.gtt,
 					   intel_plane_fb_min_alignment(plane_state),
 					   intel_plane_fb_min_phys_alignment(plane_state),
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+						 intel_plane_fb_vtd_guard(plane_state),
+#endif
 					   intel_plane_uses_fence(plane_state),
 					   &plane_state->flags);
 		if (IS_ERR(vma))
@@ -274,9 +318,17 @@ int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 		 * will trigger might_sleep() even if it won't actually sleep,
 		 * which is the case when the fb has already been pinned.
 		 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		if (intel_plane_needs_physical(plane))
 			plane_state->phys_dma_addr =
 				i915_gem_object_get_dma_address(intel_fb_obj(&fb->base), 0);
+#else
+		if (intel_plane_needs_physical(plane)) {
+			struct drm_i915_gem_object *obj = to_intel_bo(intel_fb_bo(&fb->base));
+
+			plane_state->phys_dma_addr = i915_gem_object_get_dma_address(obj, 0);
+		}
+#endif
 	} else {
 		unsigned int alignment = intel_plane_fb_min_alignment(plane_state);
 

@@ -3,12 +3,20 @@
  * Copyright © 2023 Intel Corporation
  */
 
+#include <linux/version.h>
+
 #include "i915_drv.h"
 #include "i915_reg.h"
 #include "i9xx_wm.h"
 #include "intel_atomic.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_bo.h"
+#endif
 #include "intel_display.h"
 #include "intel_display_trace.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_fb.h"
+#endif
 #include "intel_mchbar_regs.h"
 #include "intel_wm.h"
 #include "skl_watermark.h"
@@ -2171,6 +2179,7 @@ static void i9xx_update_wm(struct drm_i915_private *dev_priv)
 		    "FIFO watermarks - A: %d, B: %d\n", planea_wm, planeb_wm);
 
 	crtc = single_enabled_crtc(dev_priv);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	if (IS_I915GM(dev_priv) && crtc) {
 		struct drm_i915_gem_object *obj;
 
@@ -2180,6 +2189,17 @@ static void i9xx_update_wm(struct drm_i915_private *dev_priv)
 		if (!i915_gem_object_is_tiled(obj))
 			crtc = NULL;
 	}
+#else
+	if (IS_I915GM(dev_priv) && crtc) {
+		struct drm_gem_object *obj;
+
+		obj = intel_fb_bo(crtc->base.primary->state->fb);
+
+		/* self-refresh seems busted with untiled */
+		if (!intel_bo_is_tiled(obj))
+			crtc = NULL;
+	}
+#endif
 
 	/*
 	 * Overlay gets an aggressive default since video jitter is bad.

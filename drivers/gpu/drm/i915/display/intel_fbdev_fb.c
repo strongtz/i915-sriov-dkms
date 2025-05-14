@@ -3,12 +3,16 @@
  * Copyright © 2023 Intel Corporation
  */
 
+#include <linux/version.h>
 #include <drm/drm_fb_helper.h>
 
 #include "gem/i915_gem_lmem.h"
 
 #include "i915_drv.h"
 #include "intel_display_types.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+#include "intel_fb.h"
+#endif
 #include "intel_fbdev_fb.h"
 
 struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
@@ -60,15 +64,26 @@ struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
 		return ERR_PTR(-ENOMEM);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	fb = intel_framebuffer_create(obj, &mode_cmd);
+#else
+	fb = intel_framebuffer_create(intel_bo_to_drm_bo(obj), &mode_cmd);
+#endif
 	i915_gem_object_put(obj);
 
 	return to_intel_framebuffer(fb);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 int intel_fbdev_fb_fill_info(struct drm_i915_private *i915, struct fb_info *info,
 			     struct drm_i915_gem_object *obj, struct i915_vma *vma)
 {
+#else
+int intel_fbdev_fb_fill_info(struct drm_i915_private *i915, struct fb_info *info,
+			     struct drm_gem_object *_obj, struct i915_vma *vma)
+{
+	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
+#endif
 	struct i915_gem_ww_ctx ww;
 	void __iomem *vaddr;
 	int ret;

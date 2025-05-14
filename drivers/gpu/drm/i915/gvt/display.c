@@ -32,6 +32,8 @@
  *
  */
 
+#include <linux/version.h>
+
 #include "i915_drv.h"
 #include "i915_reg.h"
 #include "gvt.h"
@@ -575,8 +577,12 @@ static int setup_virtual_dp_monitor(struct intel_vgpu *vgpu, int port_num,
 	vgpu->display.port_num = port_num;
 
 	/* Init hrtimer based on default refresh rate */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&vblank_timer->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	vblank_timer->timer.function = vblank_timer_fn;
+#else
+	hrtimer_setup(&vblank_timer->timer, vblank_timer_fn, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+#endif
 	vblank_timer->vrefresh_k = port->vrefresh_k;
 	vblank_timer->period = DIV64_U64_ROUND_CLOSEST(NSEC_PER_SEC * MSEC_PER_SEC, vblank_timer->vrefresh_k);
 

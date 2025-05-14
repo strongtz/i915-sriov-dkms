@@ -8,10 +8,14 @@
 
 #include <linux/bits.h>
 #include <linux/types.h>
+#include <linux/version.h>
 
 struct drm_device;
 struct drm_file;
 struct drm_framebuffer;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+struct drm_gem_object;
+#endif
 struct drm_i915_gem_object;
 struct drm_i915_private;
 struct drm_mode_fb_cmd2;
@@ -82,11 +86,25 @@ bool intel_fb_supports_90_270_rotation(const struct intel_framebuffer *fb);
 int intel_fill_fb_info(struct drm_i915_private *i915, struct intel_framebuffer *fb);
 void intel_fb_fill_view(const struct intel_framebuffer *fb, unsigned int rotation,
 			struct intel_fb_view *view);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+unsigned int intel_fb_view_vtd_guard(const struct drm_framebuffer *fb,
+				     const struct intel_fb_view *view,
+				     unsigned int rotation);
+#endif
 int intel_plane_compute_gtt(struct intel_plane_state *plane_state);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 int intel_framebuffer_init(struct intel_framebuffer *ifb,
 			   struct drm_i915_gem_object *obj,
 			   struct drm_mode_fb_cmd2 *mode_cmd);
+#else
+int intel_framebuffer_init(struct intel_framebuffer *ifb,
+			   struct drm_gem_object *obj,
+			   struct drm_mode_fb_cmd2 *mode_cmd);
+struct drm_framebuffer *
+intel_framebuffer_create(struct drm_gem_object *obj,
+			 struct drm_mode_fb_cmd2 *mode_cmd);
+#endif
 struct drm_framebuffer *
 intel_user_framebuffer_create(struct drm_device *dev,
 			      struct drm_file *filp,
@@ -96,5 +114,9 @@ bool intel_fb_modifier_uses_dpt(struct drm_i915_private *i915, u64 modifier);
 bool intel_fb_uses_dpt(const struct drm_framebuffer *fb);
 
 unsigned int intel_fb_modifier_to_tiling(u64 fb_modifier);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
+struct drm_gem_object *intel_fb_bo(const struct drm_framebuffer *fb);
+#endif
 
 #endif /* __INTEL_FB_H__ */

@@ -7,6 +7,7 @@
 #define __INTEL_FB_PIN_H__
 
 #include <linux/types.h>
+#include <linux/version.h>
 
 struct drm_framebuffer;
 struct i915_vma;
@@ -18,6 +19,9 @@ intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 		     const struct i915_gtt_view *view,
 		     unsigned int alignment,
 		     unsigned int phys_alignment,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+				 unsigned int vtd_guard,
+#endif
 		     bool uses_fence,
 		     unsigned long *out_flags);
 

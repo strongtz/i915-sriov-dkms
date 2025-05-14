@@ -4,6 +4,7 @@
  */
 
 #include <linux/prime_numbers.h>
+#include <linux/version.h>
 
 #include "gem/i915_gem_internal.h"
 #include "gem/i915_gem_pm.h"
@@ -1198,7 +1199,11 @@ static int live_timeslice_rewind(void *arg)
 		ENGINE_TRACE(engine, "forcing tasklet for rewind\n");
 		while (i915_request_is_active(rq[A2])) { /* semaphore yield! */
 			/* Wait for the timeslice to kick in */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 			del_timer(&engine->execlists.timer);
+#else
+			timer_delete(&engine->execlists.timer);
+#endif
 			tasklet_hi_schedule(&engine->sched_engine->tasklet);
 			intel_engine_flush_submission(engine);
 		}
@@ -2357,7 +2362,11 @@ static int __cancel_fail(struct live_preempt_cancel *arg)
 	/* force preempt reset [failure] */
 	while (!engine->execlists.pending[0])
 		intel_engine_flush_submission(engine);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	del_timer_sync(&engine->execlists.preempt);
+#else
+	timer_delete_sync(&engine->execlists.preempt);
+#endif
 	intel_engine_flush_submission(engine);
 
 	cancel_reset_timeout(engine);

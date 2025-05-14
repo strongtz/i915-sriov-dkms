@@ -1456,9 +1456,15 @@ static void gen11_dsi_post_disable(struct intel_atomic_state *state,
 	intel_dsi->panel_power_off_time = ktime_get_boottime();
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 static enum drm_mode_status gen11_dsi_mode_valid(struct drm_connector *connector,
 						 struct drm_display_mode *mode)
 {
+#else
+static enum drm_mode_status gen11_dsi_mode_valid(struct drm_connector *connector,
+						 const struct drm_display_mode *mode)
+{
+#endif
 	struct drm_i915_private *i915 = to_i915(connector->dev);
 	enum drm_mode_status status;
 

@@ -8,6 +8,7 @@
 #include <linux/highmem.h>
 #include <linux/sync_file.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include <drm/drm_auth.h>
 #include <drm/drm_syncobj.h>
@@ -913,9 +914,15 @@ static struct i915_vma *eb_lookup_vma(struct i915_execbuffer *eb, u32 handle)
 		 * this context, because the context itself will be banned when
 		 * the protected objects become invalid.
 		 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		if (i915_gem_context_uses_protected_content(eb->gem_context) &&
 		    i915_gem_object_is_protected(obj)) {
 			err = intel_pxp_key_check(eb->i915->pxp, obj, true);
+#else
+		if (i915_gem_context_uses_protected_content(eb->gem_context) &&
+		    i915_gem_object_is_protected(obj)) {
+			err = intel_pxp_key_check(eb->i915->pxp, intel_bo_to_drm_bo(obj), true);
+#endif
 			if (err) {
 				i915_gem_object_put(obj);
 				return ERR_PTR(err);

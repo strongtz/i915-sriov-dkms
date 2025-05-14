@@ -4,6 +4,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/version.h>
 
 #include <drm/drm_drv.h>
 
@@ -51,8 +52,11 @@ void cancel_timer(struct timer_list *t)
 {
 	if (!timer_active(t))
 		return;
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	del_timer(t);
+#else
+	timer_delete(t);
+#endif
 	WRITE_ONCE(t->expires, 0);
 }
 

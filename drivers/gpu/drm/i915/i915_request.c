@@ -30,6 +30,7 @@
 #include <linux/sched/clock.h>
 #include <linux/sched/signal.h>
 #include <linux/sched/mm.h>
+#include <linux/version.h>
 
 #include "gem/i915_gem_context.h"
 #include "gt/intel_breadcrumbs.h"
@@ -303,9 +304,12 @@ static void __rq_arm_watchdog(struct i915_request *rq)
 		return;
 
 	i915_request_get(rq);
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&wdg->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	wdg->timer.function = __rq_watchdog_expired;
+#else
+	hrtimer_setup(&wdg->timer, __rq_watchdog_expired, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#endif
 	hrtimer_start_range_ns(&wdg->timer,
 			       ns_to_ktime(ce->watchdog.timeout_us *
 					   NSEC_PER_USEC),

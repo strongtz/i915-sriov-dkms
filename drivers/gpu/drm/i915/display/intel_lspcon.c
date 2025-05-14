@@ -23,6 +23,8 @@
  *
  */
 
+#include <linux/version.h>
+
 #include <drm/display/drm_dp_dual_mode_helper.h>
 #include <drm/display/drm_hdmi_helper.h>
 #include <drm/drm_atomic_helper.h>
@@ -211,7 +213,13 @@ static int lspcon_change_mode(struct intel_lspcon *lspcon,
 		return 0;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 	err = drm_lspcon_set_mode(intel_dp->aux.drm_dev, ddc, mode);
+#else
+	err = drm_lspcon_set_mode(intel_dp->aux.drm_dev, ddc, mode,
+				  lspcon_get_mode_settle_timeout(lspcon));
+#endif
+
 	if (err < 0) {
 		drm_err(display->drm, "LSPCON mode change failed\n");
 		return err;

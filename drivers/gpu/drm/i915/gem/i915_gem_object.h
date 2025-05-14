@@ -7,6 +7,8 @@
 #ifndef __I915_GEM_OBJECT_H__
 #define __I915_GEM_OBJECT_H__
 
+#include <linux/version.h>
+
 #include <drm/drm_gem.h>
 #include <drm/drm_file.h>
 #include <drm/drm_device.h>
@@ -778,7 +780,11 @@ i915_gem_object_set_to_cpu_domain(struct drm_i915_gem_object *obj, bool write);
 struct i915_vma * __must_check
 i915_gem_object_pin_to_display_plane(struct drm_i915_gem_object *obj,
 				     struct i915_gem_ww_ctx *ww,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 				     u32 alignment,
+#else
+				     u32 alignment, unsigned int guard,
+#endif
 				     const struct i915_gtt_view *view,
 				     unsigned int flags);
 

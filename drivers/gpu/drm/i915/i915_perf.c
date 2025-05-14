@@ -195,6 +195,7 @@
 #include <linux/nospec.h>
 #include <linux/sizes.h>
 #include <linux/uuid.h>
+#include <linux/version.h>
 
 #include "gem/i915_gem_context.h"
 #include "gem/i915_gem_internal.h"
@@ -3358,10 +3359,14 @@ static int i915_oa_stream_init(struct i915_perf_stream *stream,
 	drm_dbg(&stream->perf->i915->drm,
 		"opening stream oa config uuid=%s\n",
 		  stream->oa_config->uuid);
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	hrtimer_init(&stream->poll_check_timer,
 		     CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	stream->poll_check_timer.function = oa_poll_check_timer_cb;
+#else
+	hrtimer_setup(&stream->poll_check_timer, oa_poll_check_timer_cb, CLOCK_MONOTONIC,
+		      HRTIMER_MODE_REL);
+#endif
 	init_waitqueue_head(&stream->poll_wq);
 	spin_lock_init(&stream->oa_buffer.ptr_lock);
 	mutex_init(&stream->lock);
