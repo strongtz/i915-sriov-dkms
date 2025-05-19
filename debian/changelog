@@ -1,5 +1,11 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
+  * Add Arrow Lake pciids
+
+ -- bbaa bbaa <bbaa@bbaa.moe>  Sun, 18 May 2025 21:37:48 +0800
+
+i915-sriov-dkms (2025.05.11) UNRELEASED; urgency=medium
+
   * Initial support for 6.15 kernel
   * Merge upstream patches from linux-stable.git (tag v6.12.28)
 
