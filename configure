@@ -1,7 +1,7 @@
 #!/bin/sh
 #configure script to determine some symbols of kernel
 
-if [ "$KBUILD_MODULES" != "1" ]; then
+if [ "$KBUILD_MODULES" != "1" ] && [ "$KBUILD_MODULES" != "y" ]; then
   exit 0 # exit if not building modules
 fi
 
