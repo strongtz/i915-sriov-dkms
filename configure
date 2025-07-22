@@ -1,7 +1,7 @@
 #!/bin/sh
 #configure script to determine some symbols of kernel
 
-if [ "$KBUILD_MODULES" != "1" ]; then
+if [ "$KBUILD_MODULES" != "1" ] && [ "$KBUILD_MODULES" != "y" ]; then
   exit 0 # exit if not building modules
 fi
 
@@ -11,7 +11,7 @@ module_version=$(grep "^PACKAGE_VERSION" "$KBUILD_EXTMOD/dkms.conf" | grep -o "[
 cat <<EOF > "$KBUILD_EXTMOD/include/config.h"
 #include <linux/version.h>
 
-#define DKMS_MODULE_VERSION "$module_version-sriov.6.12.28"
+#define DKMS_MODULE_VERSION "$module_version-sriov.6.12.39"
 EOF
 
 # conftest
