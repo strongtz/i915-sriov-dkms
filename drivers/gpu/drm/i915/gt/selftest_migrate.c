@@ -538,7 +538,11 @@ struct spinner_timer {
 
 static void spinner_kill(struct timer_list *timer)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
 	struct spinner_timer *st = from_timer(st, timer, timer);
+#else
+	struct spinner_timer *st = timer_container_of(st, timer, timer);
+#endif
 
 	igt_spinner_end(&st->spin);
 	pr_info("%s\n", __func__);

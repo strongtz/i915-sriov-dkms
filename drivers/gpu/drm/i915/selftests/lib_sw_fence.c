@@ -56,7 +56,11 @@ void onstack_fence_fini(struct i915_sw_fence *fence)
 
 static void timed_fence_wake(struct timer_list *t)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
 	struct timed_fence *tf = from_timer(tf, t, timer);
+#else
+	struct timed_fence *tf = timer_container_of(tf, t, timer);
+#endif
 
 	i915_sw_fence_commit(&tf->fence);
 }

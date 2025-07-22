@@ -306,8 +306,14 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 		.range_end = LLONG_MAX,
 		.for_reclaim = 1,
 	};
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
 	unsigned long i;
+#else
+	struct folio *folio = NULL;
+	int error = 0;
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
 	/*
 	 * Leave mmapings intact (GTT will have been revoked on unbinding,
 	 * leaving only CPU mmapings around) and add those pages to the LRU
@@ -337,6 +343,14 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 put:
 		put_page(page);
 	}
+#else
+	while ((folio = writeback_iter(mapping, &wbc, folio, &error))) {
+		if (folio_mapped(folio))
+			folio_redirty_for_writepage(&wbc, folio);
+		else
+			error = shmem_writeout(folio, &wbc);
+	}
+#endif
 }
 
 static void
