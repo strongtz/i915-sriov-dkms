@@ -1996,3 +1996,7 @@ module_exit(kvmgt_exit);
 MODULE_DESCRIPTION("Intel mediated pass-through framework for KVM");
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Intel Corporation");
+
+#ifdef DKMS_MODULE_VERSION
+MODULE_VERSION(DKMS_MODULE_VERSION);
+#endif

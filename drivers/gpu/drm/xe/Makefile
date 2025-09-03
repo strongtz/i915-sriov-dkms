@@ -175,16 +175,16 @@ endif
 subdir-ccflags-$(CONFIG_DRM_XE_DISPLAY) += \
 	-I$(src)/display/ext \
 	-I$(src)/compat-i915-headers \
-	-I$(srctree)/drivers/gpu/drm/i915/display/ \
+	-I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915/display/ \
 	-Ddrm_i915_private=xe_device
 
 # Rule to build SOC code shared with i915
-$(obj)/i915-soc/%.o: $(srctree)/drivers/gpu/drm/i915/soc/%.c FORCE
+$(obj)/i915-soc/%.o: $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/soc/%.c FORCE
 	$(call cmd,force_checksrc)
 	$(call if_changed_rule,cc_o_c)
 
 # Rule to build display code shared with i915
-$(obj)/i915-display/%.o: $(srctree)/drivers/gpu/drm/i915/display/%.c FORCE
+$(obj)/i915-display/%.o: $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/display/%.c FORCE
 	$(call cmd,force_checksrc)
 	$(call if_changed_rule,cc_o_c)
 
@@ -331,22 +331,6 @@ xe-$(CONFIG_DRM_XE_DP_TUNNEL) += \
 	i915-display/intel_dp_tunnel.o
 
 obj-$(CONFIG_DRM_XE) += xe.o
-obj-$(CONFIG_DRM_XE_KUNIT_TEST) += tests/
-
-# header test
-hdrtest_find_args := -not -path xe_rtp_helpers.h
-ifneq ($(CONFIG_DRM_XE_DISPLAY),y)
-	hdrtest_find_args += -not -path display/\* -not -path compat-i915-headers/\* -not -path xe_display.h
-endif
-
-always-$(CONFIG_DRM_XE_WERROR) += \
-	$(patsubst %.h,%.hdrtest, $(shell cd $(src) && find * -name '*.h' $(hdrtest_find_args)))
-
-quiet_cmd_hdrtest = HDRTEST $(patsubst %.hdrtest,%.h,$@)
-      cmd_hdrtest = $(CC) -DHDRTEST $(filter-out $(CFLAGS_GCOV), $(c_flags)) -S -o /dev/null -x c /dev/null -include $<; touch $@
-
-$(obj)/%.hdrtest: $(src)/%.h FORCE
-	$(call if_changed_dep,hdrtest)
 
 uses_generated_oob := $(addprefix $(obj)/, $(xe-y))
 $(uses_generated_oob): $(obj)/generated/xe_wa_oob.h $(obj)/generated/xe_device_wa_oob.h
