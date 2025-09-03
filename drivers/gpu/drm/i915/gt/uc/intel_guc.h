@@ -303,7 +303,7 @@ struct intel_guc {
 	 */
 	struct work_struct dead_guc_worker;
 	/**
-	 * @last_dead_guc_jiffies: timestamp of previous 'dead guc' occurrance
+	 * @last_dead_guc_jiffies: timestamp of previous 'dead guc' occurrence
 	 * used to prevent a fundamentally broken system from continuously
 	 * reloading the GuC.
 	 */
@@ -360,6 +360,17 @@ intel_guc_send_and_receive(struct intel_guc *guc, const u32 *action, u32 len,
 {
 	return intel_guc_ct_send(&guc->ct, action, len,
 				 response_buf, response_buf_size, 0);
+}
+
+static inline void intel_guc_send_wait(unsigned int *sleep_period_us,
+					   bool not_atomic)
+{
+	if (likely(not_atomic)) {
+		usleep_range(*sleep_period_us, 2 * *sleep_period_us);
+		*sleep_period_us = min(*sleep_period_us << 1, 1000u);
+	} else {
+		cpu_relax();
+	}
 }
 
 static inline int intel_guc_send_busy_loop(struct intel_guc *guc,

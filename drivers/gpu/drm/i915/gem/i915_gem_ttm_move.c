@@ -3,7 +3,6 @@
  * Copyright © 2021 Intel Corporation
  */
 
-#include <linux/version.h>
 #include <drm/ttm/ttm_tt.h>
 
 #include "i915_deps.h"
@@ -604,7 +603,7 @@ int i915_ttm_move(struct ttm_buffer_object *bo, bool evict,
 		 * sequence, where at the end we can do the move for real.
 		 *
 		 * The special case here is when the dst_mem is TTM_PL_SYSTEM,
-		 * which doens't require any kind of move, so it should be safe
+		 * which doesn't require any kind of move, so it should be safe
 		 * to skip all the below and call ttm_bo_move_null() here, where
 		 * the caller in __i915_ttm_get_pages() will take care of the
 		 * rest, since we should have a valid ttm_tt.
@@ -625,11 +624,7 @@ int i915_ttm_move(struct ttm_buffer_object *bo, bool evict,
 
 	/* Populate ttm with pages if needed. Typically system memory. */
 	if (ttm && (dst_man->use_tt || (ttm->page_flags & TTM_TT_FLAG_SWAPPED))) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
-#else
 		ret = ttm_bo_populate(bo, ctx);
-#endif
 		if (ret)
 			return ret;
 	}

@@ -932,6 +932,7 @@ int intel_guc_ct_send(struct intel_guc_ct *ct, const u32 *action, u32 len,
 
 	return ret;
 }
+ALLOW_ERROR_INJECTION(intel_guc_ct_send, ERRNO);
 
 static struct ct_incoming_msg *ct_alloc_msg(u32 num_dwords)
 {
@@ -1451,6 +1452,142 @@ void intel_guc_ct_event_handler(struct intel_guc_ct *ct)
 	}
 
 	ct_try_receive_message(ct);
+}
+
+/*
+ * ct_update_addresses_in_message - Shift any GGTT addresses within
+ * a single message left within CTB from before post-migration recovery.
+ * @ct: pointer to CT struct of the target GuC
+ * @cmds: the buffer containing CT messages
+ * @head: start of the target message within the buffer
+ * @len: length of the target message
+ * @size: size of the commands buffer
+ * @shift: the address shift to be added to each GGTT reference
+ */
+static void ct_update_addresses_in_message(struct intel_guc_ct *ct,
+					    u32 *cmds, u32 head, u32 len,
+					    u32 size, s64 shift)
+{
+	u32 action, i, n;
+	u64 offset;
+
+#define msg(p) cmds[(head + (p)) % size]
+#define fixup64(p)                             \
+	offset = make_u64(msg(p+1), msg(p+0));  \
+	offset += shift;                        \
+	msg(p+0) = lower_32_bits(offset);       \
+	msg(p+1) = upper_32_bits(offset)
+
+	action = FIELD_GET(GUC_HXG_REQUEST_MSG_0_ACTION, msg(0));
+	switch (action) {
+	case INTEL_GUC_ACTION_SET_DEVICE_ENGINE_UTILIZATION_V2:
+		fixup64(1);
+		break;
+	case INTEL_GUC_ACTION_REGISTER_CONTEXT:
+	case INTEL_GUC_ACTION_REGISTER_CONTEXT_MULTI_LRC:
+		/* field wq_desc */
+		fixup64(5);
+		/* field wq_base */
+		fixup64(7);
+		if (action == INTEL_GUC_ACTION_REGISTER_CONTEXT_MULTI_LRC) {
+			/* field number_children */
+			n = msg(10);
+			/* field hwlrca and child lrcas */
+			for (i = 0; i < n; i++) {
+				fixup64(11 + 2 * i);
+			}
+		} else {
+			/* field hwlrca */
+			fixup64(10);
+		}
+		break;
+	default:
+		break;
+	}
+#undef fixup64
+#undef msg
+}
+
+static int ct_update_addresses_in_buffer(struct intel_guc_ct *ct,
+					 struct intel_guc_ct_buffer *ctb,
+					 s64 shift, u32 *mhead, s32 available)
+{
+	u32 head = *mhead;
+	u32 size = ctb->size;
+	u32 *cmds = ctb->cmds;
+	u32 header, len;
+
+	header = cmds[head];
+	head = (head + 1) % size;
+
+	/* message len with header */
+	len = FIELD_GET(GUC_CTB_MSG_0_NUM_DWORDS, header) + GUC_CTB_MSG_MIN_LEN;
+
+	if (unlikely(len > (u32)available)) {
+		CT_ERROR(ct, "Incomplete message %*ph %*ph %*ph\n",
+			 4, &header,
+			 4 * (head + available - 1 > size ?
+				size - head : available - 1), &cmds[head],
+			 4 * (head + available - 1 > size ?
+				available - 1 - size + head : 0), &cmds[0]);
+		return 0;
+	}
+	ct_update_addresses_in_message(ct, cmds, head, len - 1, size, shift);
+	*mhead = (head + len - 1) % size;
+
+	return available - len;
+}
+
+/**
+ * intel_guc_ct_update_addresses - Shifts any GGTT addresses left
+ * within CTB from before post-migration recovery.
+ * @ct: pointer to CT struct of the target GuC
+ */
+int intel_guc_ct_update_addresses(struct intel_guc_ct *ct)
+{
+	struct intel_guc *guc = ct_to_guc(ct);
+	struct intel_gt *gt = guc_to_gt(guc);
+	struct intel_guc_ct_buffer *ctb = &ct->ctbs.send;
+	struct guc_ct_buffer_desc *desc = ctb->desc;
+	u32 head = ctb->head;
+	u32 tail = READ_ONCE(desc->tail);
+	u32 size = ctb->size;
+	s32 available;
+	s64 ggtt_shift;
+
+	if (unlikely(ctb->broken))
+		return -EPIPE;
+
+	GEM_BUG_ON(head > size);
+
+	if (unlikely(tail >= size)) {
+		CT_ERROR(ct, "Invalid tail offset %u >= %u)\n",
+			 tail, size);
+		desc->status |= GUC_CTB_STATUS_OVERFLOW;
+		goto corrupted;
+	}
+
+	available = tail - head;
+
+	/* beware of buffer wrap case */
+	if (unlikely(available < 0))
+		available += size;
+	CT_DEBUG(ct, "available %d (%u:%u:%u)\n", available, head, tail, size);
+	GEM_BUG_ON(available < 0);
+
+	ggtt_shift = gt->iov.vf.config.ggtt_shift;
+
+	while (available > 0)
+		available = ct_update_addresses_in_buffer(ct, ctb, ggtt_shift, &head, available);
+
+	return 0;
+
+corrupted:
+	CT_ERROR(ct, "Corrupted descriptor head=%u tail=%u status=%#x\n",
+		 head, tail, desc->status);
+	ctb->broken = true;
+	CT_DEAD(ct, READ);
+	return -EPIPE;
 }
 
 /* FIXME: There is an known H2G loss issue that may be

@@ -144,6 +144,13 @@ struct intel_gt {
 		struct delayed_work retire_work;
 	} requests;
 
+	/**
+	 * pinned_contexts: List of pinned contexts. This list is only
+	 * assumed to be manipulated during driver load- or unload time and
+	 * does therefore not have any additional protection.
+	 */
+	struct list_head pinned_contexts;
+
 	struct {
 		struct llist_head list;
 		struct work_struct work;
@@ -157,6 +164,15 @@ struct intel_gt {
 
 	ktime_t last_init_time;
 	struct intel_reset reset;
+
+	struct {
+		bool enabled;
+		struct hrtimer timer;
+		atomic_t boost;
+		u32 delay;
+		u32 delay_fast, delay_slow;
+		bool int_enabled;
+	} fake_int;
 
 	/**
 	 * Is the GPU currently considered idle, or busy executing

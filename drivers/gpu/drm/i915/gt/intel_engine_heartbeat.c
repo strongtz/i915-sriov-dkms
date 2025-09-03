@@ -3,8 +3,6 @@
  * Copyright © 2019 Intel Corporation
  */
 
-#include <linux/version.h>
-
 #include "i915_drv.h"
 #include "i915_request.h"
 
@@ -98,12 +96,8 @@ static void heartbeat_commit(struct i915_request *rq,
 static void show_heartbeat(const struct i915_request *rq,
 			   struct intel_engine_cs *engine)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
-	struct drm_printer p = drm_debug_printer("heartbeat");
-#else
 	struct drm_printer p =
 		drm_dbg_printer(&engine->i915->drm, DRM_UT_DRIVER, "heartbeat");
-#endif
 
 	if (!rq) {
 		intel_engine_dump(engine, &p,
@@ -276,6 +270,45 @@ void intel_gt_park_heartbeats(struct intel_gt *gt)
 void intel_engine_init_heartbeat(struct intel_engine_cs *engine)
 {
 	INIT_DELAYED_WORK(&engine->heartbeat.work, heartbeat);
+}
+
+static void intel_gt_pm_get_all_engines(struct intel_gt *gt)
+{
+	struct intel_engine_cs *engine;
+	unsigned int eid;
+
+	for_each_engine(engine, gt, eid) {
+		intel_engine_pm_get(engine);
+	}
+}
+
+static void intel_gt_pm_put_all_engines(struct intel_gt *gt)
+{
+	struct intel_engine_cs *engine;
+	unsigned int eid;
+
+	for_each_engine(engine, gt, eid) {
+		intel_engine_pm_put(engine);
+	}
+}
+
+void intel_gt_heartbeats_disable(struct intel_gt *gt)
+{
+	/*
+	 * Heartbeat re-enables automatically when an engine is being unparked.
+	 * So to disable the heartbeat and make sure it stays disabled, we
+	 * need to bump PM wakeref for every engine, so that unpark will
+	 * not be called due to changes in PM states.
+	*/
+	intel_gt_pm_get_all_engines(gt);
+	intel_gt_park_heartbeats(gt);
+}
+
+void intel_gt_heartbeats_restore(struct intel_gt *gt, bool unpark)
+{
+	intel_gt_pm_put_all_engines(gt);
+	if (unpark)
+		intel_gt_unpark_heartbeats(gt);
 }
 
 static int __intel_engine_pulse(struct intel_engine_cs *engine)

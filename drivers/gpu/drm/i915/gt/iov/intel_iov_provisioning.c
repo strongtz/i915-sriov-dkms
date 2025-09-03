@@ -2160,6 +2160,50 @@ int intel_iov_provisioning_verify(struct intel_iov *iov, unsigned int num_vfs)
 	return 0;
 }
 
+static u32 pf_get_vf_tile_mask(struct intel_iov *iov, unsigned int vfid)
+{
+	struct intel_gt *gt;
+	unsigned int gtid;
+	u32 tile_mask  = 0;
+	int err;
+
+	GEM_BUG_ON(iov_is_remote(iov));
+
+	for_each_gt(gt, iov_to_i915(iov), gtid) {
+		err = pf_validate_config(&gt->iov, vfid);
+		if (!err)
+			tile_mask |= BIT(gtid);
+	}
+
+	IOV_DEBUG(iov, "VF%d tile_mask=%#x\n", vfid, tile_mask);
+	GEM_BUG_ON(tile_mask & ~GENMASK(iov_to_i915(iov)->remote_tiles, 0));
+
+	return tile_mask;
+}
+
+/**
+ * intel_iov_provisioning_get_tile_mask() - Query tile mask of the VF.
+ * @iov: the IOV struct
+ * @id: VF identifier
+ *
+ * This function shall be called only on PF.
+ *
+ * Return: tile mask.
+ */
+u32 intel_iov_provisioning_get_tile_mask(struct intel_iov *iov, unsigned int id)
+{
+	u32 tile_mask;
+
+	GEM_BUG_ON(!intel_iov_is_pf(iov));
+	GEM_BUG_ON(id > pf_get_totalvfs(iov));
+
+	mutex_lock(pf_provisioning_mutex(iov));
+	tile_mask = pf_get_vf_tile_mask(iov_get_root(iov), id);
+	mutex_unlock(pf_provisioning_mutex(iov));
+
+	return tile_mask;
+}
+
 /* Return: number of configuration dwords written */
 static u32 encode_config_ggtt(u32 *cfg, const struct intel_iov_config *config)
 {
@@ -2209,6 +2253,19 @@ static u32 encode_config(u32 *cfg, const struct intel_iov_config *config)
 
 	IOV_THRESHOLDS(__encode_threshold)
 #undef __encode_threshold
+
+	return n;
+}
+
+/* Return: number of configuration dwords written */
+static u32 encode_tile_mask(u32 *cfg, u32 tile_mask)
+{
+	u32 n = 0;
+
+	if (tile_mask) {
+		cfg[n++] = MAKE_GUC_KLV(VF_CFG_TILE_MASK);
+		cfg[n++] = tile_mask;
+	}
 
 	return n;
 }
@@ -2272,6 +2329,12 @@ static int pf_push_configs(struct intel_iov *iov, unsigned int num)
 		err = pf_validate_config(iov, n);
 		if (err != -ENODATA)
 			cfg_size = encode_config(cfg, &provisioning->configs[n]);
+
+		if (iov_is_root(iov) && HAS_REMOTE_TILES(iov_to_i915(iov))) {
+			u32 tile_mask = pf_get_vf_tile_mask(iov, n);
+
+			cfg_size += encode_tile_mask(cfg + cfg_size, tile_mask);
+		}
 
 		if (iov_to_gt(iov)->type == GT_MEDIA) {
 			struct intel_iov *root = iov_get_root(iov);
@@ -2647,6 +2710,96 @@ int intel_iov_provisioning_print_dbs(struct intel_iov *iov, struct drm_printer *
 
 	return 0;
 }
+
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV)
+#if 0
+static int pf_reprovision_ggtt(struct intel_iov *iov, unsigned int id)
+{
+	struct i915_ggtt *ggtt = iov_to_gt(iov)->ggtt;
+	struct intel_iov_provisioning *provisioning = &iov->pf.provisioning;
+	struct intel_iov_config *config = &provisioning->configs[id];
+	struct drm_mm_node *node = &config->ggtt_region;
+	struct drm_mm_node new_node = {};
+	u64 alignment = pf_get_ggtt_alignment(iov);
+	u64 node_size = node->size;
+	unsigned int ptes_size;
+	void *ptes;
+	int err;
+
+	if (!drm_mm_node_allocated(node))
+		return -ENODATA;
+
+	/* save PTEs */
+	ptes_size = i915_ggtt_save_ptes(ggtt, node, NULL, 0, 0);
+	ptes = kmalloc(ptes_size, GFP_KERNEL);
+	if (!ptes)
+		return -ENOMEM;
+	err = i915_ggtt_save_ptes(ggtt, node, ptes, ptes_size, 0);
+	if (err < 0)
+		goto out;
+
+	/* allocate new block */
+	mutex_lock(&ggtt->vm.mutex);
+	err = i915_gem_gtt_insert(&ggtt->vm, &new_node, node_size, alignment,
+		I915_COLOR_UNEVICTABLE,
+		0, ggtt->vm.total,
+		PIN_HIGH);
+	mutex_unlock(&ggtt->vm.mutex);
+	if (err)
+		goto out;
+	GEM_WARN_ON(node_size != new_node.size);
+
+	/* reprovision */
+	err = pf_push_config_ggtt(iov, id, new_node.start, new_node.size);
+	if (err) {
+		mutex_lock(&ggtt->vm.mutex);
+		drm_mm_remove_node(&new_node);
+		mutex_unlock(&ggtt->vm.mutex);
+		goto out;
+	}
+
+	/* replace node */
+	mutex_lock(&ggtt->vm.mutex);
+	drm_mm_remove_node(node);
+	drm_mm_replace_node(&new_node, node);
+	mutex_unlock(&ggtt->vm.mutex);
+
+	/* restore PTEs */
+	err = i915_ggtt_restore_ptes(ggtt, node, ptes, ptes_size, 0);
+	if (err)
+		i915_ggtt_set_space_owner(ggtt, id, node);
+
+out:
+	kfree(ptes);
+	return err;
+}
+
+/**
+ * intel_iov_provisioning_move_ggtt - Move existing GGTT allocation to other location.
+ * @iov: the IOV struct
+ * @id: VF identifier
+ *
+ * This function is for internal testing of VF migration scenarios.
+ * This function can only be called on PF.
+ */
+int intel_iov_provisioning_move_ggtt(struct intel_iov *iov, unsigned int id)
+{
+	struct intel_runtime_pm *rpm = iov_to_gt(iov)->uncore->rpm;
+	intel_wakeref_t wakeref;
+	int err = -ENONET;
+
+	GEM_BUG_ON(!intel_iov_is_pf(iov));
+	GEM_BUG_ON(id > pf_get_totalvfs(iov));
+	GEM_BUG_ON(id == PFID);
+
+	with_intel_runtime_pm(rpm, wakeref)
+		err = pf_reprovision_ggtt(iov, id);
+
+	return err;
+}
+
+#endif /* CONFIG_DRM_I915_DEBUG_IOV */
+#endif
 
 static int pf_push_self_config(struct intel_iov *iov)
 {

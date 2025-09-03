@@ -84,6 +84,35 @@ static int vf_self_config_show(struct seq_file *m, void *data)
 }
 DEFINE_INTEL_GT_DEBUGFS_ATTRIBUTE(vf_self_config);
 
+#if 0
+static ssize_t relocate_ggtt_write(struct file *file, const char __user *user,
+				    size_t count, loff_t *ppos)
+{
+	struct intel_iov *iov = &((struct intel_gt *)file->private_data)->iov;
+	u32 vfid;
+	int ret;
+
+	if (*ppos)
+		return 0;
+
+	ret = kstrtou32_from_user(user, count, 0, &vfid);
+	if (ret < 0)
+		return ret;
+
+	if (!vfid || vfid > pf_get_totalvfs(iov))
+		return -EINVAL;
+
+	ret = intel_iov_provisioning_move_ggtt(iov, vfid);
+	if (ret < 0)
+		return ret;
+
+	return count;
+}
+
+DEFINE_I915_GT_RAW_ATTRIBUTE(relocate_ggtt_fops, simple_open,
+				NULL, NULL, relocate_ggtt_write, default_llseek);
+#endif
+
 /**
  * intel_iov_debugfs_register - Register IOV specific entries in GT debugfs.
  * @iov: the IOV struct

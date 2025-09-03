@@ -20,4 +20,6 @@ void intel_iov_query_fini(struct intel_iov *iov);
 
 void intel_iov_query_print_config(struct intel_iov *iov, struct drm_printer *p);
 
+int intel_iov_notify_resfix_done(struct intel_iov *iov);
+
 #endif /* __INTEL_IOV_QUERY_H__ */

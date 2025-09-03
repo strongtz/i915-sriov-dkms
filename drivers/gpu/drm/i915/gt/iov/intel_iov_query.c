@@ -50,6 +50,39 @@ static int vf_reset_guc_state(struct intel_iov *iov)
 	return err;
 }
 
+static int guc_action_vf_notify_resfix_done(struct intel_guc *guc)
+{
+	u32 request[GUC_HXG_REQUEST_MSG_MIN_LEN] = {
+		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_ACTION_VF2GUC_NOTIFY_RESFIX_DONE),
+	};
+	int ret;
+
+	ret = intel_guc_send_mmio(guc, request, ARRAY_SIZE(request), NULL, 0);
+
+	return ret > 0 ? -EPROTO : ret;
+}
+
+/**
+ * intel_iov_notify_resfix_done - Notify GuC about resource fixups apply completed.
+ * @iov: the IOV struct instance
+ */
+int intel_iov_notify_resfix_done(struct intel_iov *iov)
+{
+	struct intel_guc *guc = iov_to_guc(iov);
+	int err;
+
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+
+	err = guc_action_vf_notify_resfix_done(guc);
+	if (unlikely(err))
+		IOV_PROBE_ERROR(iov, "Failed to notify GuC about resource fixup done (%pe)\n",
+				ERR_PTR(err));
+
+	return err;
+}
+
 static int guc_action_match_version(struct intel_guc *guc, u32 *branch,
 				    u32 *major, u32 *minor, u32 *patch)
 {
@@ -101,6 +134,18 @@ static int vf_handshake_with_guc(struct intel_iov *iov)
 	err = guc_action_match_version(guc, &branch, &major, &minor, &patch);
 	if (unlikely(err))
 		goto fail;
+
+	/* XXX we don't support interface version change */
+	if ((iov->vf.config.guc_abi.major || iov->vf.config.guc_abi.minor) &&
+	     (iov->vf.config.guc_abi.branch != branch ||
+	     iov->vf.config.guc_abi.major != major ||
+	     iov->vf.config.guc_abi.minor != minor)) {
+		IOV_ERROR(iov, "Unexpected interface version change: %u.%u.%u.%u != %u.%u.%u.%u\n",
+			  branch, major, minor, patch,
+			  iov->vf.config.guc_abi.branch, iov->vf.config.guc_abi.major,
+			  iov->vf.config.guc_abi.minor, iov->vf.config.guc_abi.patch);
+		return -EREMCHG;
+	}
 
 	/* we shouldn't get anything newer than requested */
 	if (major > GUC_VF_VERSION_LATEST_MAJOR) {
@@ -284,6 +329,37 @@ fallback:
 
 }
 
+static int vf_get_tiles(struct intel_iov *iov)
+{
+	struct intel_guc *guc = iov_to_guc(iov);
+	u32 tile_mask;
+	int err;
+
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+	GEM_BUG_ON(!iov_is_root(iov));
+
+	err = guc_action_query_single_klv32(guc, GUC_KLV_VF_CFG_TILE_MASK_KEY, &tile_mask);
+	if (unlikely(err))
+		return err;
+
+	if (!tile_mask) {
+		IOV_ERROR(iov, "Invalid GT assignment: %#x\n", tile_mask);
+		return -ENODATA;
+	}
+
+	IOV_DEBUG(iov, "tile mask %#x\n", tile_mask);
+
+	if (iov->vf.config.tile_mask && iov->vf.config.tile_mask != tile_mask) {
+		IOV_ERROR(iov, "Unexpected GT reassignment: %#x != %#x\n",
+			  tile_mask, iov->vf.config.tile_mask);
+		return -EREMCHG;
+	}
+
+	iov->vf.config.tile_mask = tile_mask;
+
+	return 0;
+}
+
 static int vf_get_ggtt_info(struct intel_iov *iov)
 {
 	struct intel_guc *guc = iov_to_guc(iov);
@@ -291,7 +367,6 @@ static int vf_get_ggtt_info(struct intel_iov *iov)
 	int err;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
-	GEM_BUG_ON(iov->vf.config.ggtt_size);
 
 	err = guc_action_query_single_klv64(guc, GUC_KLV_VF_CFG_GGTT_START_KEY, &start);
 	if (unlikely(err))
@@ -303,6 +378,12 @@ static int vf_get_ggtt_info(struct intel_iov *iov)
 
 	IOV_DEBUG(iov, "GGTT %#llx-%#llx = %lluK\n",
 		  start, start + size - 1, size / SZ_1K);
+
+	if (iov->vf.config.ggtt_size && iov->vf.config.ggtt_size != size) {
+		IOV_ERROR(iov, "Unexpected GGTT reassignment: %lluK != %lluK\n",
+			  size / SZ_1K, iov->vf.config.ggtt_size / SZ_1K);
+		return -EREMCHG;
+	}
 
 	iov->vf.config.ggtt_base = start;
 	iov->vf.config.ggtt_size = size;
@@ -317,7 +398,6 @@ static int vf_get_submission_cfg(struct intel_iov *iov)
 	int err;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
-	GEM_BUG_ON(iov->vf.config.num_ctxs);
 
 	err = guc_action_query_single_klv32(guc, GUC_KLV_VF_CFG_NUM_CONTEXTS_KEY, &num_ctxs);
 	if (unlikely(err))
@@ -329,10 +409,31 @@ static int vf_get_submission_cfg(struct intel_iov *iov)
 
 	IOV_DEBUG(iov, "CTXs %u DBs %u\n", num_ctxs, num_dbs);
 
+	if (iov->vf.config.num_ctxs && iov->vf.config.num_ctxs != num_ctxs) {
+		IOV_ERROR(iov, "Unexpected CTXs reassignment: %u != %u\n",
+			  num_ctxs, iov->vf.config.num_ctxs);
+		return -EREMCHG;
+	}
+	if (iov->vf.config.num_dbs && iov->vf.config.num_dbs != num_dbs) {
+		IOV_ERROR(iov, "Unexpected DBs reassignment: %u != %u\n",
+			  num_dbs, iov->vf.config.num_dbs);
+		return -EREMCHG;
+	}
+
 	iov->vf.config.num_ctxs = num_ctxs;
 	iov->vf.config.num_dbs = num_dbs;
 
 	return iov->vf.config.num_ctxs ? 0 : -ENODATA;
+}
+
+static bool vf_in_tile_mask(struct intel_iov *iov)
+{
+	GEM_BUG_ON(!intel_iov_is_vf(iov));
+
+	if (!HAS_REMOTE_TILES(iov_to_i915(iov)))
+		return true;
+
+	return iov_get_root(iov)->vf.config.tile_mask & BIT(iov_to_gt(iov)->info.id);
 }
 
 /**
@@ -352,6 +453,16 @@ int intel_iov_query_config(struct intel_iov *iov)
 	err = vf_get_ipver(iov);
 	if (unlikely(err))
 		return err;
+
+	if (HAS_REMOTE_TILES(iov_to_i915(iov)) && iov_is_root(iov)) {
+		err = vf_get_tiles(iov);
+		if (unlikely(err))
+			return err;
+
+		if (!vf_in_tile_mask(iov))
+			return 0;
+	}
+
 
 	err = vf_get_ggtt_info(iov);
 	if (unlikely(err))
@@ -883,6 +994,9 @@ int intel_iov_query_runtime(struct intel_iov *iov, bool early)
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
 
+	if (!vf_in_tile_mask(iov))
+		return 0;
+
 	if (early) {
 		err = vf_handshake_with_pf_mmio(iov);
 		if (unlikely(err))
@@ -928,6 +1042,10 @@ void intel_iov_query_fini(struct intel_iov *iov)
 void intel_iov_query_print_config(struct intel_iov *iov, struct drm_printer *p)
 {
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
+
+	/* tile_mask is valid on root GT only, report it once on primary GT */
+	if (HAS_REMOTE_TILES(iov_to_i915(iov)) && iov_to_gt(iov) == to_gt(iov_to_i915(iov)))
+		drm_printf(p, "tile mask:\t%#x\n", iov_get_root(iov)->vf.config.tile_mask);
 
 	drm_printf(p, "GGTT range:\t%#08llx-%#08llx\n",
 			iov->vf.config.ggtt_base,

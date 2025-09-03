@@ -1,6 +1,5 @@
+// SPDX-License-Identifier: MIT
 /*
- * SPDX-License-Identifier: MIT
- *
  * Copyright 2012 Red Hat Inc
  */
 
@@ -8,7 +7,6 @@
 #include <linux/highmem.h>
 #include <linux/dma-resv.h>
 #include <linux/module.h>
-#include <linux/version.h>
 
 #include <asm/smp.h>
 
@@ -17,11 +15,7 @@
 #include "i915_gem_object.h"
 #include "i915_scatterlist.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-MODULE_IMPORT_NS(DMA_BUF);
-#else
 MODULE_IMPORT_NS("DMA_BUF");
-#endif
 
 I915_SELFTEST_DECLARE(static bool force_different_devices;)
 
@@ -111,7 +105,7 @@ static int i915_gem_dmabuf_mmap(struct dma_buf *dma_buf, struct vm_area_struct *
 	if (!obj->base.filp)
 		return -ENODEV;
 
-	ret = call_mmap(obj->base.filp, vma);
+	ret = vfs_mmap(obj->base.filp, vma);
 	if (ret)
 		return ret;
 

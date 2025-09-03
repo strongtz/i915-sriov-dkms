@@ -40,18 +40,6 @@ static void uc_expand_default_options(struct intel_uc *uc)
 		return;
 	}
 
-	/* Don't enable GuC/HuC on older Gen12 platforms */
-	if (IS_TIGERLAKE(i915) || IS_ROCKETLAKE(i915)) {
-		i915->params.enable_guc = 0;
-		return;
-	}
-
-	/* Intermediate platforms are HuC authentication only */
-	if (IS_ALDERLAKE_S(i915) && !IS_RAPTORLAKE_S(i915)) {
-		i915->params.enable_guc = ENABLE_GUC_LOAD_HUC;
-		return;
-	}
-
 	/* Default: enable HuC authentication and GuC submission */
 	i915->params.enable_guc = ENABLE_GUC_LOAD_HUC | ENABLE_GUC_SUBMISSION;
 }
@@ -233,7 +221,7 @@ static int guc_enable_communication(struct intel_guc *guc)
 {
 	struct intel_gt *gt = guc_to_gt(guc);
 	struct drm_i915_private *i915 = gt->i915;
-	int ret;
+	int srcu, ret;
 
 	GEM_BUG_ON(intel_guc_ct_enabled(&guc->ct));
 
@@ -241,7 +229,11 @@ static int guc_enable_communication(struct intel_guc *guc)
 	if (ret)
 		return ret;
 
+	ret = gt_ggtt_address_read_lock_sync(gt, &srcu);
+	if (unlikely(ret))
+		return ret;
 	ret = intel_guc_ct_enable(&guc->ct);
+	gt_ggtt_address_read_unlock(gt, srcu);
 	if (ret)
 		return ret;
 
@@ -525,7 +517,7 @@ static int __uc_init_hw(struct intel_uc *uc)
 		       ERR_PTR(ret), attempts);
 	}
 
-	/* Did we succeded or run out of retries? */
+	/* Did we succeed or run out of retries? */
 	if (ret)
 		goto err_log_capture;
 
@@ -926,5 +918,3 @@ static const struct intel_uc_ops uc_ops_vf = {
 	.init_hw = __vf_uc_init_hw,
 	.fini_hw = __vf_uc_fini_hw,
 };
-
-

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 
-kvmgt-y += \
+kvmgt-$(CONFIG_DRM_I915_GVT) += \
 	gvt/aperture_gm.o \
 	gvt/cfg_space.o \
 	gvt/cmd_parser.o \

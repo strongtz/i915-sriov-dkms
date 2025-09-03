@@ -5,16 +5,8 @@
 
 #include <linux/component.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
-#include <drm/i915_pxp_tee_interface.h>
-#else
 #include <drm/intel/i915_pxp_tee_interface.h>
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
-#include <drm/i915_component.h>
-#else
 #include <drm/intel/i915_component.h>
-#endif
 
 #include "gem/i915_gem_lmem.h"
 #include "gt/intel_gt_print.h"

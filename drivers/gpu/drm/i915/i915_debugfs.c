@@ -33,8 +33,6 @@
 #include <linux/debugfs.h>
 #include <drm/drm_debugfs.h>
 
-#include "display/intel_display_params.h"
-
 #include "gem/i915_gem_context.h"
 #include "gt/intel_gt.h"
 #include "gt/intel_gt_buffer_pool.h"
@@ -66,20 +64,14 @@ static inline struct drm_i915_private *node_to_i915(struct drm_info_node *node)
 static int i915_capabilities(struct seq_file *m, void *data)
 {
 	struct drm_i915_private *i915 = node_to_i915(m->private);
-	struct intel_display *display = &i915->display;
 	struct drm_printer p = drm_seq_file_printer(m);
-
-	seq_printf(m, "pch: %d\n", INTEL_PCH_TYPE(i915));
 
 	intel_device_info_print(INTEL_INFO(i915), RUNTIME_INFO(i915), &p);
 	i915_print_iommu_status(i915, &p);
 	intel_gt_info_print(&to_gt(i915)->info, &p);
 	intel_driver_caps_print(&i915->caps, &p);
 
-	kernel_param_lock(THIS_MODULE);
 	i915_params_dump(&i915->params, &p);
-	intel_display_params_dump(display, &p);
-	kernel_param_unlock(THIS_MODULE);
 
 	return 0;
 }
@@ -426,9 +418,6 @@ static int i915_runtime_pm_status(struct seq_file *m, void *unused)
 
 	if (!HAS_RUNTIME_PM(dev_priv))
 		seq_puts(m, "Runtime power management not supported\n");
-
-	seq_printf(m, "Runtime power status: %s\n",
-		   str_enabled_disabled(!dev_priv->display.power.domains.init_wakeref));
 
 	seq_printf(m, "GPU idle: %s\n", str_yes_no(!to_gt(dev_priv)->awake));
 	seq_printf(m, "IRQs disabled: %s\n",

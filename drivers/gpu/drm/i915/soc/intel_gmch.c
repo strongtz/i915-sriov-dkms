@@ -6,14 +6,11 @@
 #include <linux/pci.h>
 #include <linux/pnp.h>
 #include <linux/vgaarb.h>
-#include <linux/version.h>
 
 #include <drm/drm_managed.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
-#include <drm/i915_drm.h>
-#else
 #include <drm/intel/i915_drm.h>
-#endif
+
+#include "../display/intel_display_core.h" /* FIXME */
 
 #include "i915_drv.h"
 #include "intel_gmch.h"

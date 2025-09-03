@@ -7,17 +7,17 @@
  * DOC: display pinning helpers
  */
 
-#include <linux/version.h>
-
 #include "gem/i915_gem_domain.h"
 #include "gem/i915_gem_object.h"
 
 #include "i915_drv.h"
-#include "intel_atomic_plane.h"
+#include "intel_display_core.h"
+#include "intel_display_rpm.h"
 #include "intel_display_types.h"
 #include "intel_dpt.h"
 #include "intel_fb.h"
 #include "intel_fb_pin.h"
+#include "intel_plane.h"
 
 static struct i915_vma *
 intel_fb_pin_to_dpt(const struct drm_framebuffer *fb,
@@ -27,13 +27,10 @@ intel_fb_pin_to_dpt(const struct drm_framebuffer *fb,
 		    struct i915_address_space *vm)
 {
 	struct drm_device *dev = fb->dev;
+	struct intel_display *display = to_intel_display(dev);
 	struct drm_i915_private *dev_priv = to_i915(dev);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
-#else
 	struct drm_gem_object *_obj = intel_fb_bo(fb);
 	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
-#endif
 	struct i915_gem_ww_ctx ww;
 	struct i915_vma *vma;
 	int ret;
@@ -48,7 +45,7 @@ intel_fb_pin_to_dpt(const struct drm_framebuffer *fb,
 	if (WARN_ON(!i915_gem_object_is_framebuffer(obj)))
 		return ERR_PTR(-EINVAL);
 
-	atomic_inc(&dev_priv->gpu_error.pending_fb_pin);
+	atomic_inc(&display->restore.pending_fb_pin);
 
 	for_i915_gem_ww(&ww, ret, true) {
 		ret = i915_gem_object_lock(obj, &ww);
@@ -103,40 +100,26 @@ intel_fb_pin_to_dpt(const struct drm_framebuffer *fb,
 
 	i915_vma_get(vma);
 err:
-	atomic_dec(&dev_priv->gpu_error.pending_fb_pin);
+	atomic_dec(&display->restore.pending_fb_pin);
 
 	return vma;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
 struct i915_vma *
 intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 		     const struct i915_gtt_view *view,
 		     unsigned int alignment,
 		     unsigned int phys_alignment,
+		     unsigned int vtd_guard,
 		     bool uses_fence,
 		     unsigned long *out_flags)
 {
-#else
-struct i915_vma *
-intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
-		     const struct i915_gtt_view *view,
-		     unsigned int alignment,
-		     unsigned int phys_alignment,
-				 unsigned int vtd_guard,
-		     bool uses_fence,
-		     unsigned long *out_flags)
-{
-#endif
 	struct drm_device *dev = fb->dev;
+	struct intel_display *display = to_intel_display(dev);
 	struct drm_i915_private *dev_priv = to_i915(dev);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-	struct drm_i915_gem_object *obj = intel_fb_obj(fb);
-#else
 	struct drm_gem_object *_obj = intel_fb_bo(fb);
 	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
-#endif
-	intel_wakeref_t wakeref;
+	struct ref_tracker *wakeref;
 	struct i915_gem_ww_ctx ww;
 	struct i915_vma *vma;
 	unsigned int pinctl;
@@ -148,16 +131,6 @@ intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 	if (drm_WARN_ON(dev, alignment && !is_power_of_2(alignment)))
 		return ERR_PTR(-EINVAL);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-	/* Note that the w/a also requires 64 PTE of padding following the
-	 * bo. We currently fill all unused PTE with the shadow page and so
-	 * we should always have valid PTE following the scanout preventing
-	 * the VT-d warning.
-	 */
-	if (intel_scanout_needs_vtd_wa(dev_priv) && alignment < 256 * 1024)
-		alignment = 256 * 1024;
-#endif
-
 	/*
 	 * Global gtt pte registers are special registers which actually forward
 	 * writes to a chunk of system memory. Which means that there is no risk
@@ -165,9 +138,9 @@ intel_fb_pin_to_ggtt(const struct drm_framebuffer *fb,
 	 * intel_runtime_pm_put(), so it is correct to wrap only the
 	 * pin/unpin/fence and not more.
 	 */
-	wakeref = intel_runtime_pm_get(&dev_priv->runtime_pm);
+	wakeref = intel_display_rpm_get(display);
 
-	atomic_inc(&dev_priv->gpu_error.pending_fb_pin);
+	atomic_inc(&display->restore.pending_fb_pin);
 
 	/*
 	 * Valleyview is definitely limited to scanning out the first
@@ -193,13 +166,8 @@ retry:
 	if (ret)
 		goto err;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-	vma = i915_gem_object_pin_to_display_plane(obj, &ww, alignment,
-						   view, pinctl);
-#else
 	vma = i915_gem_object_pin_to_display_plane(obj, &ww, alignment,
 						   vtd_guard, view, pinctl);
-#endif
 	if (IS_ERR(vma)) {
 		ret = PTR_ERR(vma);
 		goto err_unpin;
@@ -248,8 +216,8 @@ err:
 	if (ret)
 		vma = ERR_PTR(ret);
 
-	atomic_dec(&dev_priv->gpu_error.pending_fb_pin);
-	intel_runtime_pm_put(&dev_priv->runtime_pm, wakeref);
+	atomic_dec(&display->restore.pending_fb_pin);
+	intel_display_rpm_put(display, wakeref);
 	return vma;
 }
 
@@ -281,7 +249,6 @@ intel_plane_fb_min_phys_alignment(const struct intel_plane_state *plane_state)
 	return plane->min_alignment(plane, fb, 0);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 static unsigned int
 intel_plane_fb_vtd_guard(const struct intel_plane_state *plane_state)
 {
@@ -289,9 +256,9 @@ intel_plane_fb_vtd_guard(const struct intel_plane_state *plane_state)
 				       &plane_state->view,
 				       plane_state->hw.rotation);
 }
-#endif
 
-int intel_plane_pin_fb(struct intel_plane_state *plane_state)
+int intel_plane_pin_fb(struct intel_plane_state *plane_state,
+		       const struct intel_plane_state *old_plane_state)
 {
 	struct intel_plane *plane = to_intel_plane(plane_state->uapi.plane);
 	const struct intel_framebuffer *fb =
@@ -302,9 +269,7 @@ int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 		vma = intel_fb_pin_to_ggtt(&fb->base, &plane_state->view.gtt,
 					   intel_plane_fb_min_alignment(plane_state),
 					   intel_plane_fb_min_phys_alignment(plane_state),
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
-						 intel_plane_fb_vtd_guard(plane_state),
-#endif
+					   intel_plane_fb_vtd_guard(plane_state),
 					   intel_plane_uses_fence(plane_state),
 					   &plane_state->flags);
 		if (IS_ERR(vma))
@@ -318,17 +283,11 @@ int intel_plane_pin_fb(struct intel_plane_state *plane_state)
 		 * will trigger might_sleep() even if it won't actually sleep,
 		 * which is the case when the fb has already been pinned.
 		 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-		if (intel_plane_needs_physical(plane))
-			plane_state->phys_dma_addr =
-				i915_gem_object_get_dma_address(intel_fb_obj(&fb->base), 0);
-#else
 		if (intel_plane_needs_physical(plane)) {
 			struct drm_i915_gem_object *obj = to_intel_bo(intel_fb_bo(&fb->base));
 
 			plane_state->phys_dma_addr = i915_gem_object_get_dma_address(obj, 0);
 		}
-#endif
 	} else {
 		unsigned int alignment = intel_plane_fb_min_alignment(plane_state);
 
@@ -374,4 +333,9 @@ void intel_plane_unpin_fb(struct intel_plane_state *old_plane_state)
 		if (vma)
 			intel_dpt_unpin_from_ggtt(fb->dpt_vm);
 	}
+}
+
+void intel_fb_get_map(struct i915_vma *vma, struct iosys_map *map)
+{
+	iosys_map_set_vaddr_iomem(map, i915_vma_get_iomap(vma));
 }

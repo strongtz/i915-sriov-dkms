@@ -198,6 +198,7 @@ int intel_gt_tiles_init(struct drm_i915_private *i915);
 
 void intel_gt_info_print(const struct intel_gt_info *info,
 			 struct drm_printer *p);
+void intel_boost_fake_int_timer(struct intel_gt *gt, bool on_off);
 
 void intel_gt_watchdog_work(struct work_struct *work);
 

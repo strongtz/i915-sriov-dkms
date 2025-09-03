@@ -190,8 +190,13 @@ void __intel_timeline_pin(struct intel_timeline *tl)
 
 int intel_timeline_pin(struct intel_timeline *tl, struct i915_gem_ww_ctx *ww)
 {
-	int err;
+	int err, srcu;
 
+	/*
+	 * if already pinned, only increment the count to allow recursive
+	 * pinning; if not pinned yet, do nothing - the count should be then
+	 * incremented at the end of the pinning procedure, not here
+	 */
 	if (atomic_add_unless(&tl->pin_count, 1, 0))
 		return 0;
 
@@ -205,6 +210,12 @@ int intel_timeline_pin(struct intel_timeline *tl, struct i915_gem_ww_ctx *ww)
 	if (err)
 		return err;
 
+	err = gt_ggtt_address_read_lock_sync(tl->gt, &srcu);
+	if (unlikely(err)) {
+		__i915_vma_unpin(tl->hwsp_ggtt);
+		return err;
+	}
+
 	tl->hwsp_offset =
 		i915_ggtt_offset(tl->hwsp_ggtt) +
 		offset_in_page(tl->hwsp_offset);
@@ -216,8 +227,28 @@ int intel_timeline_pin(struct intel_timeline *tl, struct i915_gem_ww_ctx *ww)
 		i915_active_release(&tl->active);
 		__i915_vma_unpin(tl->hwsp_ggtt);
 	}
+	gt_ggtt_address_read_unlock(tl->gt, srcu);
 
 	return 0;
+}
+
+/**
+ * intel_timeline_rebase_hwsp - Recompute hwsp_offset cached within the pinned timeline.
+ * @tl: context timeline instance struct
+ */
+void intel_timeline_rebase_hwsp(struct intel_timeline *tl)
+{
+	if (!atomic_read(&tl->pin_count))
+		return; /* the offset will get updated while pinning */
+
+	GEM_BUG_ON(!tl->hwsp_map);
+	GEM_BUG_ON(!tl->hwsp_ggtt);
+
+	tl->hwsp_offset =
+		i915_ggtt_offset(tl->hwsp_ggtt) +
+		offset_in_page(tl->hwsp_offset);
+	GT_TRACE(tl->gt, "timeline:%llx using HWSP offset:%x\n",
+		 tl->fence_context, tl->hwsp_offset);
 }
 
 void intel_timeline_reset_seqno(const struct intel_timeline *tl)
@@ -309,16 +340,24 @@ __intel_timeline_get_seqno(struct intel_timeline *tl,
 			   u32 *seqno)
 {
 	u32 next_ofs = offset_in_page(tl->hwsp_offset + TIMELINE_SEQNO_BYTES);
+	int err, srcu;
 
 	/* w/a: bit 5 needs to be zero for MI_FLUSH_DW address. */
 	if (TIMELINE_SEQNO_BYTES <= BIT(5) && (next_ofs & BIT(5)))
 		next_ofs = offset_in_page(next_ofs + BIT(5));
+
+	err = gt_ggtt_address_read_lock_sync(tl->gt, &srcu);
+	if (unlikely(err))
+		return err;
 
 	tl->hwsp_offset = i915_ggtt_offset(tl->hwsp_ggtt) + next_ofs;
 	tl->hwsp_seqno = tl->hwsp_map + next_ofs;
 	intel_timeline_reset_seqno(tl);
 
 	*seqno = timeline_advance(tl);
+
+	gt_ggtt_address_read_unlock(tl->gt, srcu);
+
 	GEM_BUG_ON(i915_seqno_passed(*tl->hwsp_seqno, *seqno));
 	return 0;
 }

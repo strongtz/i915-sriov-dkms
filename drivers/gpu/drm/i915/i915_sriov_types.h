@@ -32,11 +32,25 @@ struct i915_sriov_pf {
 };
 
 /**
+ * struct i915_sriov_vf - i915 SR-IOV VF data.
+ */
+struct i915_sriov_vf {
+
+	/** @migration_worker: migration recovery worker */
+	struct work_struct migration_worker;
+	unsigned long migration_gt_flags;
+};
+
+/**
  * struct i915_sriov - i915 SR-IOV data.
  * @pf: PF only data.
  */
 struct i915_sriov {
-	struct i915_sriov_pf pf;
+	union {
+		struct i915_sriov_pf pf;
+		struct i915_sriov_vf vf;
+	};
+
 };
 
 #endif /* __I915_SRIOV_TYPES_H__ */

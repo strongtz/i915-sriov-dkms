@@ -76,10 +76,6 @@ i915_param_named(max_vfs, uint, 0400,
 i915_param_named(enable_mtl_rcs_ccs_wa, bool, 0400,
        "Enable the RCS/CCS switchout hold workaround for MTL (only some workloads are affected by issue and w/a has a performance penalty) (default:false)");
 
-i915_param_named(force_disable_ccs, int, 0400,
-       "Force to disable CCS engine. "
-       "(0 = fallback to default [default]; 1 = disable CCS)");
-
 #if IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR)
 i915_param_named(error_capture, bool, 0400,
 	"Record the GPU state following a hang. "
@@ -138,6 +134,13 @@ i915_param_named(enable_gvt, bool, 0400,
 #if CONFIG_DRM_I915_REQUEST_TIMEOUT
 i915_param_named_unsafe(request_timeout_ms, uint, 0600,
 			"Default request/fence/batch buffer expiration timeout.");
+#endif
+
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV)
+i915_param_named_unsafe(vfs_flr_mask, ulong, 0600,
+	"Bitmask to enable (1) or disable (0) cleaning by PF VF's resources "
+	"(GGTT and LMEM) after FLR (default: ~0 - cleaning enable for all VFs) "
+	"Bit number indicates VF number, e.g. bit 1 indicates VF1");
 #endif
 
 i915_param_named_unsafe(lmem_size, uint, 0400,

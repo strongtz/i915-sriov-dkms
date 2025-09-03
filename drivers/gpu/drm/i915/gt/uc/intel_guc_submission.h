@@ -18,6 +18,8 @@ int intel_guc_submission_limit_ids(struct intel_guc *guc, u32 limit);
 int intel_guc_submission_init(struct intel_guc *guc);
 int intel_guc_submission_enable(struct intel_guc *guc);
 void intel_guc_submission_disable(struct intel_guc *guc);
+void intel_guc_submission_pause(struct intel_guc *guc);
+void intel_guc_submission_restore(struct intel_guc *guc);
 void intel_guc_submission_fini(struct intel_guc *guc);
 int intel_guc_preempt_work_create(struct intel_guc *guc);
 void intel_guc_preempt_work_destroy(struct intel_guc *guc);
@@ -26,6 +28,7 @@ void intel_guc_submission_print_info(struct intel_guc *guc,
 				     struct drm_printer *p);
 void intel_guc_submission_print_context_info(struct intel_guc *guc,
 					     struct drm_printer *p);
+void guc_submission_refresh_ctx_rings_content(struct intel_context *ce);
 void intel_guc_dump_active_requests(struct intel_engine_cs *engine,
 				    struct i915_request *hung_rq,
 				    struct drm_printer *m);

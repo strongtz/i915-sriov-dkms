@@ -95,9 +95,11 @@ enum intel_platform {
 /*
  * Subplatform bits share the same namespace per parent platform. In other words
  * it is fine for the same bit to be used on multiple parent platforms.
+ * Devices can belong to multiple subplatforms if needed, so it's possible to set
+ * multiple bits for same device.
  */
 
-#define INTEL_SUBPLATFORM_BITS (3)
+#define INTEL_SUBPLATFORM_BITS (4)
 #define INTEL_SUBPLATFORM_MASK (BIT(INTEL_SUBPLATFORM_BITS) - 1)
 
 /* HSW/BDW/SKL/KBL/CFL */
@@ -114,6 +116,7 @@ enum intel_platform {
 #define INTEL_SUBPLATFORM_G10	0
 #define INTEL_SUBPLATFORM_G11	1
 #define INTEL_SUBPLATFORM_G12	2
+#define INTEL_SUBPLATFORM_D	3
 
 /* ADL */
 #define INTEL_SUBPLATFORM_RPL	0
@@ -140,7 +143,6 @@ enum intel_ppgtt_type {
 
 #define DEV_INFO_FOR_EACH_FLAG(func) \
 	func(is_mobile); \
-	func(is_lp); \
 	func(require_force_probe); \
 	func(is_dgfx); \
 	/* Keep has_* in alphabetical order */ \
@@ -157,6 +159,7 @@ enum intel_ppgtt_type {
 	func(has_heci_gscfi); \
 	func(has_guc_deprivilege); \
 	func(has_guc_tlb_invalidation); \
+	func(has_iov_memirq); \
 	func(has_l3_ccs_read); \
 	func(has_l3_dpf); \
 	func(has_llc); \
@@ -179,7 +182,8 @@ enum intel_ppgtt_type {
 	func(has_coherent_ggtt); \
 	func(tuning_thread_rr_after_dep); \
 	func(unfenced_needs_alignment); \
-	func(hws_needs_physical);
+	func(hws_needs_physical); \
+	func(has_remote_tiles);
 
 struct intel_ip_version {
 	u8 ver;
@@ -215,16 +219,12 @@ struct intel_runtime_info {
 
 	u16 device_id;
 
-	intel_engine_mask_t platform_engine_mask; /* Engines supported by the HW */
-
 	struct intel_step_info step;
 
 	unsigned int page_sizes; /* page sizes supported by the HW */
 
 	enum intel_ppgtt_type ppgtt_type;
 	unsigned int ppgtt_size; /* log2, e.g. 31/32/48 bits */
-
-	u32 memory_regions; /* regions supported by the HW */
 
 	bool has_pooled_eu;
 };
@@ -237,6 +237,9 @@ struct intel_device_info {
 	const struct intel_gt_definition *extra_gt_list;
 
 	u8 gt; /* GT number, 0 if undefined */
+
+	intel_engine_mask_t platform_engine_mask; /* Engines supported by the HW */
+	u32 memory_regions; /* regions supported by the HW */
 
 #define DEFINE_FLAG(name) u8 name:1
 	DEV_INFO_FOR_EACH_FLAG(DEFINE_FLAG);

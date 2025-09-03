@@ -31,15 +31,10 @@
 #include <linux/firmware.h>
 #include <linux/crc32.h>
 #include <linux/vmalloc.h>
-#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "gvt.h"
 #include "i915_pvinfo.h"
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
-MODULE_IMPORT_NS(I915_SRIOV_COMPAT);
-#endif
 
 #define FIRMWARE_VERSION (0x0)
 

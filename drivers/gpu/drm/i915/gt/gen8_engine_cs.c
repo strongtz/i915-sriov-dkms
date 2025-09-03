@@ -10,6 +10,8 @@
 #include "intel_lrc.h"
 #include "intel_ring.h"
 
+#define GEN8_EMIT_INIT_BREADCRUMB_NUM_DWORDS 6
+
 int gen8_emit_flush_rcs(struct i915_request *rq, u32 mode)
 {
 	bool vf_flush_wa = false, dc_flush_wa = false;
@@ -439,7 +441,7 @@ int gen8_emit_init_breadcrumb(struct i915_request *rq)
 	if (!i915_request_timeline(rq)->has_initial_breadcrumb)
 		return 0;
 
-	cs = intel_ring_begin(rq, 6);
+	cs = intel_ring_begin(rq, GEN8_EMIT_INIT_BREADCRUMB_NUM_DWORDS);
 	if (IS_ERR(cs))
 		return PTR_ERR(cs);
 
@@ -478,20 +480,79 @@ int gen8_emit_init_breadcrumb(struct i915_request *rq)
 	return 0;
 }
 
+/**
+ * Retrieve the ring position initial breadcrumb for given request.
+ * @rq: the request instance
+ *
+ * Return: Ring position of commands emited by emit_init_breadcrumb().
+ */
+u32 get_init_breadcrumb_pos(struct i915_request *rq)
+{
+	if (!rq->engine->emit_init_breadcrumb)
+		return rq->infix;
+
+	GEM_BUG_ON(rq->engine->emit_init_breadcrumb != gen8_emit_init_breadcrumb);
+
+	if (!intel_timeline_has_initial_breadcrumb(rcu_access_pointer(rq->timeline)))
+		return rq->infix;
+
+	if (__intel_ring_count(rq->head, rq->infix, rq->ring->size) >
+			GEN8_EMIT_INIT_BREADCRUMB_NUM_DWORDS * sizeof(u32))
+		return intel_ring_wrap(rq->ring, rq->infix -
+				       GEN8_EMIT_INIT_BREADCRUMB_NUM_DWORDS * sizeof(u32));
+
+	return rq->head;
+}
+
+static int xehp_get_params_for_emit_bb_start(struct i915_request *rq,
+				u64 *offset, u32 *len, u32 *flags)
+{
+	struct intel_ring *ring = rq->ring;
+	u32 *cs;
+
+	cs = ring->vaddr + rq->infix;
+	*flags = 0;
+	*len = 0;
+
+	if (__intel_ring_count(rq->infix, rq->advance, ring->size) < 9 * sizeof(u32))
+		return -ENOMSG;
+
+	if ((*cs & MI_INSTR(0x3F, 0)) != MI_ARB_ON_OFF)
+		return -EILSEQ;
+	cs++;
+
+	if (*cs != (MI_LOAD_REGISTER_MEM_GEN8  |
+		   MI_SRM_LRM_GLOBAL_GTT |
+		   MI_LRI_LRM_CS_MMIO))
+		return -EILSEQ;
+	cs += 4;
+
+	if ((*cs & MI_INSTR(0x3F, 3)) != MI_BATCH_BUFFER_START_GEN8)
+		return -EILSEQ;
+	*flags |= (*cs++ & BIT(8) ? 0 : I915_DISPATCH_SECURE);
+	*offset = *cs++;
+	*offset |= ((u64)*cs++) << 32;
+
+	return 0;
+}
+
 static int __xehp_emit_bb_start(struct i915_request *rq,
 				u64 offset, u32 len,
 				const unsigned int flags,
 				u32 arb)
 {
 	struct intel_context *ce = rq->context;
-	u32 wa_offset = lrc_indirect_bb(ce);
+	u32 wa_offset;
+	int srcu;
 	u32 *cs;
 
 	GEM_BUG_ON(!ce->wa_bb_page);
 
-	cs = intel_ring_begin(rq, 12);
+	cs = intel_ring_begin_ggtt(rq, &srcu, 12);
 	if (IS_ERR(cs))
 		return PTR_ERR(cs);
+
+	wa_offset = lrc_indirect_bb(ce);
 
 	*cs++ = MI_ARB_ON_OFF | arb;
 
@@ -514,7 +575,7 @@ static int __xehp_emit_bb_start(struct i915_request *rq,
 
 	*cs++ = MI_ARB_ON_OFF | MI_ARB_DISABLE;
 
-	intel_ring_advance(rq, cs);
+	intel_ring_advance_ggtt(rq, srcu, cs);
 
 	return 0;
 }
@@ -538,6 +599,8 @@ int gen8_emit_bb_start_noarb(struct i915_request *rq,
 			     const unsigned int flags)
 {
 	u32 *cs;
+
+	GEM_BUG_ON(IS_SRIOV_VF(rq->i915) && (flags & I915_DISPATCH_SECURE));
 
 	cs = intel_ring_begin(rq, 4);
 	if (IS_ERR(cs))
@@ -569,11 +632,39 @@ int gen8_emit_bb_start_noarb(struct i915_request *rq,
 	return 0;
 }
 
+static int gen8_get_params_for_emit_bb_start(struct i915_request *rq,
+				u64 *offset, u32 *len, u32 *flags)
+{
+	struct intel_ring *ring = rq->ring;
+	u32 *cs;
+
+	cs = ring->vaddr + rq->infix;
+	*flags = 0;
+	*len = 0;
+
+	if (rq->postfix - rq->infix < 4 * sizeof(u32))
+		return -ENOMSG;
+
+	if ((*cs & MI_INSTR(0x3F, 3)) != (MI_ARB_ON_OFF | MI_ARB_ENABLE))
+		return -EILSEQ;
+	cs++;
+
+	if ((*cs & MI_INSTR(0x3F, 3)) != MI_BATCH_BUFFER_START_GEN8)
+		return -EILSEQ;
+	*flags |= (*cs++ & BIT(8) ? 0 : I915_DISPATCH_SECURE);
+	*offset = *cs++;
+	*offset |= ((u64)*cs++) << 32;
+
+	return 0;
+}
+
 int gen8_emit_bb_start(struct i915_request *rq,
 		       u64 offset, u32 len,
 		       const unsigned int flags)
 {
 	u32 *cs;
+
+	GEM_BUG_ON(IS_SRIOV_VF(rq->i915) && (flags & I915_DISPATCH_SECURE));
 
 	if (unlikely(i915_request_has_nopreempt(rq)))
 		return gen8_emit_bb_start_noarb(rq, offset, len, flags);
@@ -603,6 +694,103 @@ static void assert_request_valid(struct i915_request *rq)
 
 	/* Can we unwind this request without appearing to go forwards? */
 	GEM_BUG_ON(intel_ring_direction(ring, rq->wa_tail, rq->head) <= 0);
+}
+
+/**
+ * Fill an area of a ring with NOOP instructions.
+ * @ring: the ring struct instance
+ * @start: start position on the ring, qword-aligned
+ * @end: end position on the ring, qword-aligned (the content at this position
+ *    will not get NOOPed)
+ */
+void ring_range_emit_noop(struct intel_ring *ring, u32 start, u32 end)
+{
+	int i, num_dwords;
+	u32 *cs;
+	void *vaddr = ring->vaddr;
+
+	cs = vaddr + start;
+	num_dwords = __intel_ring_count(start, end, ring->size) / sizeof(u32);
+	GEM_BUG_ON(num_dwords & 1);
+	GEM_BUG_ON(num_dwords < 0);
+
+	for (i = num_dwords/2 + 1; i > 0; i--) {
+		*cs++ = MI_NOOP;
+		*cs++ = MI_NOOP;
+		cs = vaddr + intel_ring_wrap(ring, ptrdiff(cs, vaddr));
+	}
+}
+
+/**
+ * Refreshes commands on the ring associated to init_breadcrumb command packet.
+ * @rq: the request instance
+ */
+int reemit_init_breadcrumb(struct i915_request *rq)
+{
+	u32 advance;
+	u32 dwlen;
+
+	if (!test_bit(I915_FENCE_FLAG_INITIAL_BREADCRUMB, &rq->fence.flags))
+		return -ENOMSG;
+
+	if (rq->engine->emit_init_breadcrumb == gen8_emit_init_breadcrumb)
+		dwlen = GEN8_EMIT_INIT_BREADCRUMB_NUM_DWORDS;
+	else
+		dwlen = 0;
+
+	/* ring emit position is expected to be already correctly set for reemit */
+	if (__intel_ring_count(rq->ring->emit, rq->advance, rq->ring->size) < dwlen * sizeof(u32))
+		return -EPROTO;
+
+	advance = rq->advance;
+
+	if (rq->engine->emit_init_breadcrumb) {
+		__clear_bit(I915_FENCE_FLAG_INITIAL_BREADCRUMB, &rq->fence.flags);
+		rq->engine->emit_init_breadcrumb(rq);
+	}
+
+	rq->advance = advance;
+
+	return 0;
+}
+
+static int get_params_for_emit_bb_start(struct i915_request *rq,
+				u64 *offset, u32 *len, u32 *flags)
+{
+	if (rq->engine->emit_bb_start == xehp_emit_bb_start)
+		return xehp_get_params_for_emit_bb_start(rq, offset, len, flags);
+	if (rq->engine->emit_bb_start == gen8_emit_bb_start)
+		return gen8_get_params_for_emit_bb_start(rq, offset, len, flags);
+
+	return -EOPNOTSUPP;
+}
+
+/**
+ * Refreshes commands on the ring associated to bb_start command packet.
+ * @rq: the request instance
+ *
+ * If the old ring content was lost, it is not possible to refresh it as
+ * some parameters of the request were stored only there. But if the ring
+ * data is ok and we just want to re-emit after update to GGTT addresses,
+ * this should do it.
+ */
+int reemit_bb_start(struct i915_request *rq)
+{
+	u64 offset;
+	u32 emlen, emflags, advance;
+	int err;
+
+	advance = rq->advance;
+
+	err = get_params_for_emit_bb_start(rq, &offset, &emlen, &emflags);
+	if (err)
+		return err;
+
+	err = rq->engine->emit_bb_start(rq, offset, emlen, emflags);
+
+	rq->advance = advance;
+
+	return err;
 }
 
 /*
@@ -726,6 +914,8 @@ u32 *gen11_emit_fini_breadcrumb_rcs(struct i915_request *rq, u32 *cs)
 
 static u32 *gen12_emit_preempt_busywait(struct i915_request *rq, u32 *cs)
 {
+	GEM_BUG_ON(IS_SRIOV_VF(rq->i915));
+
 	*cs++ = MI_ARB_CHECK; /* trigger IDLE->ACTIVE first */
 	*cs++ = MI_SEMAPHORE_WAIT_TOKEN |
 		MI_SEMAPHORE_GLOBAL_GTT |
@@ -754,8 +944,9 @@ static u32 hold_switchout_semaphore_offset(struct i915_request *rq)
 /* Wa_14019159160 */
 static u32 *hold_switchout_emit_wa_busywait(struct i915_request *rq, u32 *cs)
 {
-	int i;
+	int srcu;
 
+	intel_ring_fini_begin_ggtt(rq, &srcu);
 	*cs++ = MI_ATOMIC_INLINE | MI_ATOMIC_GLOBAL_GTT | MI_ATOMIC_CS_STALL |
 		MI_ATOMIC_MOVE;
 	*cs++ = hold_switchout_semaphore_offset(rq);
@@ -766,8 +957,8 @@ static u32 *hold_switchout_emit_wa_busywait(struct i915_request *rq, u32 *cs)
 	 * When MI_ATOMIC_INLINE_DATA set this command must be 11 DW + (1 NOP)
 	 * to align. 4 DWs above + 8 filler DWs here.
 	 */
-	for (i = 0; i < 8; ++i)
-		*cs++ = 0;
+	memset32(cs, 0, 8);
+	cs += 8;
 
 	*cs++ = MI_SEMAPHORE_WAIT |
 		MI_SEMAPHORE_GLOBAL_GTT |
@@ -776,6 +967,7 @@ static u32 *hold_switchout_emit_wa_busywait(struct i915_request *rq, u32 *cs)
 	*cs++ = 0;
 	*cs++ = hold_switchout_semaphore_offset(rq);
 	*cs++ = 0;
+	intel_ring_fini_advance_ggtt(rq, srcu, cs);
 
 	return cs;
 }

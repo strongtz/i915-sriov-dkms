@@ -752,7 +752,6 @@ static int lrc_ring_indirect_offset(const struct intel_engine_cs *engine)
 
 static int lrc_ring_cmd_buf_cctl(const struct intel_engine_cs *engine)
 {
-
 	if (GRAPHICS_VER_FULL(engine->i915) >= IP_VER(12, 55))
 		/*
 		 * Note that the CSFE context has a dummy slot for CMD_BUF_CCTL
@@ -822,8 +821,10 @@ static bool ctx_needs_runalone(const struct intel_context *ce)
 	bool ctx_is_protected = false;
 
 	/*
-	 * On MTL and newer platforms, protected contexts require setting
-	 * the LRC run-alone bit or else the encryption will not happen.
+	 * Wa_14019159160 - Case 2.
+	 * On some platforms, protected contexts require setting
+	 * the LRC run-alone bit or else the encryption/decryption will not happen.
+	 * NOTE: Case 2 only applies to PXP use-case of said workaround.
 	 */
 	if (GRAPHICS_VER_FULL(ce->engine->i915) >= IP_VER(12, 70) &&
 	    (ce->engine->class == COMPUTE_CLASS || ce->engine->class == RENDER_CLASS)) {
@@ -852,6 +853,7 @@ static void init_common_regs(u32 * const regs,
 	if (GRAPHICS_VER(engine->i915) < 11)
 		ctl |= _MASKED_BIT_DISABLE(CTX_CTRL_ENGINE_CTX_SAVE_INHIBIT |
 					   CTX_CTRL_RS_CTX_ENABLE);
+	/* Wa_14019159160 - Case 2.*/
 	if (ctx_needs_runalone(ce))
 		ctl |= _MASKED_BIT_ENABLE(GEN12_CTX_CTRL_RUNALONE_MODE);
 	regs[CTX_CONTEXT_CONTROL] = ctl;
@@ -1204,13 +1206,17 @@ err_vma:
 
 void lrc_reset(struct intel_context *ce)
 {
+	int srcu;
+
 	GEM_BUG_ON(!intel_context_is_pinned(ce));
 
 	intel_ring_reset(ce->ring, ce->ring->emit);
 
 	/* Scrub away the garbage */
+	gt_ggtt_address_read_lock(ce->engine->gt, &srcu);
 	lrc_init_regs(ce, ce->engine, true);
 	ce->lrc.lrca = lrc_update_regs(ce, ce->engine, ce->ring->tail);
+	gt_ggtt_address_read_unlock(ce->engine->gt, srcu);
 }
 
 int
@@ -1597,6 +1603,30 @@ u32 lrc_update_regs(const struct intel_context *ce,
 	return lrc_descriptor(ce) | CTX_DESC_FORCE_RESTORE;
 }
 
+void lrc_update_regs_with_address(struct intel_context *ce)
+{
+	struct intel_ring *ring = ce->ring;
+	u32 *regs = ce->lrc_reg_state;
+
+	regs[CTX_RING_START] = i915_ggtt_offset(ring->vma);
+
+	init_wa_bb_regs(regs, ce->engine);
+
+	if (ce->wa_bb_page) {
+		u32 *(*fn)(const struct intel_context *ce, u32 *cs);
+
+		fn = gen12_emit_indirect_ctx_xcs;
+		if (ce->engine->class == RENDER_CLASS)
+			fn = gen12_emit_indirect_ctx_rcs;
+
+		/* Mutually exclusive wrt to global indirect bb */
+		GEM_BUG_ON(ce->engine->wa_ctx.indirect_ctx.size);
+		setup_indirect_ctx_bb(ce, ce->engine, fn);
+	}
+
+	ce->lrc.lrca = lrc_descriptor(ce) | CTX_DESC_FORCE_RESTORE;
+}
+
 void lrc_update_offsets(struct intel_context *ce,
 			struct intel_engine_cs *engine)
 {
@@ -1609,10 +1639,22 @@ void lrc_check_regs(const struct intel_context *ce,
 {
 	const struct intel_ring *ring = ce->ring;
 	u32 *regs = ce->lrc_reg_state;
+	u32 regs_ring_start, vma_ring_start;
 	bool valid = true;
 	int x;
 
-	if (regs[CTX_RING_START] != i915_ggtt_offset(ring->vma)) {
+	regs_ring_start = regs[CTX_RING_START];
+	vma_ring_start = i915_ggtt_offset(ring->vma);
+	/*
+	 * The RING_START check is less strict on VFs, due to expected
+	 * inconsistency if unpin happens during post-migration recovery.
+	 * Only offsets within pages are guaranteed to always match.
+	 */
+	if (IS_SRIOV_VF(engine->i915)) {
+		regs_ring_start = offset_in_page(regs_ring_start);
+		vma_ring_start = offset_in_page(vma_ring_start);
+	}
+	if (regs_ring_start != vma_ring_start) {
 		pr_err("%s: context submitted with incorrect RING_START [%08x], expected %08x\n",
 		       engine->name,
 		       regs[CTX_RING_START],

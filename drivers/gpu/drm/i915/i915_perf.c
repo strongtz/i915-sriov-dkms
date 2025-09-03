@@ -195,7 +195,6 @@
 #include <linux/nospec.h>
 #include <linux/sizes.h>
 #include <linux/uuid.h>
-#include <linux/version.h>
 
 #include "gem/i915_gem_context.h"
 #include "gem/i915_gem_internal.h"
@@ -549,7 +548,8 @@ static bool oa_buffer_check_unlocked(struct i915_perf_stream *stream)
 	bool pollin;
 	u32 partial_report_size;
 
-	/* We have to consider the (unlikely) possibility that read() errors
+	/*
+	 * We have to consider the (unlikely) possibility that read() errors
 	 * could result in an OA buffer reset which might reset the head and
 	 * tail state.
 	 */
@@ -558,7 +558,8 @@ static bool oa_buffer_check_unlocked(struct i915_perf_stream *stream)
 	hw_tail = stream->perf->ops.oa_hw_tail_read(stream);
 	hw_tail -= gtt_offset;
 
-	/* The tail pointer increases in 64 byte increments, not in report_size
+	/*
+	 * The tail pointer increases in 64 byte increments, not in report_size
 	 * steps. Also the report size may not be a power of 2. Compute
 	 * potentially partially landed report in the OA buffer
 	 */
@@ -570,8 +571,9 @@ static bool oa_buffer_check_unlocked(struct i915_perf_stream *stream)
 
 	tail = hw_tail;
 
-	/* Walk the stream backward until we find a report with report
-	 * id and timestmap not at 0. Since the circular buffer pointers
+	/*
+	 * Walk the stream backward until we find a report with report
+	 * id and timestamp not at 0. Since the circular buffer pointers
 	 * progress by increments of 64 bytes and that reports can be up
 	 * to 256 bytes long, we can't tell whether a report has fully
 	 * landed in memory before the report id and timestamp of the
@@ -1322,6 +1324,9 @@ __store_reg_to_mem(struct i915_request *rq, i915_reg_t reg, u32 ggtt_offset)
 {
 	u32 *cs, cmd;
 
+	/* GGTT address cannot be transferred unlocked on VF */
+	GEM_BUG_ON(IS_SRIOV_VF(rq->i915));
+
 	cmd = MI_STORE_REGISTER_MEM | MI_SRM_LRM_GLOBAL_GTT;
 	if (GRAPHICS_VER(rq->i915) >= 8)
 		cmd++;
@@ -1664,9 +1669,7 @@ static void i915_oa_stream_destroy(struct i915_perf_stream *stream)
 	struct i915_perf *perf = stream->perf;
 	struct intel_gt *gt = stream->engine->gt;
 	struct i915_perf_group *g = stream->engine->oa_group;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	int m;
-#endif
 
 	if (WARN_ON(stream != g->exclusive_stream))
 		return;
@@ -1691,16 +1694,9 @@ static void i915_oa_stream_destroy(struct i915_perf_stream *stream)
 	free_oa_configs(stream);
 	free_noa_wait(stream);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
-	if (perf->spurious_report_rs.missed) {
-		gt_notice(gt, "%d spurious OA report notices suppressed due to ratelimiting\n",
-			  perf->spurious_report_rs.missed);
-	}
-#else
 	m = ratelimit_state_get_miss(&perf->spurious_report_rs);
 	if (m)
 		gt_notice(gt, "%d spurious OA report notices suppressed due to ratelimiting\n", m);
-#endif
 }
 
 static void gen7_init_oa_buffer(struct i915_perf_stream *stream)
@@ -3368,14 +3364,9 @@ static int i915_oa_stream_init(struct i915_perf_stream *stream,
 	drm_dbg(&stream->perf->i915->drm,
 		"opening stream oa config uuid=%s\n",
 		  stream->oa_config->uuid);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	hrtimer_init(&stream->poll_check_timer,
-		     CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	stream->poll_check_timer.function = oa_poll_check_timer_cb;
-#else
+
 	hrtimer_setup(&stream->poll_check_timer, oa_poll_check_timer_cb, CLOCK_MONOTONIC,
 		      HRTIMER_MODE_REL);
-#endif
 	init_waitqueue_head(&stream->poll_wq);
 	spin_lock_init(&stream->oa_buffer.ptr_lock);
 	mutex_init(&stream->lock);
@@ -3866,7 +3857,7 @@ i915_perf_open_ioctl_locked(struct i915_perf *perf,
 	}
 
 	/*
-	 * Asking for SSEU configuration is a priviliged operation.
+	 * Asking for SSEU configuration is a privileged operation.
 	 */
 	if (props->has_sseu)
 		privileged_op = true;
@@ -4495,14 +4486,16 @@ static bool gen12_is_valid_mux_addr(struct i915_perf *perf, u32 addr)
 
 static u32 mask_reg_value(u32 reg, u32 val)
 {
-	/* HALF_SLICE_CHICKEN2 is programmed with a the
+	/*
+	 * HALF_SLICE_CHICKEN2 is programmed with a the
 	 * WaDisableSTUnitPowerOptimization workaround. Make sure the value
 	 * programmed by userspace doesn't change this.
 	 */
 	if (REG_EQUAL(reg, HALF_SLICE_CHICKEN2))
 		val = val & ~_MASKED_BIT_ENABLE(GEN8_ST_PO_DISABLE);
 
-	/* WAIT_FOR_RC6_EXIT has only one bit fullfilling the function
+	/*
+	 * WAIT_FOR_RC6_EXIT has only one bit fulfilling the function
 	 * indicated by its name and a bunch of selection fields used by OA
 	 * configs.
 	 */
@@ -4819,7 +4812,7 @@ err_unlock:
 	return ret;
 }
 
-static struct ctl_table oa_table[] = {
+static const struct ctl_table oa_table[] = {
 	{
 	 .procname = "perf_stream_paranoid",
 	 .data = &i915_perf_stream_paranoid,

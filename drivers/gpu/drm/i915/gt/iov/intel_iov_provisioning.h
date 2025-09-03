@@ -29,6 +29,8 @@ int intel_iov_provisioning_auto(struct intel_iov *iov, unsigned int num_vfs);
 int intel_iov_provisioning_verify(struct intel_iov *iov, unsigned int num_vfs);
 int intel_iov_provisioning_push(struct intel_iov *iov, unsigned int num);
 
+u32 intel_iov_provisioning_get_tile_mask(struct intel_iov *iov, unsigned int vfid);
+
 int intel_iov_provisioning_set_ggtt(struct intel_iov *iov, unsigned int id, u64 size);
 u64 intel_iov_provisioning_get_ggtt(struct intel_iov *iov, unsigned int id);
 int intel_iov_provisioning_set_spare_ggtt(struct intel_iov *iov, u64 size);
@@ -68,6 +70,10 @@ int intel_iov_provisioning_print_ctxs(struct intel_iov *iov, struct drm_printer 
 int intel_iov_provisioning_print_dbs(struct intel_iov *iov, struct drm_printer *p);
 
 int intel_iov_provisioning_print_available_ggtt(struct intel_iov *iov, struct drm_printer *p);
+
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV)
+int intel_iov_provisioning_move_ggtt(struct intel_iov *iov, unsigned int id);
+#endif /* CONFIG_DRM_I915_DEBUG_IOV */
 
 int intel_iov_provisioning_force_vgt_mode(struct intel_iov *iov);
 

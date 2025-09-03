@@ -2,14 +2,16 @@
 /*
  * Copyright © 2020 Intel Corporation
  */
-#include <linux/version.h>
 
 #include "display/bxt_dpio_phy_regs.h"
 #include "display/i9xx_plane_regs.h"
+#include "display/i9xx_wm_regs.h"
 #include "display/intel_audio_regs.h"
 #include "display/intel_backlight_regs.h"
 #include "display/intel_color_regs.h"
+#include "display/intel_crt_regs.h"
 #include "display/intel_cursor_regs.h"
+#include "display/intel_display_core.h"
 #include "display/intel_display_types.h"
 #include "display/intel_dmc_regs.h"
 #include "display/intel_dp_aux_regs.h"
@@ -17,8 +19,11 @@
 #include "display/intel_fbc_regs.h"
 #include "display/intel_fdi_regs.h"
 #include "display/intel_lvds_regs.h"
+#include "display/intel_pfit_regs.h"
 #include "display/intel_psr_regs.h"
+#include "display/intel_sbi_regs.h"
 #include "display/intel_sprite_regs.h"
+#include "display/intel_vga_regs.h"
 #include "display/skl_universal_plane_regs.h"
 #include "display/skl_watermark_regs.h"
 #include "display/vlv_dsi_pll_regs.h"
@@ -29,6 +34,7 @@
 #include "i915_drv.h"
 #include "i915_pvinfo.h"
 #include "i915_reg.h"
+#include "display/intel_display_regs.h"
 #include "intel_gvt.h"
 #include "intel_mchbar_regs.h"
 
@@ -1259,7 +1265,7 @@ static int iterate_bxt_mmio(struct intel_gvt_mmio_table_iter *iter)
 
 /**
  * intel_gvt_iterate_mmio_table - Iterate the GVT MMIO table
- * @iter: the interator
+ * @iter: the iterator
  *
  * This function is called for iterating the GVT MMIO table when i915 is
  * taking the snapshot of the HW and GVT is building MMIO tracking table.
@@ -1309,8 +1315,4 @@ int intel_gvt_iterate_mmio_table(struct intel_gvt_mmio_table_iter *iter)
 err:
 	return ret;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(intel_gvt_iterate_mmio_table, I915_GVT);
-#else
 EXPORT_SYMBOL_NS_GPL(intel_gvt_iterate_mmio_table, "I915_GVT");
-#endif

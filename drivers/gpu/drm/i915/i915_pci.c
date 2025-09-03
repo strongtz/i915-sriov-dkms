@@ -22,18 +22,9 @@
  *
  */
 
-#include <linux/version.h>
-
 #include <drm/drm_color_mgmt.h>
 #include <drm/drm_drv.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
-#include <drm/i915_pciids.h>
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-#include <drm/intel/i915_pciids.h>
-#else
 #include <drm/intel/pciids.h>
-#endif
 
 #include "display/intel_display_driver.h"
 #include "gt/intel_gt_regs.h"
@@ -84,7 +75,7 @@ __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for d
 	.__runtime.page_sizes = I915_GTT_PAGE_SIZE_4K
 
 #define GEN_DEFAULT_REGIONS \
-	.__runtime.memory_regions = BIT(INTEL_REGION_SMEM) | BIT(INTEL_REGION_STOLEN_SMEM)
+	.memory_regions = BIT(INTEL_REGION_SMEM) | BIT(INTEL_REGION_STOLEN_SMEM)
 
 #define I830_FEATURES \
 	GEN(2), \
@@ -93,7 +84,7 @@ __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for d
 	.has_3d_pipeline = 1, \
 	.hws_needs_physical = 1, \
 	.unfenced_needs_alignment = 1, \
-	.__runtime.platform_engine_mask = BIT(RCS0), \
+	.platform_engine_mask = BIT(RCS0), \
 	.has_snoop = true, \
 	.has_coherent_ggtt = false, \
 	.dma_mask_size = 32, \
@@ -108,7 +99,7 @@ __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for d
 	.gpu_reset_clobbers_display = true, \
 	.hws_needs_physical = 1, \
 	.unfenced_needs_alignment = 1, \
-	.__runtime.platform_engine_mask = BIT(RCS0), \
+	.platform_engine_mask = BIT(RCS0), \
 	.has_snoop = true, \
 	.has_coherent_ggtt = false, \
 	.dma_mask_size = 32, \
@@ -140,7 +131,7 @@ static const struct intel_device_info i865g_info = {
 #define GEN3_FEATURES \
 	GEN(3), \
 	.gpu_reset_clobbers_display = true, \
-	.__runtime.platform_engine_mask = BIT(RCS0), \
+	.platform_engine_mask = BIT(RCS0), \
 	.has_3d_pipeline = 1, \
 	.has_snoop = true, \
 	.has_coherent_ggtt = true, \
@@ -203,7 +194,7 @@ static const struct intel_device_info pnv_m_info = {
 #define GEN4_FEATURES \
 	GEN(4), \
 	.gpu_reset_clobbers_display = true, \
-	.__runtime.platform_engine_mask = BIT(RCS0), \
+	.platform_engine_mask = BIT(RCS0), \
 	.has_3d_pipeline = 1, \
 	.has_snoop = true, \
 	.has_coherent_ggtt = true, \
@@ -231,7 +222,7 @@ static const struct intel_device_info i965gm_info = {
 static const struct intel_device_info g45_info = {
 	GEN4_FEATURES,
 	PLATFORM(INTEL_G45),
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0),
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0),
 	.gpu_reset_clobbers_display = false,
 };
 
@@ -239,13 +230,13 @@ static const struct intel_device_info gm45_info = {
 	GEN4_FEATURES,
 	PLATFORM(INTEL_GM45),
 	.is_mobile = 1,
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0),
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0),
 	.gpu_reset_clobbers_display = false,
 };
 
 #define GEN5_FEATURES \
 	GEN(5), \
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0), \
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0), \
 	.has_3d_pipeline = 1, \
 	.has_snoop = true, \
 	.has_coherent_ggtt = true, \
@@ -271,7 +262,7 @@ static const struct intel_device_info ilk_m_info = {
 
 #define GEN6_FEATURES \
 	GEN(6), \
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0), \
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0), \
 	.has_3d_pipeline = 1, \
 	.has_coherent_ggtt = true, \
 	.has_llc = 1, \
@@ -319,7 +310,7 @@ static const struct intel_device_info snb_m_gt2_info = {
 
 #define GEN7_FEATURES  \
 	GEN(7), \
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0), \
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0), \
 	.has_3d_pipeline = 1, \
 	.has_coherent_ggtt = true, \
 	.has_llc = 1, \
@@ -376,7 +367,6 @@ static const struct intel_device_info ivb_q_info = {
 static const struct intel_device_info vlv_info = {
 	PLATFORM(INTEL_VALLEYVIEW),
 	GEN(7),
-	.is_lp = 1,
 	.has_runtime_pm = 1,
 	.has_rc6 = 1,
 	.has_reset_engine = true,
@@ -387,7 +377,7 @@ static const struct intel_device_info vlv_info = {
 	.__runtime.ppgtt_size = 31,
 	.has_snoop = true,
 	.has_coherent_ggtt = false,
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0),
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0),
 	GEN_DEFAULT_PAGE_SIZES,
 	GEN_DEFAULT_REGIONS,
 	LEGACY_CACHELEVEL,
@@ -395,7 +385,7 @@ static const struct intel_device_info vlv_info = {
 
 #define G75_FEATURES  \
 	GEN7_FEATURES, \
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0), \
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0), \
 	.has_rc6p = 0 /* RC6p removed-by HSW */, \
 	.has_runtime_pm = 1
 
@@ -453,15 +443,14 @@ static const struct intel_device_info bdw_rsvd_info = {
 static const struct intel_device_info bdw_gt3_info = {
 	BDW_PLATFORM,
 	.gt = 3,
-	.__runtime.platform_engine_mask =
+	.platform_engine_mask =
 		BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS1),
 };
 
 static const struct intel_device_info chv_info = {
 	PLATFORM(INTEL_CHERRYVIEW),
 	GEN(8),
-	.is_lp = 1,
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0),
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0),
 	.has_64bit_reloc = 1,
 	.has_runtime_pm = 1,
 	.has_rc6 = 1,
@@ -505,7 +494,7 @@ static const struct intel_device_info skl_gt2_info = {
 
 #define SKL_GT3_PLUS_PLATFORM \
 	SKL_PLATFORM, \
-	.__runtime.platform_engine_mask = \
+	.platform_engine_mask = \
 		BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS1)
 
 
@@ -521,8 +510,7 @@ static const struct intel_device_info skl_gt4_info = {
 
 #define GEN9_LP_FEATURES \
 	GEN(9), \
-	.is_lp = 1, \
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0), \
+	.platform_engine_mask = BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0), \
 	.has_3d_pipeline = 1, \
 	.has_64bit_reloc = 1, \
 	.has_runtime_pm = 1, \
@@ -568,7 +556,7 @@ static const struct intel_device_info kbl_gt2_info = {
 static const struct intel_device_info kbl_gt3_info = {
 	KBL_PLATFORM,
 	.gt = 3,
-	.__runtime.platform_engine_mask =
+	.platform_engine_mask =
 		BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS1),
 };
 
@@ -589,7 +577,7 @@ static const struct intel_device_info cfl_gt2_info = {
 static const struct intel_device_info cfl_gt3_info = {
 	CFL_PLATFORM,
 	.gt = 3,
-	.__runtime.platform_engine_mask =
+	.platform_engine_mask =
 		BIT(RCS0) | BIT(VCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS1),
 };
 
@@ -622,21 +610,21 @@ static const struct intel_device_info cml_gt2_info = {
 static const struct intel_device_info icl_info = {
 	GEN11_FEATURES,
 	PLATFORM(INTEL_ICELAKE),
-	.__runtime.platform_engine_mask =
+	.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
 };
 
 static const struct intel_device_info ehl_info = {
 	GEN11_FEATURES,
 	PLATFORM(INTEL_ELKHARTLAKE),
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(VCS0) | BIT(VECS0),
+	.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(VCS0) | BIT(VECS0),
 	.__runtime.ppgtt_size = 36,
 };
 
 static const struct intel_device_info jsl_info = {
 	GEN11_FEATURES,
 	PLATFORM(INTEL_JASPERLAKE),
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(VCS0) | BIT(VECS0),
+	.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(VCS0) | BIT(VECS0),
 	.__runtime.ppgtt_size = 36,
 };
 
@@ -651,21 +639,22 @@ static const struct intel_device_info jsl_info = {
 static const struct intel_device_info tgl_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_TIGERLAKE),
-	.__runtime.platform_engine_mask =
-		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
+	.platform_engine_mask =
+		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
 	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
+	.__runtime.ppgtt_size = 47,
 	.has_sriov = 1,
 };
 
 static const struct intel_device_info rkl_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ROCKETLAKE),
-	.__runtime.platform_engine_mask =
+	.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0),
 };
 
 #define DGFX_FEATURES \
-	.__runtime.memory_regions = BIT(INTEL_REGION_SMEM) | BIT(INTEL_REGION_LMEM_0) | BIT(INTEL_REGION_STOLEN_LMEM), \
+	.memory_regions = BIT(INTEL_REGION_SMEM) | BIT(INTEL_REGION_LMEM_0) | BIT(INTEL_REGION_STOLEN_LMEM), \
 	.has_llc = 0, \
 	.has_pxp = 0, \
 	.has_snoop = 1, \
@@ -677,10 +666,9 @@ static const struct intel_device_info dg1_info = {
 	DGFX_FEATURES,
 	.__runtime.graphics.ip.rel = 10,
 	PLATFORM(INTEL_DG1),
-	.require_force_probe = 1,
-	.__runtime.platform_engine_mask =
+	.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) |
-		BIT(VCS0) | BIT(VCS2),
+		BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
 	/* Wa_16011227922 */
 	.__runtime.ppgtt_size = 47,
 };
@@ -688,8 +676,9 @@ static const struct intel_device_info dg1_info = {
 static const struct intel_device_info adl_s_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ALDERLAKE_S),
-	.__runtime.platform_engine_mask =
-		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
+	.platform_engine_mask =
+		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
+	.__runtime.ppgtt_size = 47,
 	.dma_mask_size = 39,
 	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
@@ -698,9 +687,9 @@ static const struct intel_device_info adl_s_info = {
 static const struct intel_device_info adl_p_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ALDERLAKE_P),
-	.__runtime.platform_engine_mask =
-		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
-	.__runtime.ppgtt_size = 48,
+	.platform_engine_mask =
+		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
+	.__runtime.ppgtt_size = 47,
 	.dma_mask_size = 39,
 	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
@@ -737,6 +726,10 @@ static const struct intel_device_info adl_p_info = {
 	.__runtime.ppgtt_size = 48, \
 	.__runtime.ppgtt_type = INTEL_PPGTT_FULL
 
+#define REMOTE_TILE_FEATURES \
+	.has_remote_tiles = 1, \
+	.memory_regions = (REGION_SMEM | REGION_STOLEN | REGION_LMEM)
+
 #define DG2_FEATURES \
 	XE_HP_FEATURES, \
 	DGFX_FEATURES, \
@@ -749,7 +742,7 @@ static const struct intel_device_info adl_p_info = {
 	.has_guc_deprivilege = 1, \
 	.has_heci_pxp = 1, \
 	.has_media_ratio_mode = 1, \
-	.__runtime.platform_engine_mask = \
+	.platform_engine_mask = \
 		BIT(RCS0) | BIT(BCS0) | \
 		BIT(VECS0) | BIT(VECS1) | \
 		BIT(VCS0) | BIT(VCS2) | \
@@ -789,6 +782,7 @@ static const struct intel_device_info mtl_info = {
 	.has_flat_ccs = 0,
 	.has_gmd_id = 1,
 	.has_guc_deprivilege = 1,
+	.has_iov_memirq = 1,
 	.has_guc_tlb_invalidation = 1,
 	.has_llc = 0,
 	.has_memirq = 1,
@@ -797,9 +791,8 @@ static const struct intel_device_info mtl_info = {
 	.has_sriov = 1,
 	.max_pat_index = 4,
 	.has_pxp = 1,
-	.__runtime.memory_regions = BIT(INTEL_REGION_SMEM) | BIT(INTEL_REGION_STOLEN_LMEM),
-	.__runtime.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(CCS0),
-	.require_force_probe = 1,
+	.memory_regions = BIT(INTEL_REGION_SMEM) | BIT(INTEL_REGION_STOLEN_LMEM),
+	.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(CCS0),
 	MTL_CACHELEVEL,
 };
 
@@ -813,86 +806,6 @@ __diag_pop();
  * and subvendor IDs, we need it to come before the more general IVB
  * PCI ID matches, otherwise we'll use the wrong info struct above.
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
-static const struct pci_device_id pciidlist[] = {
-	INTEL_I830_IDS(&i830_info),
-	INTEL_I845G_IDS(&i845g_info),
-	INTEL_I85X_IDS(&i85x_info),
-	INTEL_I865G_IDS(&i865g_info),
-	INTEL_I915G_IDS(&i915g_info),
-	INTEL_I915GM_IDS(&i915gm_info),
-	INTEL_I945G_IDS(&i945g_info),
-	INTEL_I945GM_IDS(&i945gm_info),
-	INTEL_I965G_IDS(&i965g_info),
-	INTEL_G33_IDS(&g33_info),
-	INTEL_I965GM_IDS(&i965gm_info),
-	INTEL_GM45_IDS(&gm45_info),
-	INTEL_G45_IDS(&g45_info),
-	INTEL_PNV_G_IDS(&pnv_g_info),
-	INTEL_PNV_M_IDS(&pnv_m_info),
-	INTEL_ILK_D_IDS(&ilk_d_info),
-	INTEL_ILK_M_IDS(&ilk_m_info),
-	INTEL_SNB_D_GT1_IDS(&snb_d_gt1_info),
-	INTEL_SNB_D_GT2_IDS(&snb_d_gt2_info),
-	INTEL_SNB_M_GT1_IDS(&snb_m_gt1_info),
-	INTEL_SNB_M_GT2_IDS(&snb_m_gt2_info),
-	INTEL_IVB_Q_IDS(&ivb_q_info), /* must be first IVB */
-	INTEL_IVB_M_GT1_IDS(&ivb_m_gt1_info),
-	INTEL_IVB_M_GT2_IDS(&ivb_m_gt2_info),
-	INTEL_IVB_D_GT1_IDS(&ivb_d_gt1_info),
-	INTEL_IVB_D_GT2_IDS(&ivb_d_gt2_info),
-	INTEL_HSW_GT1_IDS(&hsw_gt1_info),
-	INTEL_HSW_GT2_IDS(&hsw_gt2_info),
-	INTEL_HSW_GT3_IDS(&hsw_gt3_info),
-	INTEL_VLV_IDS(&vlv_info),
-	INTEL_BDW_GT1_IDS(&bdw_gt1_info),
-	INTEL_BDW_GT2_IDS(&bdw_gt2_info),
-	INTEL_BDW_GT3_IDS(&bdw_gt3_info),
-	INTEL_BDW_RSVD_IDS(&bdw_rsvd_info),
-	INTEL_CHV_IDS(&chv_info),
-	INTEL_SKL_GT1_IDS(&skl_gt1_info),
-	INTEL_SKL_GT2_IDS(&skl_gt2_info),
-	INTEL_SKL_GT3_IDS(&skl_gt3_info),
-	INTEL_SKL_GT4_IDS(&skl_gt4_info),
-	INTEL_BXT_IDS(&bxt_info),
-	INTEL_GLK_IDS(&glk_info),
-	INTEL_KBL_GT1_IDS(&kbl_gt1_info),
-	INTEL_KBL_GT2_IDS(&kbl_gt2_info),
-	INTEL_KBL_GT3_IDS(&kbl_gt3_info),
-	INTEL_KBL_GT4_IDS(&kbl_gt3_info),
-	INTEL_AML_KBL_GT2_IDS(&kbl_gt2_info),
-	INTEL_CFL_S_GT1_IDS(&cfl_gt1_info),
-	INTEL_CFL_S_GT2_IDS(&cfl_gt2_info),
-	INTEL_CFL_H_GT1_IDS(&cfl_gt1_info),
-	INTEL_CFL_H_GT2_IDS(&cfl_gt2_info),
-	INTEL_CFL_U_GT2_IDS(&cfl_gt2_info),
-	INTEL_CFL_U_GT3_IDS(&cfl_gt3_info),
-	INTEL_WHL_U_GT1_IDS(&cfl_gt1_info),
-	INTEL_WHL_U_GT2_IDS(&cfl_gt2_info),
-	INTEL_AML_CFL_GT2_IDS(&cfl_gt2_info),
-	INTEL_WHL_U_GT3_IDS(&cfl_gt3_info),
-	INTEL_CML_GT1_IDS(&cml_gt1_info),
-	INTEL_CML_GT2_IDS(&cml_gt2_info),
-	INTEL_CML_U_GT1_IDS(&cml_gt1_info),
-	INTEL_CML_U_GT2_IDS(&cml_gt2_info),
-	INTEL_ICL_IDS(&icl_info),
-	INTEL_EHL_IDS(&ehl_info),
-	INTEL_JSL_IDS(&jsl_info),
-	INTEL_TGL_IDS(&tgl_info),
-	INTEL_RKL_IDS(&rkl_info),
-	INTEL_ADLS_IDS(&adl_s_info),
-	INTEL_ADLP_IDS(&adl_p_info),
-	INTEL_ADLN_IDS(&adl_p_info),
-	INTEL_DG1_IDS(&dg1_info),
-	INTEL_RPLS_IDS(&adl_s_info),
-	INTEL_RPLU_IDS(&adl_p_info),
-	INTEL_RPLP_IDS(&adl_p_info),
-	INTEL_DG2_IDS(&dg2_info),
-	INTEL_ATS_M_IDS(&ats_m_info),
-	INTEL_MTL_IDS(&mtl_info),
-	{}
-};
-#else
 static const struct pci_device_id pciidlist[] = {
 	INTEL_I830_IDS(INTEL_VGA_DEVICE, &i830_info),
 	INTEL_I845G_IDS(INTEL_VGA_DEVICE, &i845g_info),
@@ -968,13 +881,10 @@ static const struct pci_device_id pciidlist[] = {
 	INTEL_RPLP_IDS(INTEL_VGA_DEVICE, &adl_p_info),
 	INTEL_DG2_IDS(INTEL_VGA_DEVICE, &dg2_info),
 	INTEL_ATS_M_IDS(INTEL_VGA_DEVICE, &ats_m_info),
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 	INTEL_ARL_IDS(INTEL_VGA_DEVICE, &mtl_info),
-#endif
 	INTEL_MTL_IDS(INTEL_VGA_DEVICE, &mtl_info),
 	{}
 };
-#endif
 MODULE_DEVICE_TABLE(pci, pciidlist);
 
 static void i915_pci_remove(struct pci_dev *pdev)

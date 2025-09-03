@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: MIT
 /*
- * SPDX-License-Identifier: MIT
- *
  * Copyright © 2014-2016 Intel Corporation
  */
 
-#include <linux/version.h>
-
-#include "display/intel_display.h"
 #include "gt/intel_gt.h"
 
 #include "i915_drv.h"
@@ -19,10 +15,6 @@
 #include "i915_gem_object.h"
 #include "i915_gem_object_frontbuffer.h"
 #include "i915_vma.h"
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-#define VTD_GUARD (168u * I915_GTT_PAGE_SIZE) /* 168 or tile-row PTE padding */
-#endif
 
 static bool gpu_write_needs_clflush(struct drm_i915_gem_object *obj)
 {
@@ -280,7 +272,7 @@ int i915_gem_object_set_cache_level(struct drm_i915_gem_object *obj,
 	 * For objects created by userspace through GEM_CREATE with pat_index
 	 * set by set_pat extension, simply return 0 here without touching
 	 * the cache setting, because such objects should have an immutable
-	 * cache setting by desgin and always managed by userspace.
+	 * cache setting by design and always managed by userspace.
 	 */
 	if (i915_gem_object_has_cache_level(obj, cache_level))
 		return 0;
@@ -428,11 +420,7 @@ out:
 struct i915_vma *
 i915_gem_object_pin_to_display_plane(struct drm_i915_gem_object *obj,
 				     struct i915_gem_ww_ctx *ww,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-				     u32 alignment,
-#else
-						 u32 alignment, unsigned int guard,
-#endif
+				     u32 alignment, unsigned int guard,
 				     const struct i915_gtt_view *view,
 				     unsigned int flags)
 {
@@ -461,20 +449,8 @@ i915_gem_object_pin_to_display_plane(struct drm_i915_gem_object *obj,
 		return ERR_PTR(ret);
 
 	/* VT-d may overfetch before/after the vma, so pad with scratch */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-	if (intel_scanout_needs_vtd_wa(i915)) {
-		unsigned int guard = VTD_GUARD;
-
-		if (i915_gem_object_is_tiled(obj))
-			guard = max(guard,
-				    i915_gem_object_get_tile_row_size(obj));
-
-		flags |= PIN_OFFSET_GUARD | guard;
-	}
-#else
 	if (guard)
 		flags |= PIN_OFFSET_GUARD | (guard * I915_GTT_PAGE_SIZE);
-#endif
 
 	/*
 	 * As the user may map the buffer once pinned in the display plane

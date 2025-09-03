@@ -2,26 +2,118 @@
 /*
  * Copyright © 2023 Intel Corporation
  */
-#include <linux/version.h>
+
 #include <drm/i915_sriov.h>
 
 #include "i915_sriov.h"
 #include "i915_sriov_sysfs.h"
 #include "i915_drv.h"
+#include "i915_irq.h"
 #include "i915_pci.h"
 #include "i915_utils.h"
 #include "i915_reg.h"
 #include "intel_pci_config.h"
+#include "gem/i915_gem_context.h"
+#include "gem/i915_gem_pm.h"
 
+#include "display/intel_display_core.h"
+#include "gt/intel_engine_heartbeat.h"
 #include "gt/intel_gt.h"
 #include "gt/intel_gt_pm.h"
+#include "gt/intel_lrc.h"
+#include "gt/iov/intel_iov_migration.h"
 #include "gt/iov/intel_iov_provisioning.h"
+#include "gt/iov/intel_iov_query.h"
 #include "gt/iov/intel_iov_service.h"
 #include "gt/iov/intel_iov_reg.h"
 #include "gt/iov/intel_iov_state.h"
 #include "gt/iov/intel_iov_utils.h"
 
 #include "pxp/intel_pxp.h"
+
+/**
+ * DOC: VM Migration with SR-IOV
+ *
+ * Most VMM applications allow to save state of a VM, and restore it
+ * at different time or on another machine. To allow proper migration of a
+ * VM which configuration includes directly attached VF device, we need to
+ * assure that VF state is part of the VM image being migrated.
+ *
+ * Storing complete state of any hardware is hard. Doing so in a manner
+ * which allows restoring back such state is even harder. Since the migrated
+ * VF state might contain configuration or provisioning which was specific
+ * to the source machine, we need to do proper re-initialization of VF
+ * device on the target machine. This initialization is done within
+ * `VF Post-migration worker`_.
+ */
+
+/**
+ * DOC: VF Post-migration worker
+ *
+ * After `VM Migration with SR-IOV`_, i915 ends up running on a new VF device
+ * which had it GuC state restored. While the platform model and memory sizes
+ * assigned to this new VF must match the previous, address of Global GTT chunk
+ * assigned to the new VF might be different. Both GuC and VF KMD are expected
+ * to update the GGTT references in the objects they own.
+ *
+ * The new GuC informs the VF driver that migration just happened, by triggering
+ * MIGRATED interrupt. After that, GuC enters a state where it waits for the VF
+ * KMD to perform all the necessary fixups. Communication with the GuC is limited
+ * at that point, allowing only a few MMIO commands. CTB communication is not
+ * working, because GuC is not allowed to read any messages from H2G CT buffer.
+ *
+ * On receiving the MIGRATED IRQ, VF KMD schedules post-migration worker. The
+ * worker makes sure it is executed at most once per migration, by limiting its
+ * operations in case it was scheduled again before finishing.  Normal work of
+ * GuC is restored only after VF KMD sends RESFIX_DONE or RESET message to the
+ * GuC, of which the latter is used in exceptional flow only.
+ *
+ * The post-migration worker has two main goals:
+ *
+ * * Update driver state to prepare work on a new hardware (treated as new
+ *   even if the VM got restored at the place where it worked before).
+ *
+ * * Provide users with seamless experience in terms of GPU execution (no failed
+ *   kernel calls nor corrupted buffers).
+ *
+ * To achieve these goals, the following operations need to be performed:
+ *
+ * * Get new provisioning information from GuC. While count of the provisioned
+ *   resources must match the previous VM instance, the start point might be
+ *   different, and for non-virtualized ones that is significant.
+ *
+ * * Apply fixups to prepare work on new ranges of non-virtualized resources.
+ *   This really only concerns Global GTT, as it only has one address space
+ *   shared between PF and all VFs.
+ *
+ * * Update state information which depended on the previous hardware and is no
+ *   longer fully valid. This currently only concerns references to the old GGTT
+ *   address range within context state and on the context ring.
+ *
+ * * Prevent any kernel workers from trying to use resources before fixups, as
+ *   that would propagate references which are no longer valid, or interfere with
+ *   the applying of fixups. These workers operate as separate threads, so they
+ *   could try to access various driver structures before they are ready.
+ *
+ * * Provide seamless switch for the user space, by honoring all the requests
+ *   from before the finalization of post-migration recovery process.
+ *
+ * The post-migration worker performs the operations above in proper order to
+ * ensure safe transition. First it does a shutdown of some driver operations
+ * to avoid waiting for any locks taken there. Then it does handshake for
+ * `GuC MMIO based communication`_, and receives new provisioning data through
+ * that channel. With the new GGTT range taken from provisioning, the worker
+ * rebases 'Virtual Memory Address'_ structures used for tracking GGTT allocations,
+ * by shifting addresses of the underlying `drm_mm`_ nodes to range newly
+ * assigned to this VF. Similar adjustments are then applied to places where
+ * address from these nodes was stored. These are hardware states of contexts,
+ * commands emited on rings linked to these contexts, and messages expected to be
+ * sent to GuC via H2G CT buffer. After the fixups are applied, a message to GuC
+ * is sent confirming that everything is ready to continue GPU execution. The
+ * previously stopped VF driver operations are then kickstarted. If there are
+ * any requests which were preempted while pausing, they are re-submitted by
+ * the tasklet soon after post-migration worker ends.
+ */
 
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 /* XXX: can't use drm_WARN() as we are still using preliminary IP versions at few locations */
@@ -100,7 +192,7 @@ static bool pf_has_valid_vf_bars(struct drm_i915_private *i915)
 	if (!i915_pci_resource_valid(pdev, GEN12_VF_GTTMMADR_BAR))
 		return false;
 
-	if ((RUNTIME_INFO(i915)->memory_regions & BIT(INTEL_REGION_LMEM_0)) &&
+	if ((INTEL_INFO(i915)->memory_regions & BIT(INTEL_REGION_LMEM_0)) &&
 	    !i915_pci_resource_valid(pdev, GEN12_VF_LMEM_BAR))
 		return false;
 
@@ -177,6 +269,13 @@ enum i915_iov_mode i915_sriov_probe(struct drm_i915_private *i915)
 	return I915_IOV_MODE_NONE;
 }
 
+static void migration_worker_func(struct work_struct *w);
+
+static void vf_init_early(struct drm_i915_private *i915)
+{
+	INIT_WORK(&i915->sriov.vf.migration_worker, migration_worker_func);
+}
+
 static int vf_check_guc_submission_support(struct drm_i915_private *i915)
 {
 	if (!intel_guc_submission_is_wanted(&to_gt(i915)->uc.guc)) {
@@ -193,16 +292,17 @@ static void vf_tweak_device_info(struct drm_i915_private *i915)
 {
 	/* FIXME: info shouldn't be written to outside of intel_device_info.c */
 	struct intel_display_runtime_info *drinfo = DISPLAY_RUNTIME_INFO(i915);
+	struct intel_display *display = i915->display;
 
 	/* Force PCH_NOOP. We have no access to display */
-	i915->pch_type = PCH_NOP;
-	i915->display.info.__device_info = &no_display;
+	display->pch_type = PCH_NOP;
+	i915->display->info.__device_info = &no_display;
 
 	/*
 	 * Overwrite current display runtime info based on just updated device
 	 * info for VF.
 	 */
-	memcpy(drinfo, &i915->display.info.__device_info->__runtime_defaults, sizeof(*drinfo));
+	memcpy(drinfo, &i915->display->info.__device_info->__runtime_defaults, sizeof(*drinfo));
 }
 
 /**
@@ -218,6 +318,7 @@ int i915_sriov_early_tweaks(struct drm_i915_private *i915)
 	int err;
 
 	if (IS_SRIOV_VF(i915)) {
+		vf_init_early(i915);
 		err = vf_check_guc_submission_support(i915);
 		if (unlikely(err))
 			return err;
@@ -1107,11 +1208,7 @@ int i915_sriov_pause_vf(struct pci_dev *pdev, unsigned int vfid)
 
 	return i915_sriov_pf_pause_vf(i915, vfid);
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_pause_vf, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_pause_vf, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_resume_vf - Resume VF.
@@ -1132,11 +1229,7 @@ int i915_sriov_resume_vf(struct pci_dev *pdev, unsigned int vfid)
 
 	return i915_sriov_pf_resume_vf(i915, vfid);
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_resume_vf, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_resume_vf, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_wait_vf_flr_done - Wait for VF FLR completion.
@@ -1167,11 +1260,7 @@ int i915_sriov_wait_vf_flr_done(struct pci_dev *pdev, unsigned int vfid)
 
 	return 0;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_wait_vf_flr_done, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_wait_vf_flr_done, "I915_SRIOV_NS");
-#endif
 
 static struct intel_gt *
 sriov_to_gt(struct pci_dev *pdev, unsigned int tile)
@@ -1220,11 +1309,7 @@ i915_sriov_ggtt_size(struct pci_dev *pdev, unsigned int vfid, unsigned int tile)
 
 	return size;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_size, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_size, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_ggtt_save - Save VF GGTT.
@@ -1254,11 +1339,7 @@ ssize_t i915_sriov_ggtt_save(struct pci_dev *pdev, unsigned int vfid, unsigned i
 
 	return intel_iov_state_save_ggtt(&gt->iov, vfid, buf, size);
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_save, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_save, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_ggtt_load - Load VF GGTT.
@@ -1287,11 +1368,65 @@ i915_sriov_ggtt_load(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
 
 	return intel_iov_state_restore_ggtt(&gt->iov, vfid, buf, size);
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_load, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_load, "I915_SRIOV_NS");
-#endif
+
+static struct intel_iov *sriov_save_restore_get_iov_or_error(struct pci_dev *pdev, unsigned int id)
+{
+	struct intel_gt *gt;
+
+	gt = sriov_to_gt(pdev, id);
+	if (!gt)
+		return  ERR_PTR(-ENODEV);
+
+	if (!guc_supports_save_restore_v2(&gt->uc.guc)) {
+		IOV_ERROR(&gt->iov, "No save/restore support in loaded GuC FW\n");
+		return  ERR_PTR(-EOPNOTSUPP);
+	}
+
+	return &gt->iov;
+}
+
+ssize_t
+i915_sriov_mmio_save(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
+		     void *buf, size_t size)
+{
+	struct intel_iov *iov;
+
+	iov = sriov_save_restore_get_iov_or_error(pdev, tile);
+	if (IS_ERR(iov))
+		return PTR_ERR(iov);
+
+	WARN_ON(buf == NULL && size == 0);
+
+	return intel_iov_state_save_mmio(iov, vfid, buf, size);
+}
+EXPORT_SYMBOL_NS_GPL(i915_sriov_mmio_save, "I915_SRIOV_NS");
+
+int i915_sriov_mmio_load(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
+			 const void *buf, size_t size)
+{
+	struct intel_iov *iov;
+
+	iov = sriov_save_restore_get_iov_or_error(pdev, tile);
+	if (IS_ERR(iov))
+		return PTR_ERR(iov);
+
+	return intel_iov_state_restore_mmio(iov, vfid, buf, size);
+}
+EXPORT_SYMBOL_NS_GPL(i915_sriov_mmio_load, "I915_SRIOV_NS");
+
+ssize_t
+i915_sriov_mmio_size(struct pci_dev *pdev, unsigned int vfid, unsigned int tile)
+{
+	struct intel_iov *iov;
+
+	iov = sriov_save_restore_get_iov_or_error(pdev, tile);
+	if (IS_ERR(iov))
+		return PTR_ERR(iov);
+
+	return intel_iov_state_save_mmio_size(iov, vfid);
+}
+EXPORT_SYMBOL_NS_GPL(i915_sriov_mmio_size, "I915_SRIOV_NS");
 
 /**
  * i915_sriov_fw_state_size - Get size needed to store GuC FW state.
@@ -1306,22 +1441,18 @@ EXPORT_SYMBOL_NS_GPL(i915_sriov_ggtt_load, "I915_SRIOV_NS");
 ssize_t
 i915_sriov_fw_state_size(struct pci_dev *pdev, unsigned int vfid, unsigned int tile)
 {
-	struct intel_gt *gt;
+	struct intel_iov *iov;
 	int ret;
 
-	gt = sriov_to_gt(pdev, tile);
-	if (!gt)
-		return -ENODEV;
+	iov = sriov_save_restore_get_iov_or_error(pdev, tile);
+	if (IS_ERR(iov))
+		return PTR_ERR(iov);
 
-	ret = intel_iov_state_save_vf_size(&gt->iov, vfid);
+	ret = intel_iov_state_save_vf_size(iov, vfid);
 
 	return ret;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_size, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_size, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_fw_state_save - Save GuC FW state.
@@ -1339,22 +1470,18 @@ ssize_t
 i915_sriov_fw_state_save(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
 			 void *buf, size_t size)
 {
-	struct intel_gt *gt;
+	struct intel_iov *iov;
 	int ret;
 
-	gt = sriov_to_gt(pdev, tile);
-	if (!gt)
-		return -ENODEV;
+	iov = sriov_save_restore_get_iov_or_error(pdev, tile);
+	if (IS_ERR(iov))
+		return PTR_ERR(iov);
 
-	ret = intel_iov_state_save_vf(&gt->iov, vfid, buf, size);
+	ret = intel_iov_state_save_vf(iov, vfid, buf, size);
 
 	return ret;
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_save, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_save, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_fw_state_load - Load GuC FW state.
@@ -1372,19 +1499,15 @@ int
 i915_sriov_fw_state_load(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
 			 const void *buf, size_t size)
 {
-	struct intel_gt *gt;
+	struct intel_iov *iov;
 
-	gt = sriov_to_gt(pdev, tile);
-	if (!gt)
-		return -ENODEV;
+	iov = sriov_save_restore_get_iov_or_error(pdev, tile);
+	if (IS_ERR(iov))
+		return PTR_ERR(iov);
 
-	return intel_iov_state_store_guc_migration_state(&gt->iov, vfid, buf, size);
+	return intel_iov_state_store_guc_migration_state(iov, vfid, buf, size);
 }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_load, I915_SRIOV_NS);
-#else
 EXPORT_SYMBOL_NS_GPL(i915_sriov_fw_state_load, "I915_SRIOV_NS");
-#endif
 
 /**
  * i915_sriov_pf_clear_vf - Unprovision VF.
@@ -1477,4 +1600,421 @@ int i915_sriov_resume(struct drm_i915_private *i915)
 	}
 
 	return 0;
+}
+
+static void intel_gt_default_contexts_ring_restore(struct intel_gt *gt)
+{
+	struct intel_context *ce;
+
+	list_for_each_entry(ce, &gt->pinned_contexts, pinned_contexts_link) {
+	if (!ce)
+		continue;
+
+	if (!ce->timeline)
+		continue;
+
+	guc_submission_refresh_ctx_rings_content(ce);
+	}
+}
+
+static void user_contexts_ring_restore(struct drm_i915_private *i915)
+{
+	struct i915_gem_context *ctx;
+
+	spin_lock_irq(&i915->gem.contexts.lock);
+	rcu_read_lock();
+	list_for_each_entry_rcu(ctx, &i915->gem.contexts.list, link) {
+		struct i915_gem_engines_iter it;
+		struct intel_context *ce;
+
+		if (!kref_get_unless_zero(&ctx->ref))
+			continue;
+		spin_unlock_irq(&i915->gem.contexts.lock);
+
+		for_each_gem_engine(ce, rcu_dereference(ctx->engines), it) {
+			guc_submission_refresh_ctx_rings_content(ce);
+		}
+
+		spin_lock_irq(&i915->gem.contexts.lock);
+		i915_gem_context_put(ctx);
+	}
+	rcu_read_unlock();
+	spin_unlock_irq(&i915->gem.contexts.lock);
+}
+
+static void user_contexts_hwsp_rebase(struct drm_i915_private *i915)
+{
+	struct i915_gem_context *ctx;
+
+	spin_lock_irq(&i915->gem.contexts.lock);
+	rcu_read_lock();
+	list_for_each_entry_rcu(ctx, &i915->gem.contexts.list, link) {
+		struct i915_gem_engines_iter it;
+		struct intel_context *ce;
+
+		if (!kref_get_unless_zero(&ctx->ref))
+			continue;
+		spin_unlock_irq(&i915->gem.contexts.lock);
+
+		for_each_gem_engine(ce, rcu_dereference(ctx->engines), it) {
+			if (intel_context_is_pinned(ce)) {
+				intel_timeline_rebase_hwsp(ce->timeline);
+				lrc_update_regs_with_address(ce);
+			}
+		}
+
+		spin_lock_irq(&i915->gem.contexts.lock);
+		i915_gem_context_put(ctx);
+	}
+	rcu_read_unlock();
+	spin_unlock_irq(&i915->gem.contexts.lock);
+}
+
+static void intel_gt_default_contexts_hwsp_rebase(struct intel_gt *gt)
+{
+	struct intel_context *ce;
+
+	list_for_each_entry(ce, &gt->pinned_contexts, pinned_contexts_link) {
+		if (intel_context_is_pinned(ce)) {
+			intel_timeline_rebase_hwsp(ce->timeline);
+			lrc_update_regs_with_address(ce);
+		}
+	}
+}
+
+static void vf_post_migration_fixup_contexts(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id) {
+	if (!gt)
+		continue;
+
+	if (!gt->pinned_contexts.next || !gt->pinned_contexts.prev)
+		continue;
+
+	if (list_empty(&gt->pinned_contexts))
+		continue;
+
+	intel_gt_default_contexts_hwsp_rebase(gt);
+	intel_gt_default_contexts_ring_restore(gt);
+	}
+
+	user_contexts_hwsp_rebase(i915);
+	user_contexts_ring_restore(i915);
+}
+
+static void vf_post_migration_fixup_ctb(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id)
+		intel_guc_ct_update_addresses(&gt->uc.guc.ct);
+}
+
+static void heartbeats_disable(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id)
+		intel_gt_heartbeats_disable(gt);
+}
+
+static void heartbeats_restore(struct drm_i915_private *i915, bool unpark)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id)
+		intel_gt_heartbeats_restore(gt, unpark);
+}
+
+/**
+ * submissions_disable - Turn off advancing with execution of scheduled submissions.
+ * @i915: the i915 struct
+ *
+ * When the hardware is not ready to accept submissions, continuing to push
+ * the scheduled requests would only lead to a series of errors, and aborting
+ * requests which could be successfully executed if submitted after the pipeline
+ * is back to ready state.
+ */
+static void submissions_disable(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id)
+		intel_guc_submission_pause(&gt->uc.guc);
+}
+
+/**
+ * submissions_restore - Re-enable advancing with execution of scheduled submissions.
+ * @i915: the i915 struct
+ *
+ * We possibly unwinded some requests which did not finished before migration; now
+ * we can allow these requests to be re-submitted.
+ */
+static void submissions_restore(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id)
+		intel_guc_submission_restore(&gt->uc.guc);
+}
+
+/**
+ * vf_post_migration_shutdown - Stop the driver activities after VF migration.
+ * @i915: the i915 struct instance
+ *
+ * After this VM is migrated and assigned to a new VF, it is running on a new
+ * hardware, and therefore many hardware-dependent states and related structures
+ * require fixups. Without fixups, the hardware cannot do any work, and therefore
+ * all GPU pipelines are stalled.
+ * Stop some of kernel acivities to make the fixup process faster.
+ */
+static void vf_post_migration_shutdown(struct drm_i915_private *i915)
+{
+	heartbeats_disable(i915);
+	submissions_disable(i915);
+}
+
+/**
+ * vf_post_migration_reset_guc_state - Reset GuC state.
+ * @i915: the i915 struct
+ *
+ * This function sends VF state reset to GuC, as a way of exiting RESFIX
+ * state if a proper post-migration recovery procedure has failed.
+ */
+static void vf_post_migration_reset_guc_state(struct drm_i915_private *i915)
+{
+	intel_wakeref_t wakeref;
+
+	with_intel_runtime_pm(&i915->runtime_pm, wakeref) {
+		struct intel_gt *gt;
+		unsigned int id;
+
+		for_each_gt(gt, i915, id)
+			__intel_gt_reset(gt, ALL_ENGINES);
+	}
+	drm_notice(&i915->drm, "VF migration recovery reset sent\n");
+}
+
+static bool vf_post_migration_is_scheduled(struct drm_i915_private *i915)
+{
+	return work_pending(&i915->sriov.vf.migration_worker);
+}
+
+static int vf_post_migration_reinit_guc(struct drm_i915_private *i915)
+{
+	intel_wakeref_t wakeref;
+	int err;
+
+	with_intel_runtime_pm(&i915->runtime_pm, wakeref) {
+		struct intel_gt *gt;
+		unsigned int id;
+
+		for_each_gt(gt, i915, id) {
+			err = intel_iov_migration_reinit_guc(&gt->iov);
+			if (unlikely(err))
+				break;
+		}
+	}
+	return err;
+}
+
+static void vf_post_migration_fixup_ggtt_nodes(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id) {
+		/* media doesn't have its own ggtt */
+		if (gt->type == GT_MEDIA)
+			continue;
+		intel_iov_migration_fixup_ggtt_nodes(&gt->iov);
+	}
+}
+
+/*
+ * vf_post_migration_notify_resfix_done - Notify all GuCs about resource fixups apply finished.
+ * @i915: i915 device instance struct
+ */
+static void vf_post_migration_notify_resfix_done(struct drm_i915_private *i915)
+{
+	intel_wakeref_t wakeref;
+
+	with_intel_runtime_pm(&i915->runtime_pm, wakeref) {
+		struct intel_gt *gt;
+		unsigned int id;
+
+		for_each_gt(gt, i915, id)
+			intel_iov_notify_resfix_done(&gt->iov);
+	}
+	drm_dbg(&i915->drm, "VF resource fixups done notification sent\n");
+}
+
+/**
+ * vf_post_migration_kickstart - Re-start the driver activities under new hardware.
+ * @i915: the i915 struct instance
+ *
+ * After we have finished with all post-migration fixups, restart the driver
+ * activities to continue feeding the GPU with workloads.
+ */
+static void vf_post_migration_kickstart(struct drm_i915_private *i915)
+{
+	intel_irq_resume(i915);
+	submissions_restore(i915);
+	heartbeats_restore(i915, true);
+}
+
+static void i915_reset_backoff_enter(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	/* Raise flag for any other resets to back off and resign. */
+	for_each_gt(gt, i915, id)
+		intel_gt_reset_backoff_raise(gt);
+
+	/* Make sure intel_gt_reset_trylock() sees the I915_RESET_BACKOFF. */
+	synchronize_rcu_expedited();
+
+	/*
+	 * Wait for any operations already in progress which state could be
+	 * skewed by post-migration actions.
+	 */
+	for_each_gt(gt, i915, id)
+		synchronize_srcu_expedited(&gt->reset.backoff_srcu);
+}
+
+static void i915_reset_backoff_leave(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id)
+		intel_gt_reset_backoff_clear(gt);
+}
+
+static void vf_post_migration_recovery(struct drm_i915_private *i915)
+{
+	int err;
+
+	i915_reset_backoff_enter(i915);
+
+	drm_dbg(&i915->drm, "migration recovery in progress\n");
+	vf_post_migration_shutdown(i915);
+
+	if (vf_post_migration_is_scheduled(i915))
+		goto defer;
+	i915_ggtt_address_write_lock(i915);
+	err = vf_post_migration_reinit_guc(i915);
+	if (unlikely(err))
+		goto fail;
+
+	vf_post_migration_fixup_ggtt_nodes(i915);
+	vf_post_migration_fixup_contexts(i915);
+	vf_post_migration_fixup_ctb(i915);
+
+	if (!vf_post_migration_is_scheduled(i915)) {
+		vf_post_migration_notify_resfix_done(i915);
+		i915_ggtt_address_write_unlock(i915);
+	}
+	vf_post_migration_kickstart(i915);
+	i915_reset_backoff_leave(i915);
+	drm_notice(&i915->drm, "migration recovery completed\n");
+	return;
+
+defer:
+	drm_dbg(&i915->drm, "migration recovery deferred\n");
+	/* We bumped wakerefs when disabling heartbeat. Put them back. */
+	heartbeats_restore(i915, false);
+	i915_reset_backoff_leave(i915);
+	return;
+
+fail:
+	drm_err(&i915->drm, "migration recovery failed (%pe)\n", ERR_PTR(err));
+	intel_gt_set_wedged(to_gt(i915));
+	if (!vf_post_migration_is_scheduled(i915))
+		i915_ggtt_address_write_unlock(i915);
+	i915_reset_backoff_leave(i915);
+}
+
+static void migration_worker_func(struct work_struct *w)
+{
+	struct drm_i915_private *i915 = container_of(w, struct drm_i915_private,
+						     sriov.vf.migration_worker);
+
+	vf_post_migration_recovery(i915);
+}
+
+/**
+ * i915_sriov_vf_start_migration_recovery - Start VF migration recovery.
+ * @i915: the i915 struct
+ *
+ * This function shall be called only by VF.
+ */
+void i915_sriov_vf_start_migration_recovery(struct drm_i915_private *i915)
+{
+	bool started;
+
+	GEM_BUG_ON(!IS_SRIOV_VF(i915));
+
+	WRITE_ONCE(i915->sriov.vf.migration_gt_flags, 0);
+	smp_mb();
+
+	started = queue_work(system_unbound_wq, &i915->sriov.vf.migration_worker);
+	dev_info(i915->drm.dev, "VF migration recovery %s\n", started ?
+		 "scheduled" : "already in progress");
+}
+
+/**
+ * i915_sriov_current_is_vf_migration_recovery - returns if current worker is the
+ *   VF post-migration recovery worker
+ * @i915: the i915 struct instance
+ * Return: True if the current cpu context is the post-migration recovery worker
+ */
+bool i915_sriov_current_is_vf_migration_recovery(struct drm_i915_private *i915)
+{
+	return current_work() == &i915->sriov.vf.migration_worker;
+}
+
+static bool vf_ready_to_recovery_on_all_tiles(struct drm_i915_private *i915)
+{
+	struct intel_gt *gt;
+	unsigned int id;
+
+	for_each_gt(gt, i915, id) {
+		if (!test_bit(id, &i915->sriov.vf.migration_gt_flags))
+			return false;
+	}
+	return true;
+}
+
+int intel_sriov_vf_migrated_event_handler(struct intel_guc *guc)
+{
+	struct intel_gt *gt = guc_to_gt(guc);
+	struct drm_i915_private *i915 = gt->uncore->i915;
+
+	if (!guc->submission_initialized) {
+		/*
+		 * If at driver init, ignore migration which happened
+		 * before the driver was loaded.
+		 */
+		vf_post_migration_reset_guc_state(i915);
+		return -EAGAIN;
+	}
+
+	set_bit(gt->info.id, &i915->sriov.vf.migration_gt_flags);
+	smp_mb__after_atomic();
+	dev_info(i915->drm.dev, "VF migration recovery ready on gt%d\n",
+		 gt->info.id);
+	if (vf_ready_to_recovery_on_all_tiles(i915))
+		i915_sriov_vf_start_migration_recovery(i915);
+
+	return -EREMOTEIO;
 }

@@ -161,7 +161,7 @@ enum {
 	 * parent-child relationship (parallel submission, multi-lrc) that
 	 * hit an error while generating requests in the execbuf IOCTL.
 	 * Indicates this request should be skipped as another request in
-	 * submission / relationship encoutered an error.
+	 * submission / relationship encountered an error.
 	 */
 	I915_FENCE_FLAG_SKIP_PARALLEL,
 
@@ -170,6 +170,29 @@ enum {
 	 * fence (dma_fence_array) and i915 generated for parallel submission.
 	 */
 	I915_FENCE_FLAG_COMPOSITE,
+
+	/*
+	 * I915_FENCE_FLAG_LR - This fence represents a request on long running
+	 * (LR) context. Can't wait on this under a reservation object, and
+	 * can't wait in reclaim. This fence doesn't signal until the LR request
+	 * is done, and is thus different from a preempt fence.
+	 */
+	I915_FENCE_FLAG_LR,
+
+	/*
+	 * I915_FENCE_FLAG_GGTT_EMITTED - The request represented by this fence
+	 * has emitted at least one packet of commands to the ring which contained
+	 * GGTT address reference. This flag indicates that there may be GGTT
+	 * address references within the ring area associated to this request.
+	 * Only command packets which are used on SRIOV VF execution are obligated
+	 * to be mared with this flag.
+	 */
+	I915_FENCE_FLAG_GGTT_EMITTED,
+
+	I915_FENCE_FLAG_UFENCE,
+
+	__I915_FENCE_FLAG_LAST__
+
 };
 
 /*
@@ -187,7 +210,7 @@ enum {
  * RCU lookup of it that may race against reallocation of the struct
  * from the slab freelist. We intentionally do not zero the structure on
  * allocation so that the lookup can use the dangling pointers (and is
- * cogniscent that those pointers may be wrong). Instead, everything that
+ * cognisant that those pointers may be wrong). Instead, everything that
  * needs to be initialised must be done so explicitly.
  *
  * The requests are reference counted.
@@ -295,6 +318,9 @@ struct i915_request {
 
 	/* Position in the ring of the end of any workarounds after the tail */
 	u32 wa_tail;
+
+	/** Position in the ring of the end of last packet of emitted commands */
+	u32 advance;
 
 	/* Preallocate space in the ring for the emitting the request */
 	u32 reserved_space;

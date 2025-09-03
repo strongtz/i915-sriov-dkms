@@ -4,7 +4,6 @@
  * Copyright © 2021 Intel Corporation
  */
 
-#include <linux/kernel.h>
 #include <drm/drm_drv.h>
 
 #include "gem/i915_gem_context.h"
@@ -25,7 +24,7 @@ static int i915_check_nomodeset(void)
 	bool use_kms = true;
 
 	/*
-	 * Enable KMS by default, unless explicitly overriden by
+	 * Enable KMS by default, unless explicitly overridden by
 	 * either the i915.modeset parameter or by the
 	 * nomodeset boot option.
 	 */
@@ -72,8 +71,6 @@ static const struct {
 	{ .init = i915_vma_resource_module_init,
 	  .exit = i915_vma_resource_module_exit },
 	{ .init = i915_mock_selftests },
-	{ .init = i915_pmu_init,
-	  .exit = i915_pmu_exit },
 	{ .init = i915_pci_register_driver,
 	  .exit = i915_pci_unregister_driver },
 	{ .init = i915_perf_sysctl_register,
@@ -81,16 +78,8 @@ static const struct {
 };
 static int init_progress;
 
-static inline void _i915_sriov_dkms_print_description(void) {
-	pr_info(DRIVER_NAME ": You are using the i915-sriov-dkms module, a ported version of the i915 module with SR-IOV support.\n");
-	pr_info(DRIVER_NAME ": Please file any bug report at https://github.com/strongtz/i915-sriov-dkms/issues/new.\n");
-	pr_info(DRIVER_NAME ": Module Homepage: https://github.com/strongtz/i915-sriov-dkms\n");
-}
-
 static int __init i915_init(void)
 {
-	_i915_sriov_dkms_print_description();
-
 	int err, i;
 
 	for (i = 0; i < ARRAY_SIZE(init_funcs); i++) {
@@ -114,6 +103,7 @@ static int __init i915_init(void)
 	}
 
 	init_progress = i;
+
 	return 0;
 }
 
@@ -133,11 +123,6 @@ module_exit(i915_exit);
 
 MODULE_AUTHOR("Tungsten Graphics, Inc.");
 MODULE_AUTHOR("Intel Corporation");
-MODULE_AUTHOR("Contributors of i915-sriov-dkms");
-
-#ifdef DKMS_MODULE_VERSION
-MODULE_VERSION(DKMS_MODULE_VERSION);
-#endif
 
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL and additional rights");

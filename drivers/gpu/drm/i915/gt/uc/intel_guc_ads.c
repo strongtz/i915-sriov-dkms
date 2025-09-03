@@ -868,6 +868,11 @@ static void guc_waklv_init(struct intel_guc *guc)
 		guc_waklv_enable_simple(guc, &offset, &remain,
 					GUC_WORKAROUND_KLV_BLOCK_INTERRUPTS_WHEN_MGSR_BLOCKED);
 
+	/* Wa_16026508708 */
+	if (GUC_FIRMWARE_VER(guc) >= MAKE_GUC_VER(70, 44, 0))
+		guc_waklv_enable_simple(guc, &offset, &remain,
+					GUC_WORKAROUND_KLV_RESET_BB_STACK_PTR_ON_VF_SWITCH);
+
 	size = guc_ads_waklv_size(guc) - remain;
 	if (!size)
 		return;
