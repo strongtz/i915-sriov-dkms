@@ -1,0 +1,5 @@
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#define CONFIG_DRM_XE_PAGEMAP y
+#endif
