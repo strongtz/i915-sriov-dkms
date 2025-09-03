@@ -14,7 +14,7 @@ struct drm_i915_private;
 struct drm_printer;
 
 #define DRIVER_NAME		"i915"
-#define DRIVER_DESC		"Intel Graphics"
+#define DRIVER_DESC		"Linux i915 driver with SR-IOV support"
 
 extern const struct dev_pm_ops i915_pm_ops;
 

@@ -9,7 +9,7 @@
 #include <drm/drm_drv.h>
 
 #define DRIVER_NAME		"xe"
-#define DRIVER_DESC		"Intel Xe2 Graphics"
+#define DRIVER_DESC		"Linux xe driver with SR-IOV support"
 
 /* Interface history:
  *
