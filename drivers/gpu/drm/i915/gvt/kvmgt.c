@@ -44,7 +44,6 @@
 #include <linux/eventfd.h>
 #include <linux/mdev.h>
 #include <linux/debugfs.h>
-#include <linux/version.h>
 
 #include <linux/nospec.h>
 
@@ -54,16 +53,8 @@
 #include "intel_gvt.h"
 #include "gvt.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-MODULE_IMPORT_NS(DMA_BUF);
-#else
 MODULE_IMPORT_NS("DMA_BUF");
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-MODULE_IMPORT_NS(I915_GVT);
-#else
 MODULE_IMPORT_NS("I915_GVT");
-#endif
 
 /* helper macros copied from vfio-pci */
 #define VFIO_PCI_OFFSET_SHIFT   40
@@ -151,7 +142,7 @@ static int gvt_pin_guest_page(struct intel_vgpu *vgpu, unsigned long gfn,
 	int ret;
 
 	/*
-	 * We pin the pages one-by-one to avoid allocating a big arrary
+	 * We pin the pages one-by-one to avoid allocating a big array
 	 * on stack to hold pfns.
 	 */
 	for (npage = 0; npage < total_pages; npage++) {
@@ -2005,7 +1996,3 @@ module_exit(kvmgt_exit);
 MODULE_DESCRIPTION("Intel mediated pass-through framework for KVM");
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Intel Corporation");
-
-#ifdef DKMS_MODULE_VERSION
-MODULE_VERSION(DKMS_MODULE_VERSION);
-#endif

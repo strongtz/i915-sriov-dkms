@@ -15,6 +15,7 @@ int intel_sa_mediagt_setup(struct intel_gt *gt, phys_addr_t phys_addr,
 {
 	struct drm_i915_private *i915 = gt->i915;
 	struct intel_uncore *uncore;
+	int err;
 
 	uncore = drmm_kzalloc(&i915->drm, sizeof(*uncore), GFP_KERNEL);
 	if (!uncore)
@@ -29,7 +30,7 @@ int intel_sa_mediagt_setup(struct intel_gt *gt, phys_addr_t phys_addr,
 
 	/*
 	 * Standalone media shares the general MMIO space with the primary
-	 * GT.  We'll re-use the primary GT's mapping.
+	 * GT.  We'll reuse the primary GT's mapping.
 	 */
 	uncore->regs = intel_uncore_regs(&i915->uncore);
 	if (drm_WARN_ON(&i915->drm, uncore->regs == NULL))
@@ -37,6 +38,10 @@ int intel_sa_mediagt_setup(struct intel_gt *gt, phys_addr_t phys_addr,
 
 	gt->uncore = uncore;
 	gt->phys_addr = phys_addr;
+
+	err = intel_iov_init_mmio(&gt->iov);
+	if (unlikely(err))
+		return err;
 
 	/*
 	 * For current platforms we can assume there's only a single

@@ -254,7 +254,15 @@ static u32 guc_ctl_debug_flags(struct intel_guc *guc)
 
 static u32 guc_ctl_feature_flags(struct intel_guc *guc)
 {
+	struct intel_gt *gt = guc_to_gt(guc);
 	u32 flags = 0;
+
+	/*
+	 * Enable PXP GuC autoteardown flow.
+	 * NB: MTL does things differently.
+	 */
+	if (HAS_PXP(gt->i915) && !IS_METEORLAKE(gt->i915))
+		flags |= GUC_CTL_ENABLE_GUC_PXP_CTL;
 
 	if (!intel_guc_submission_is_used(guc))
 		flags |= GUC_CTL_DISABLE_SCHEDULER;
@@ -321,8 +329,13 @@ static u32 guc_ctl_wa_flags(struct intel_guc *guc)
 	 *
 	 * The same WA bit is used for both and 22011391025 is applicable to
 	 * all DG2.
+	 *
+	 * Platforms post DG2 prevent this issue in hardware by stalling
+	 * submissions. With this flag GuC will schedule as to avoid such
+	 * stalls.
 	 */
-	if (IS_DG2(gt->i915))
+	if (IS_DG2(gt->i915) ||
+	    (CCS_MASK(gt) && GRAPHICS_VER_FULL(gt->i915) >= IP_VER(12, 70)))
 		flags |= GUC_WA_DUAL_QUEUE;
 
 	/* Wa_22011802037: graphics version 11/12 */
@@ -635,6 +648,13 @@ busy_loop:
 		u32 hint = FIELD_GET(GUC_HXG_FAILURE_MSG_0_HINT, header);
 		u32 error = FIELD_GET(GUC_HXG_FAILURE_MSG_0_ERROR, header);
 
+		if (error == INTEL_GUC_RESPONSE_VF_MIGRATED) {
+			ret = intel_sriov_vf_migrated_event_handler(guc);
+			if (ret == -EAGAIN)
+				goto retry;
+			goto out;
+		}
+
 		guc_err(guc, "mmio request %#x: failure %x/%u\n",
 			request[0], error, hint);
 		ret = -ENXIO;
@@ -676,6 +696,7 @@ out:
 
 	return ret;
 }
+ALLOW_ERROR_INJECTION(intel_guc_send_mmio, ERRNO);
 
 int intel_guc_crash_process_msg(struct intel_guc *guc, u32 action)
 {
@@ -759,7 +780,7 @@ int intel_guc_suspend(struct intel_guc *guc)
 		 * H2G MMIO command completes.
 		 *
 		 * Don't abort on a failure code from the GuC. Keep going and do the
-		 * clean up in santize() and re-initialisation on resume and hopefully
+		 * clean up in sanitize() and re-initialisation on resume and hopefully
 		 * the error here won't be problematic.
 		 */
 		ret = intel_guc_send_mmio(guc, action, ARRAY_SIZE(action), NULL, 0);

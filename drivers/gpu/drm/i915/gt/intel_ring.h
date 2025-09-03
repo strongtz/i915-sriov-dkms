@@ -16,7 +16,10 @@ struct intel_ring *
 intel_engine_create_ring(struct intel_engine_cs *engine, int size);
 
 u32 *intel_ring_begin(struct i915_request *rq, unsigned int num_dwords);
-int intel_ring_cacheline_align(struct i915_request *rq);
+u32 *intel_ring_begin_ggtt(struct i915_request *rq, int *srcu, unsigned int num_dwords);
+void intel_ring_advance_ggtt(struct i915_request *rq, int srcu, u32 *cs);
+void intel_ring_fini_begin_ggtt(struct i915_request *rq, int *srcu);
+void intel_ring_fini_advance_ggtt(struct i915_request *rq, int srcu, u32 *cs);
 
 unsigned int intel_ring_update_space(struct intel_ring *ring);
 
@@ -41,13 +44,13 @@ static inline void intel_ring_put(struct intel_ring *ring)
 static inline void intel_ring_advance(struct i915_request *rq, u32 *cs)
 {
 	/* Dummy function.
-	 *
-	 * This serves as a placeholder in the code so that the reader
-	 * can compare against the preceding intel_ring_begin() and
-	 * check that the number of dwords emitted matches the space
-	 * reserved for the command packet (i.e. the value passed to
-	 * intel_ring_begin()).
-	 */
+	*
+	* This serves as a placeholder in the code so that the reader
+	* can compare against the preceding intel_ring_begin() and
+	* check that the number of dwords emitted matches the space
+	* reserved for the command packet (i.e. the value passed to
+	* intel_ring_begin()).
+	*/
 	GEM_BUG_ON((rq->ring->vaddr + rq->ring->emit) != cs);
 	GEM_BUG_ON(!IS_ALIGNED(rq->ring->emit, 8)); /* RING_TAIL qword align */
 }
@@ -125,6 +128,13 @@ intel_ring_set_tail(struct intel_ring *ring, unsigned int tail)
 	assert_ring_tail_valid(ring, tail);
 	ring->tail = tail;
 	return tail;
+}
+
+static inline unsigned int
+__intel_ring_count(unsigned int head, unsigned int tail, unsigned int size)
+{
+	GEM_BUG_ON(!is_power_of_2(size));
+	return (tail - head) & (size - 1);
 }
 
 static inline unsigned int

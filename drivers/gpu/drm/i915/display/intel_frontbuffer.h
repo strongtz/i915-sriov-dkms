@@ -21,8 +21,6 @@
  * IN THE SOFTWARE.
  */
 
-#include <linux/version.h>
-
 #ifndef __INTEL_FRONTBUFFER_H__
 #define __INTEL_FRONTBUFFER_H__
 
@@ -32,10 +30,8 @@
 
 #include "i915_active_types.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 struct drm_gem_object;
-#endif
-struct drm_i915_private;
+struct intel_display;
 
 enum fb_op_origin {
 	ORIGIN_CPU = 0,
@@ -49,11 +45,7 @@ struct intel_frontbuffer {
 	struct kref ref;
 	atomic_t bits;
 	struct i915_active write;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-	struct drm_i915_gem_object *obj;
-#else
 	struct drm_gem_object *obj;
-#endif
 	struct rcu_head rcu;
 
 	struct work_struct flush_work;
@@ -76,22 +68,17 @@ struct intel_frontbuffer {
 	GENMASK(INTEL_FRONTBUFFER_BITS_PER_PIPE * ((pipe) + 1) - 1,	\
 		INTEL_FRONTBUFFER_BITS_PER_PIPE * (pipe))
 
-void intel_frontbuffer_flip_prepare(struct drm_i915_private *i915,
+void intel_frontbuffer_flip_prepare(struct intel_display *display,
 				    unsigned frontbuffer_bits);
-void intel_frontbuffer_flip_complete(struct drm_i915_private *i915,
+void intel_frontbuffer_flip_complete(struct intel_display *display,
 				     unsigned frontbuffer_bits);
-void intel_frontbuffer_flip(struct drm_i915_private *i915,
+void intel_frontbuffer_flip(struct intel_display *display,
 			    unsigned frontbuffer_bits);
 
 void intel_frontbuffer_put(struct intel_frontbuffer *front);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-struct intel_frontbuffer *
-intel_frontbuffer_get(struct drm_i915_gem_object *obj);
-#else
 struct intel_frontbuffer *
 intel_frontbuffer_get(struct drm_gem_object *obj);
-#endif
 
 void __intel_fb_invalidate(struct intel_frontbuffer *front,
 			   enum fb_op_origin origin,

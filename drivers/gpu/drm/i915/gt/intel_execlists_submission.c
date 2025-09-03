@@ -108,7 +108,6 @@
  */
 #include <linux/interrupt.h>
 #include <linux/string_helpers.h>
-#include <linux/version.h>
 
 #include "i915_drv.h"
 #include "i915_reg.h"
@@ -404,15 +403,6 @@ __unwind_incomplete_requests(struct intel_engine_cs *engine)
 	}
 
 	return active;
-}
-
-struct i915_request *
-execlists_unwind_incomplete_requests(struct intel_engine_execlists *execlists)
-{
-	struct intel_engine_cs *engine =
-		container_of(execlists, typeof(*engine), execlists);
-
-	return __unwind_incomplete_requests(engine);
 }
 
 static void
@@ -2512,11 +2502,7 @@ static void execlists_irq_handler(struct intel_engine_cs *engine, u16 iir)
 			   ENGINE_READ_FW(engine, RING_EXECLIST_STATUS_HI));
 		ENGINE_TRACE(engine, "semaphore yield: %08x\n",
 			     engine->execlists.yield);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-		if (del_timer(&engine->execlists.timer))
-#else
 		if (timer_delete(&engine->execlists.timer))
-#endif
 			tasklet = true;
 	}
 
@@ -2766,7 +2752,6 @@ static int emit_pdps(struct i915_request *rq)
 		*cs++ = lower_32_bits(pd_daddr);
 	}
 	*cs++ = MI_ARB_ON_OFF | MI_ARB_ENABLE;
-	intel_ring_advance(rq, cs);
 
 	intel_ring_advance(rq, cs);
 
@@ -3384,13 +3369,8 @@ static void execlists_set_default_submission(struct intel_engine_cs *engine)
 static void execlists_shutdown(struct intel_engine_cs *engine)
 {
 	/* Synchronise with residual timers and any softirq they raise */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	del_timer_sync(&engine->execlists.timer);
-	del_timer_sync(&engine->execlists.preempt);
-#else
 	timer_delete_sync(&engine->execlists.timer);
 	timer_delete_sync(&engine->execlists.preempt);
-#endif
 	tasklet_kill(&engine->sched_engine->tasklet);
 }
 

@@ -5,10 +5,10 @@
 #define __INTEL_BO__
 
 #include <linux/types.h>
-#include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,13,0)
 
 struct drm_gem_object;
+struct drm_scanout_buffer;
+struct intel_framebuffer;
 struct seq_file;
 struct vm_area_struct;
 
@@ -25,5 +25,8 @@ struct intel_frontbuffer *intel_bo_set_frontbuffer(struct drm_gem_object *obj,
 						   struct intel_frontbuffer *front);
 
 void intel_bo_describe(struct seq_file *m, struct drm_gem_object *obj);
-#endif
+struct intel_framebuffer *intel_bo_alloc_framebuffer(void);
+int intel_bo_panic_setup(struct drm_scanout_buffer *sb);
+void intel_bo_panic_finish(struct intel_framebuffer *fb);
+
 #endif /* __INTEL_BO__ */

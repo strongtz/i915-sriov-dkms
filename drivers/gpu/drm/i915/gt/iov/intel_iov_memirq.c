@@ -49,6 +49,7 @@
 static int vf_create_memirq_data(struct intel_iov *iov)
 {
 	struct drm_i915_private *i915 = iov_to_i915(iov);
+	struct intel_gt *gt = iov_to_gt(iov);
 	struct drm_i915_gem_object *obj;
 	void *vaddr;
 	int err;
@@ -76,8 +77,15 @@ static int vf_create_memirq_data(struct intel_iov *iov)
 	iov->vf.irq.vaddr = vaddr;
 
 	enable_vector = (u32 *)(vaddr + I915_VF_IRQ_ENABLE);
-	/*XXX: we should start with all irqs disabled: 0xffff0000 */
-	*enable_vector = 0xffff;
+
+	/* Wa:16014207253 */
+	if (gt->fake_int.enabled) {
+		drm_info(&gt->i915->drm, "Using fake interrupt w/a, gt = %d\n", gt->info.id);
+		*enable_vector = 0x0;
+	} else {
+		/*XXX: we should start with all irqs disabled: 0xffff0000 */
+		*enable_vector = 0xffff;
+	}
 
 	return 0;
 
@@ -259,6 +267,11 @@ static void __guc_mem_irq_handler(struct intel_guc *guc, u8 *status)
 	struct intel_gt __maybe_unused *gt = guc_to_gt(guc);
 
 	MEMIRQ_DEBUG(gt, "STATUS %s %*ph\n", "GUC", 16, status);
+
+	if (READ_ONCE(status[ilog2(GUC_INTR_SW_INT_0)]) == 0xFF) {
+		WRITE_ONCE(status[ilog2(GUC_INTR_SW_INT_0)], 0x00);
+		intel_sriov_vf_migrated_event_handler(guc);
+	}
 
 	if (READ_ONCE(status[ilog2(GUC_INTR_GUC2HOST)]) == 0xFF) {
 		WRITE_ONCE(status[ilog2(GUC_INTR_GUC2HOST)], 0x00);

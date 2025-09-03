@@ -25,6 +25,8 @@
  *
  */
 
+#include <drm/drm_print.h>
+
 #include "intel_display_types.h"
 #include "intel_dvo_dev.h"
 
@@ -246,15 +248,9 @@ static enum drm_connector_status ch7017_detect(struct intel_dvo_device *dvo)
 	return connector_status_connected;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
-static enum drm_mode_status ch7017_mode_valid(struct intel_dvo_device *dvo,
-					      struct drm_display_mode *mode)
-{
-#else
 static enum drm_mode_status ch7017_mode_valid(struct intel_dvo_device *dvo,
 					      const struct drm_display_mode *mode)
 {
-#endif
 	if (mode->clock > 160000)
 		return MODE_CLOCK_HIGH;
 

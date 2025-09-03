@@ -11,6 +11,7 @@
 #include "intel_iov_utils.h"
 #include "gt/intel_gt.h"
 #include "gt/uc/abi/guc_actions_pf_abi.h"
+#include "gt/iov/intel_iov_reg.h"
 
 static void pf_state_worker_func(struct work_struct *w);
 
@@ -173,8 +174,19 @@ static void pf_clear_vf_ggtt_entries(struct intel_iov *iov, u32 vfid)
 	i915_ggtt_set_space_owner(gt->ggtt, vfid, &config->ggtt_region);
 }
 
+static bool pf_vfs_flr_enabled(struct intel_iov *iov, u32 vfid)
+{
+	return iov_to_i915(iov)->params.vfs_flr_mask & BIT(vfid);
+}
+
 static int pf_process_vf_flr_finish(struct intel_iov *iov, u32 vfid)
 {
+	if (!pf_vfs_flr_enabled(iov, vfid)) {
+		IOV_DEBUG(iov, "VF%u FLR processing skipped\n", vfid);
+		goto skip;
+	}
+	IOV_DEBUG(iov, "processing VF%u FLR\n", vfid);
+
 	/* Wa_14017568299:mtl - Clear Unsupported Request Detected status*/
 	wa_14017568299(iov, vfid);
 
@@ -184,6 +196,7 @@ static int pf_process_vf_flr_finish(struct intel_iov *iov, u32 vfid)
 	pf_clear_vf_ggtt_entries(iov, vfid);
 	mutex_unlock(pf_provisioning_mutex(iov));
 
+skip:
 	return pf_trigger_vf_flr_finish(iov, vfid);
 }
 
@@ -364,8 +377,10 @@ static void pf_handle_vf_flr(struct intel_iov *iov, u32 vfid)
 	unsigned int gtid;
 
 	if (!iov_is_root(iov)) {
-		if (iov_to_gt(iov)->type == GT_MEDIA)
+		if (iov_to_gt(iov)->type == GT_MEDIA) {
+			iov->pf.state.data[vfid].paused = false;
 			return;
+		}
 		IOV_ERROR(iov, "Unexpected VF%u FLR notification\n", vfid);
 		return;
 	}
@@ -400,6 +415,13 @@ static void pf_handle_vf_pause_done(struct intel_iov *iov, u32 vfid)
 	dev_info(dev, "VF%u %s\n", vfid, "paused");
 }
 
+static void pf_handle_vf_fixup_done(struct intel_iov *iov, u32 vfid)
+{
+	struct device *dev = iov_to_dev(iov);
+
+	dev_info(dev, "VF%u %s\n", vfid, "has completed migration");
+}
+
 static int pf_handle_vf_event(struct intel_iov *iov, u32 vfid, u32 eventid)
 {
 	switch (eventid) {
@@ -411,6 +433,9 @@ static int pf_handle_vf_event(struct intel_iov *iov, u32 vfid, u32 eventid)
 		break;
 	case GUC_PF_NOTIFY_VF_PAUSE_DONE:
 		pf_handle_vf_pause_done(iov, vfid);
+		break;
+	case GUC_PF_NOTIFY_VF_FIXUP_DONE:
+		pf_handle_vf_fixup_done(iov, vfid);
 		break;
 	default:
 		return -ENOPKG;
@@ -665,21 +690,15 @@ ssize_t intel_iov_state_save_ggtt(struct intel_iov *iov, u32 vfid, void *buf, si
 		goto out;
 	}
 
-	with_intel_runtime_pm(rpm, wakeref) {
-		unsigned int flags = I915_GGTT_SAVE_PTES_NO_VFID;
-
-		/* Wa_22018453856 */
-		if (i915_ggtt_require_binder(iov_to_i915(iov)))
-			ret = intel_iov_ggtt_shadow_save(iov, vfid, buf, size, flags);
-		else
-			ret = i915_ggtt_save_ptes(ggtt, node, buf, size, flags);
-	}
+	with_intel_runtime_pm(rpm, wakeref)
+		ret = i915_ggtt_save_ptes(ggtt, node, buf, size, I915_GGTT_SAVE_PTES_NO_VFID);
 
 out:
 	mutex_unlock(pf_provisioning_mutex(iov));
 
 	return ret;
 }
+
 
 /**
  * intel_iov_state_restore_ggtt - Restore VF GGTT.
@@ -704,16 +723,10 @@ int intel_iov_state_restore_ggtt(struct intel_iov *iov, u32 vfid, const void *bu
 
 	mutex_lock(pf_provisioning_mutex(iov));
 
-	with_intel_runtime_pm(rpm, wakeref) {
-		unsigned int flags = FIELD_PREP(I915_GGTT_RESTORE_PTES_VFID_MASK, vfid) |
-						I915_GGTT_RESTORE_PTES_NEW_VFID;
-
-		/* Wa_22018453856 */
-		if (i915_ggtt_require_binder(iov_to_i915(iov)))
-			ret = intel_iov_ggtt_shadow_restore(iov, vfid, buf, size, flags);
-		else
-			ret = i915_ggtt_restore_ptes(ggtt, node, buf, size, flags);
-	}
+	with_intel_runtime_pm(rpm, wakeref)
+		ret = i915_ggtt_restore_ptes(ggtt, node, buf, size,
+				FIELD_PREP(I915_GGTT_RESTORE_PTES_VFID_MASK, vfid) |
+				I915_GGTT_RESTORE_PTES_NEW_VFID);
 
 	mutex_unlock(pf_provisioning_mutex(iov));
 
@@ -825,6 +838,14 @@ int intel_iov_state_save_vf_size(struct intel_iov *iov, u32 vfid)
 	return ret;
 }
 
+int intel_iov_state_save_mmio_size(struct intel_iov *iov, u32 vfid)
+{
+	struct drm_i915_private *i915 = iov_to_i915(iov);
+
+	return (GRAPHICS_VER_FULL(i915) < IP_VER(12, 50)) ?
+		GEN12_VF_REGISTERS_STRIDE :
+		XEHPSDV_VF_REGISTERS_STRIDE;
+}
 /**
  * intel_iov_state_save_vf - Save VF state.
  * @iov: the IOV struct
@@ -930,5 +951,45 @@ int intel_iov_state_store_guc_migration_state(struct intel_iov *iov, u32 vfid,
 
 	if (ret < 0)
 		return ret;
+	return 0;
+}
+
+ssize_t intel_iov_state_save_mmio(struct intel_iov *iov, u32 vfid, void *buf, size_t size)
+{
+	struct intel_runtime_pm *rpm = iov_to_gt(iov)->uncore->rpm;
+	struct intel_gt *gt = iov_to_gt(iov);
+	intel_wakeref_t wakeref;
+
+	GEM_BUG_ON(!intel_iov_is_pf(iov));
+
+	mutex_lock(pf_provisioning_mutex(iov));
+
+	with_intel_runtime_pm(rpm, wakeref) {
+		memcpy_fromio(buf, gt->uncore->regs + 0x190000 + (vfid * GEN12_VF_REGISTERS_STRIDE),
+				size);
+	}
+
+	mutex_unlock(pf_provisioning_mutex(iov));
+
+	return size;
+}
+
+int intel_iov_state_restore_mmio(struct intel_iov *iov, u32 vfid, const void *buf, size_t size)
+{
+	struct intel_runtime_pm *rpm = iov_to_gt(iov)->uncore->rpm;
+	struct intel_gt *gt = iov_to_gt(iov);
+	intel_wakeref_t wakeref;
+
+	GEM_BUG_ON(!intel_iov_is_pf(iov));
+
+	mutex_lock(pf_provisioning_mutex(iov));
+
+	with_intel_runtime_pm(rpm, wakeref) {
+		memcpy_toio(gt->uncore->regs + 0x190000 + (vfid * GEN12_VF_REGISTERS_STRIDE), buf,
+				size);
+	}
+
+	mutex_unlock(pf_provisioning_mutex(iov));
+
 	return 0;
 }

@@ -88,12 +88,12 @@ void intel_uc_fw_change_status(struct intel_uc_fw *uc_fw,
  * security fixes, etc. to be enabled.
  */
 #define INTEL_GUC_FIRMWARE_DEFS(fw_def, guc_maj, guc_mmp) \
-	fw_def(METEORLAKE,   0, guc_maj(mtl,  70, 29, 2)) \
-	fw_def(DG2,          0, guc_maj(dg2,  70, 29, 2)) \
-	fw_def(ALDERLAKE_P,  0, guc_maj(adlp, 70, 29, 2)) \
+	fw_def(METEORLAKE,   0, guc_maj(mtl,  70, 44, 1)) \
+	fw_def(DG2,          0, guc_maj(dg2,  70, 44, 1)) \
+	fw_def(ALDERLAKE_P,  0, guc_maj(adlp, 70, 44, 1)) \
 	fw_def(ALDERLAKE_P,  0, guc_mmp(adlp, 70, 1, 1)) \
 	fw_def(ALDERLAKE_P,  0, guc_mmp(adlp, 69, 0, 3)) \
-	fw_def(ALDERLAKE_S,  0, guc_maj(tgl,  70, 29, 2)) \
+	fw_def(ALDERLAKE_S,  0, guc_maj(tgl,  70, 44, 1)) \
 	fw_def(ALDERLAKE_S,  0, guc_mmp(tgl,  70, 1, 1)) \
 	fw_def(ALDERLAKE_S,  0, guc_mmp(tgl,  69, 0, 3)) \
 	fw_def(DG1,          0, guc_maj(dg1,  70, 5, 1)) \
@@ -1142,7 +1142,7 @@ static int uc_fw_xfer(struct intel_uc_fw *uc_fw, u32 dst_offset, u32 dma_flags)
 			      _MASKED_BIT_ENABLE(dma_flags | START_DMA));
 
 	/* Wait for DMA to finish */
-	ret = intel_wait_for_register_fw(uncore, DMA_CTRL, START_DMA, 0, 100);
+	ret = intel_wait_for_register_fw(uncore, DMA_CTRL, START_DMA, 0, 100, NULL);
 	if (ret)
 		gt_err(gt, "DMA for %s fw failed, DMA_CTRL=%u\n",
 		       intel_uc_fw_type_repr(uc_fw->type),

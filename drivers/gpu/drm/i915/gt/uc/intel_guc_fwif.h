@@ -128,6 +128,7 @@ static inline const char *hxg_type_to_string(u32 type)
 #define   GUC_WA_DISABLE_GSC_RESET_IN_VF	BIT(23)
 
 #define GUC_CTL_FEATURE			2
+#define   GUC_CTL_ENABLE_GUC_PXP_CTL	BIT(1)
 #define   GUC_CTL_ENABLE_SLPC		BIT(2)
 #define   GUC_CTL_DISABLE_SCHEDULER	BIT(14)
 
@@ -430,7 +431,7 @@ enum guc_capture_type {
 	GUC_CAPTURE_LIST_TYPE_MAX,
 };
 
-/* Class indecies for capture_class and capture_instance arrays */
+/* Class indices for capture_class and capture_instance arrays */
 enum {
 	GUC_CAPTURE_LIST_CLASS_RENDER_COMPUTE = 0,
 	GUC_CAPTURE_LIST_CLASS_VIDEO = 1,

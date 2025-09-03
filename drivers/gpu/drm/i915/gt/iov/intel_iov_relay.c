@@ -352,6 +352,9 @@ static int relay_send_and_wait(struct intel_iov_relay *relay, u32 target,
 	pending.response = buf;
 	pending.response_size = buf_size;
 
+	/* Wa:16014207253 */
+	intel_boost_fake_int_timer(relay_to_gt(relay), true);
+
 	/* list ordering does not need to match fence ordering */
 	spin_lock(&relay->lock);
 	list_add_tail(&pending.link, &relay->pending_relays);
@@ -391,6 +394,9 @@ unlink:
 	spin_lock(&relay->lock);
 	list_del(&pending.link);
 	spin_unlock(&relay->lock);
+
+	/* Wa:16014207253 */
+	intel_boost_fake_int_timer(relay_to_gt(relay), false);
 
 	if (unlikely(ret < 0)) {
 		RELAY_PROBE_ERROR(relay, "Unsuccessful %s.%u %#x:%u to %u (%pe) %*ph\n",
@@ -474,6 +480,7 @@ int intel_iov_relay_send_to_pf(struct intel_iov_relay *relay,
 	GEM_BUG_ON(relay_type != GUC_HXG_TYPE_REQUEST);
 	return relay_send_and_wait(relay, 0, relay_id, msg, len, buf, buf_size);
 }
+ALLOW_ERROR_INJECTION(intel_iov_relay_send_to_pf, ERRNO);
 
 static int relay_handle_reply(struct intel_iov_relay *relay, u32 origin,
 			      u32 relay_id, int reply, const u32 *msg, u32 len)

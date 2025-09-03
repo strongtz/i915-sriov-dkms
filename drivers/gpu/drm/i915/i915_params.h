@@ -62,7 +62,7 @@ struct drm_printer;
 	param(unsigned int, lmem_size, 0, 0400) \
 	param(unsigned int, lmem_bar_size, 0, 0400) \
 	param(unsigned int, max_vfs, 0, 0400) \
-	param(int, force_disable_ccs, 0, 0400) \
+	param(unsigned long, vfs_flr_mask, ~0, IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV) ? 0600 : 0) \
 	/* leave bools at the end to not create holes */ \
 	param(bool, enable_mtl_rcs_ccs_wa, true, 0x400) \
 	param(bool, enable_hangcheck, true, 0600) \

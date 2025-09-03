@@ -2,7 +2,6 @@
 /*
  * Copyright © 2016 Intel Corporation
  */
-#include <linux/version.h>
 
 #include "gem/i915_gem_context.h"
 #include "gt/intel_ring.h"
@@ -109,11 +108,7 @@ static void advance(struct i915_request *request)
 
 static void hw_delay_complete(struct timer_list *t)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
-	struct mock_engine *engine = from_timer(engine, t, hw_delay);
-#else
 	struct mock_engine *engine = timer_container_of(engine, t, hw_delay);
-#endif
 	struct i915_request *request;
 	unsigned long flags;
 
@@ -302,11 +297,7 @@ static void mock_reset_cancel(struct intel_engine_cs *engine)
 	struct i915_request *rq;
 	unsigned long flags;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	del_timer_sync(&mock->hw_delay);
-#else
 	timer_delete_sync(&mock->hw_delay);
-#endif
 
 	spin_lock_irqsave(&engine->sched_engine->lock, flags);
 
@@ -441,11 +432,7 @@ void mock_engine_flush(struct intel_engine_cs *engine)
 		container_of(engine, typeof(*mock), base);
 	struct i915_request *request, *rn;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	del_timer_sync(&mock->hw_delay);
-#else
 	timer_delete_sync(&mock->hw_delay);
-#endif
 
 	spin_lock_irq(&mock->hw_lock);
 	list_for_each_entry_safe(request, rn, &mock->hw_queue, mock.link)

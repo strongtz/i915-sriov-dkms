@@ -1,6 +1,6 @@
-# Linux i915 driver (dkms module) with SR-IOV support for linux 6.8-6.15(-rc5)
+# Linux i915 and xe driver (dkms module) with SR-IOV support for linux 6.17
 
-This repo is a code snapshot of the i915 module from https://github.com/intel/mainline-tracking/tree/linux/v6.12 and will randomly merge patches from the linux-stable tree.
+This repo is a code snapshot of the i915 and xe modules from the mainline linux kernel with SR-IOV support ported from the [intel/mainline-tracking.git](https://github.com/intel/mainline-tracking.git)
 
 ## Warning
 
@@ -8,20 +8,9 @@ This package is **highly experimental**, you should only use it when you know wh
 
 You need to install this dkms module in **both host and guest!**
 
-Tested kernel versions: 6.12.10-zen1/6.11.9-arch1/6.10.9-arch1/6.9.10-arch1/6.8.9-arch1 with ArchLinux
-
-
 ## Required Kernel Parameters
 ```
 intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
-```
-
-Besides `intel_iommu=on`, the other 3 parameters could be applied by `modprobe` by putting following content to `/etc/modprobe.d/i915-sriov-dkms.conf`
-
-```
-blacklist xe
-options i915 enable_guc=3
-options i915 max_vfs=7
 ```
 
 ## Creating Virtual Functions (VF)
@@ -32,18 +21,14 @@ echo 1 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs
 
 You can create up to 7 VFs on Intel UHD Graphics 
 
-## Arch Linux Installation Steps (Tested Kernel 6.12.6-zen1)
+## Arch Linux Installation Steps
 
 For Arch Linux users, it is available in AUR. [i915-sriov-dkms](https://aur.archlinux.org/packages/i915-sriov-dkms) 
-
 You also can download the package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases) and install it with `pacman -U`.
 
-## NixOS Linux Installation Steps (Tested Kernel 6.12.36)
-For NixOS users, the i915-sriov kernel module can be directly included in your NixOS configuration without the use of DKMS. In particular, the kernel module is provided as a NixOS module that must be included in your NixOS configuration. This NixOS module places the i915-sriov kernel module via an overlay in your `pkgs` attribute set with the attribute name `i915-sriov`. This kernel module can then be included in your configuration by declaring `boot.extraModulePackages = [ pkgs.i915-sriov ];`
-
-## PVE Host Installation Steps (Tested Kernel 6.8)
+## PVE Host Installation Steps (PVE 9 with Kernel 6.14)
 1. Install build tools: `apt install build-* dkms`
-1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.8 proxmox-kernel-6.8` (for unsigned kernel).
+1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.14 proxmox-kernel-6.14` (for unsigned kernel).
 1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
    ```sh
    wget -O /tmp/i915-sriov-dkms_2025.07.22_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.07.22/i915-sriov-dkms_2025.07.22_amd64.deb"
@@ -57,7 +42,7 @@ For NixOS users, the i915-sriov kernel module can be directly included in your N
 1. When the system is back up again, you should see the number of VFs under 02:00.1 - 02:00.7. Again, assuming your iGPU is on 00:02 bus.
 1. You can passthrough the VFs to LXCs or VMs. However, never pass the **PF (02:00.0)** to **VM** which would crash all other VFs.
 
-## Linux Guest Installation Steps (Tested Ubuntu 24.04/Kernel 6.8)
+## Linux Guest Installation Steps (Tested Ubuntu 25.04/Kernel 6.14)
 We will need to run the same driver under Linux guests. 
 1. Install build tools
    ```
@@ -70,11 +55,6 @@ We will need to run the same driver under Linux guests.
    ```
 3. Update kernel parameters
    `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `i915.enable_guc=3 module_blacklist=xe`, or add to it if you have other arguments there already.
-
-   Example:
-   ```conf
-   GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on i915.enable_guc=3 module_blacklist=xe"
-   ```
 
 4. Once that's done, update `grub` and `initramfs`, then reboot.
    ```
@@ -125,8 +105,6 @@ hostpci0: 0000:00:02.1,pcie=1,romfile=Intelgopdriver_desktop.efi,x-vga=1
 8. After rebooting, connect with RDP once again. Go to Device Manager and verify the result. You should see the Intel Graphics is installed and working.
 
 ![CleanShot 2025-01-27 at 12 26 28](https://github.com/user-attachments/assets/7e48877f-2b57-42ac-bd0b-c1aa72bddc40)
-
-See also: https://github.com/strongtz/i915-sriov-dkms/issues/8#issuecomment-1567465036
 
 ## Manual Installation Steps
 1. Install build tools: `apt install build-essential dkms git` / `pacman -S base-devel dkms git`.

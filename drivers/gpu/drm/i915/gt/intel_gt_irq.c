@@ -273,6 +273,13 @@ void gen11_gt_irq_postinstall(struct intel_gt *gt)
 			GT_CONTEXT_SWITCH_INTERRUPT |
 			GT_WAIT_SEMAPHORE_INTERRUPT;
 
+	/* Wa:16014207253 */
+	if (gt->fake_int.enabled)
+		irqs = 0;
+
+	if (gt->fake_int.enabled)
+		drm_info(&gt->i915->drm, "Using fake interrupt w/a, gt = %d\n", gt->info.id);
+
 	dmask = irqs << 16 | irqs;
 	smask = irqs << 16;
 
@@ -452,10 +459,10 @@ void gen8_gt_irq_reset(struct intel_gt *gt)
 {
 	struct intel_uncore *uncore = gt->uncore;
 
-	GEN8_IRQ_RESET_NDX(uncore, GT, 0);
-	GEN8_IRQ_RESET_NDX(uncore, GT, 1);
-	GEN8_IRQ_RESET_NDX(uncore, GT, 2);
-	GEN8_IRQ_RESET_NDX(uncore, GT, 3);
+	gen2_irq_reset(uncore, GEN8_GT_IRQ_REGS(0));
+	gen2_irq_reset(uncore, GEN8_GT_IRQ_REGS(1));
+	gen2_irq_reset(uncore, GEN8_GT_IRQ_REGS(2));
+	gen2_irq_reset(uncore, GEN8_GT_IRQ_REGS(3));
 }
 
 void gen8_gt_irq_postinstall(struct intel_gt *gt)
@@ -476,14 +483,14 @@ void gen8_gt_irq_postinstall(struct intel_gt *gt)
 
 	gt->pm_ier = 0x0;
 	gt->pm_imr = ~gt->pm_ier;
-	GEN8_IRQ_INIT_NDX(uncore, GT, 0, ~gt_interrupts[0], gt_interrupts[0]);
-	GEN8_IRQ_INIT_NDX(uncore, GT, 1, ~gt_interrupts[1], gt_interrupts[1]);
+	gen2_irq_init(uncore, GEN8_GT_IRQ_REGS(0), ~gt_interrupts[0], gt_interrupts[0]);
+	gen2_irq_init(uncore, GEN8_GT_IRQ_REGS(1), ~gt_interrupts[1], gt_interrupts[1]);
 	/*
 	 * RPS interrupts will get enabled/disabled on demand when RPS itself
-	 * is enabled/disabled. Same wil be the case for GuC interrupts.
+	 * is enabled/disabled. Same will be the case for GuC interrupts.
 	 */
-	GEN8_IRQ_INIT_NDX(uncore, GT, 2, gt->pm_imr, gt->pm_ier);
-	GEN8_IRQ_INIT_NDX(uncore, GT, 3, ~gt_interrupts[3], gt_interrupts[3]);
+	gen2_irq_init(uncore, GEN8_GT_IRQ_REGS(2), gt->pm_imr, gt->pm_ier);
+	gen2_irq_init(uncore, GEN8_GT_IRQ_REGS(3), ~gt_interrupts[3], gt_interrupts[3]);
 }
 
 static void gen5_gt_update_irq(struct intel_gt *gt,
@@ -514,9 +521,9 @@ void gen5_gt_irq_reset(struct intel_gt *gt)
 {
 	struct intel_uncore *uncore = gt->uncore;
 
-	GEN3_IRQ_RESET(uncore, GT);
+	gen2_irq_reset(uncore, GT_IRQ_REGS);
 	if (GRAPHICS_VER(gt->i915) >= 6)
-		GEN3_IRQ_RESET(uncore, GEN6_PM);
+		gen2_irq_reset(uncore, GEN6_PM_IRQ_REGS);
 }
 
 void gen5_gt_irq_postinstall(struct intel_gt *gt)
@@ -538,7 +545,7 @@ void gen5_gt_irq_postinstall(struct intel_gt *gt)
 	else
 		gt_irqs |= GT_BLT_USER_INTERRUPT | GT_BSD_USER_INTERRUPT;
 
-	GEN3_IRQ_INIT(uncore, GT, gt->gt_imr, gt_irqs);
+	gen2_irq_init(uncore, GT_IRQ_REGS, gt->gt_imr, gt_irqs);
 
 	if (GRAPHICS_VER(gt->i915) >= 6) {
 		/*
@@ -551,6 +558,35 @@ void gen5_gt_irq_postinstall(struct intel_gt *gt)
 		}
 
 		gt->pm_imr = 0xffffffff;
-		GEN3_IRQ_INIT(uncore, GEN6_PM, gt->pm_imr, pm_irqs);
+		gen2_irq_init(uncore, GEN6_PM_IRQ_REGS, gt->pm_imr, pm_irqs);
 	}
 }
+
+void intel_boost_fake_int_timer(struct intel_gt *gt, bool on_off)
+{
+	u32 new_delay;
+	bool boost;
+
+	if (!gt->fake_int.enabled)
+		return;
+
+	if (on_off) {
+		atomic_inc(&gt->fake_int.boost);
+		boost = true;
+	} else {
+		boost = !atomic_dec_and_test(&gt->fake_int.boost);
+	}
+
+	if (!gt->fake_int.delay)
+		return;
+
+	new_delay = boost ? gt->fake_int.delay_fast : gt->fake_int.delay_slow;
+	if (new_delay == gt->fake_int.delay)
+		return;
+
+	gt->fake_int.delay = new_delay;
+	hrtimer_cancel(&gt->fake_int.timer);
+	hrtimer_start(&gt->fake_int.timer, ns_to_ktime(gt->fake_int.delay),
+			HRTIMER_MODE_REL);
+}
+

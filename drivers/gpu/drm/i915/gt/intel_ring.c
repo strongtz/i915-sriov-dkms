@@ -8,6 +8,7 @@
 #include "gem/i915_gem_object.h"
 
 #include "i915_drv.h"
+#include "i915_sriov.h"
 #include "i915_vma.h"
 #include "intel_engine.h"
 #include "intel_engine_regs.h"
@@ -15,6 +16,8 @@
 #include "intel_ring.h"
 #include "intel_gt.h"
 #include "intel_timeline.h"
+
+#define INVALID_SRCU -1
 
 unsigned int intel_ring_update_space(struct intel_ring *ring)
 {
@@ -227,7 +230,12 @@ wait_for_space(struct intel_ring *ring,
 	return 0;
 }
 
-u32 *intel_ring_begin(struct i915_request *rq, unsigned int num_dwords)
+static bool need_ggtt_srcu(struct drm_i915_private *i915)
+{
+	return IS_SRIOV_VF(i915) && !i915_sriov_current_is_vf_migration_recovery(i915);
+}
+
+static u32 *ring_packet_begin(struct i915_request *rq, int *srcu, unsigned int num_dwords)
 {
 	struct intel_ring *ring = rq->ring;
 	const unsigned int remain_usable = ring->effective_size - ring->emit;
@@ -285,6 +293,17 @@ u32 *intel_ring_begin(struct i915_request *rq, unsigned int num_dwords)
 			return ERR_PTR(ret);
 	}
 
+	if (unlikely(srcu)) {
+		*srcu = INVALID_SRCU;
+		if (unlikely(need_ggtt_srcu(rq->i915))) {
+			int ret;
+
+			ret = gt_ggtt_address_read_lock_interruptible(rq->engine->gt, srcu);
+			if (unlikely(ret))
+				return ERR_PTR(ret);
+		}
+	}
+
 	if (unlikely(need_wrap)) {
 		need_wrap &= ~1;
 		GEM_BUG_ON(need_wrap > ring->space);
@@ -308,28 +327,72 @@ u32 *intel_ring_begin(struct i915_request *rq, unsigned int num_dwords)
 	return cs;
 }
 
-/* Align the ring tail to a cacheline boundary */
-int intel_ring_cacheline_align(struct i915_request *rq)
+static void ring_packet_advance(struct i915_request *rq, int srcu, u32 *cs)
 {
-	int num_dwords;
-	void *cs;
+	/*
+	 * Compare current state against what was provided to the preceding
+	 * intel_ring_begin() by checking whether the number of dwords
+	 * emitted matches the space reserved for the command packet (i.e.
+	 * the value passed to intel_ring_begin()).
+	 */
+	GEM_BUG_ON((rq->ring->vaddr + rq->ring->emit) != cs);
+	GEM_BUG_ON(!IS_ALIGNED(rq->ring->emit, 8)); /* RING_TAIL qword align */
 
-	num_dwords = (rq->ring->emit & (CACHELINE_BYTES - 1)) / sizeof(u32);
-	if (num_dwords == 0)
-		return 0;
+	rq->advance = intel_ring_offset(rq, cs);
+	if (srcu != INVALID_SRCU) {
+		set_bit(I915_FENCE_FLAG_GGTT_EMITTED, &rq->fence.flags);
+		gt_ggtt_address_read_unlock(rq->engine->gt, srcu);
+	}
+}
 
-	num_dwords = CACHELINE_DWORDS - num_dwords;
-	GEM_BUG_ON(num_dwords & 1);
+static void ring_fini_packet_begin(struct i915_request *rq, int *srcu)
+{
+	if (!srcu)
+		return;
 
-	cs = intel_ring_begin(rq, num_dwords);
-	if (IS_ERR(cs))
-		return PTR_ERR(cs);
+	*srcu = INVALID_SRCU;
+	if (unlikely(need_ggtt_srcu(rq->i915)))
+		gt_ggtt_address_read_lock(rq->engine->gt, srcu);
+}
 
-	memset64(cs, (u64)MI_NOOP << 32 | MI_NOOP, num_dwords / 2);
-	intel_ring_advance(rq, cs + num_dwords);
+static void ring_fini_packet_advance(struct i915_request *rq, int srcu, u32 *cs)
+{
+	rq->tail = intel_ring_offset(rq, cs);
+	if (srcu != INVALID_SRCU) {
+		set_bit(I915_FENCE_FLAG_GGTT_EMITTED, &rq->fence.flags);
+		gt_ggtt_address_read_unlock(rq->engine->gt, srcu);
+	}
+}
 
-	GEM_BUG_ON(rq->ring->emit & (CACHELINE_BYTES - 1));
-	return 0;
+/**
+ * intel_ring_begin - prepare for ring command packet emission
+ * @rq: request which starts the command packet
+ * @num_dwords: length of the packet
+ * Return: pointer to ring position where the packet starts
+ */
+u32 *intel_ring_begin(struct i915_request *rq, unsigned int num_dwords)
+{
+	return ring_packet_begin(rq, NULL, num_dwords);
+}
+
+u32 *intel_ring_begin_ggtt(struct i915_request *rq, int *srcu, unsigned int num_dwords)
+{
+	return ring_packet_begin(rq, srcu, num_dwords);
+}
+
+void intel_ring_advance_ggtt(struct i915_request *rq, int srcu, u32 *cs)
+{
+	ring_packet_advance(rq, srcu, cs);
+}
+
+void intel_ring_fini_begin_ggtt(struct i915_request *rq, int *srcu)
+{
+	ring_fini_packet_begin(rq, srcu);
+}
+
+void intel_ring_fini_advance_ggtt(struct i915_request *rq, int srcu, u32 *cs)
+{
+	ring_fini_packet_advance(rq, srcu, cs);
 }
 
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)

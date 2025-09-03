@@ -53,4 +53,9 @@ static inline void assert_graphics_ip_ver_ready(const struct drm_i915_private *i
 static inline void assert_media_ip_ver_ready(const struct drm_i915_private *i915) { }
 #endif
 
+/* VF only */
+void i915_sriov_vf_start_migration_recovery(struct drm_i915_private *i915);
+int intel_sriov_vf_migrated_event_handler(struct intel_guc *guc);
+bool i915_sriov_current_is_vf_migration_recovery(struct drm_i915_private *i915);
+
 #endif /* __I915_SRIOV_H__ */

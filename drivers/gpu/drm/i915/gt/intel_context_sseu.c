@@ -18,9 +18,10 @@ static int gen8_emit_rpcs_config(struct i915_request *rq,
 				 const struct intel_sseu sseu)
 {
 	u64 offset;
+	int srcu;
 	u32 *cs;
 
-	cs = intel_ring_begin(rq, 4);
+	cs = intel_ring_begin_ggtt(rq, &srcu, 4);
 	if (IS_ERR(cs))
 		return PTR_ERR(cs);
 
@@ -32,7 +33,7 @@ static int gen8_emit_rpcs_config(struct i915_request *rq,
 	*cs++ = upper_32_bits(offset);
 	*cs++ = intel_sseu_make_rpcs(rq->engine->gt, &sseu);
 
-	intel_ring_advance(rq, cs);
+	intel_ring_advance_ggtt(rq, srcu, cs);
 
 	return 0;
 }

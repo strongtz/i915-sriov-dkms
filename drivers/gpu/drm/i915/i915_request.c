@@ -30,7 +30,6 @@
 #include <linux/sched/clock.h>
 #include <linux/sched/signal.h>
 #include <linux/sched/mm.h>
-#include <linux/version.h>
 
 #include "gem/i915_gem_context.h"
 #include "gt/intel_breadcrumbs.h"
@@ -274,11 +273,6 @@ i915_request_active_engine(struct i915_request *rq,
 	return ret;
 }
 
-static void __rq_init_watchdog(struct i915_request *rq)
-{
-	rq->watchdog.timer.function = NULL;
-}
-
 static enum hrtimer_restart __rq_watchdog_expired(struct hrtimer *hrtimer)
 {
 	struct i915_request *rq =
@@ -295,6 +289,13 @@ static enum hrtimer_restart __rq_watchdog_expired(struct hrtimer *hrtimer)
 	return HRTIMER_NORESTART;
 }
 
+static void __rq_init_watchdog(struct i915_request *rq)
+{
+	struct i915_request_watchdog *wdg = &rq->watchdog;
+
+	hrtimer_setup(&wdg->timer, __rq_watchdog_expired, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+}
+
 static void __rq_arm_watchdog(struct i915_request *rq)
 {
 	struct i915_request_watchdog *wdg = &rq->watchdog;
@@ -304,12 +305,7 @@ static void __rq_arm_watchdog(struct i915_request *rq)
 		return;
 
 	i915_request_get(rq);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	hrtimer_init(&wdg->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	wdg->timer.function = __rq_watchdog_expired;
-#else
-	hrtimer_setup(&wdg->timer, __rq_watchdog_expired, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-#endif
+
 	hrtimer_start_range_ns(&wdg->timer,
 			       ns_to_ktime(ce->watchdog.timeout_us *
 					   NSEC_PER_USEC),
@@ -321,7 +317,7 @@ static void __rq_cancel_watchdog(struct i915_request *rq)
 {
 	struct i915_request_watchdog *wdg = &rq->watchdog;
 
-	if (wdg->timer.function && hrtimer_try_to_cancel(&wdg->timer) > 0)
+	if (hrtimer_try_to_cancel(&wdg->timer) > 0)
 		i915_request_put(rq);
 }
 
@@ -476,7 +472,7 @@ static bool __request_in_flight(const struct i915_request *signal)
 	 * to avoid tearing.]
 	 *
 	 * Note that the read of *execlists->active may race with the promotion
-	 * of execlists->pending[] to execlists->inflight[], overwritting
+	 * of execlists->pending[] to execlists->inflight[], overwriting
 	 * the value at *execlists->active. This is fine. The promotion implies
 	 * that we received an ACK from the HW, and so the context is not
 	 * stuck -- if we do not see ourselves in *active, the inflight status
@@ -555,6 +551,8 @@ static bool fatal_error(int error)
 
 void __i915_request_skip(struct i915_request *rq)
 {
+	int srcu;
+
 	GEM_BUG_ON(!fatal_error(rq->fence.error));
 
 	if (rq->infix == rq->postfix)
@@ -562,6 +560,7 @@ void __i915_request_skip(struct i915_request *rq)
 
 	RQ_TRACE(rq, "error: %d\n", rq->fence.error);
 
+	gt_ggtt_address_read_lock(rq->engine->gt, &srcu);
 	/*
 	 * As this request likely depends on state from the lost
 	 * context, clear out all the user operations leaving the
@@ -569,6 +568,8 @@ void __i915_request_skip(struct i915_request *rq)
 	 */
 	__i915_request_fill(rq, 0);
 	rq->infix = rq->postfix;
+	set_bit(I915_FENCE_FLAG_GGTT_EMITTED, &rq->fence.flags);
+	gt_ggtt_address_read_unlock(rq->engine->gt, srcu);
 }
 
 bool i915_request_set_error_once(struct i915_request *rq, int error)
@@ -888,6 +889,18 @@ static void __i915_request_ctor(void *arg)
 	init_llist_head(&rq->execute_cb);
 }
 
+static int wait_for_space(struct i915_request *rq)
+{
+	void *ptr;
+
+	ptr = intel_ring_begin(rq, 0);
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+	intel_ring_advance(rq, ptr);
+
+	return 0;
+}
+
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
 #define clear_batch_ptr(_rq) ((_rq)->batch = NULL)
 #else
@@ -994,6 +1007,10 @@ __i915_request_create(struct intel_context *ce, gfp_t gfp)
 	 */
 	rq->reserved_space =
 		2 * rq->engine->emit_fini_breadcrumb_dw * sizeof(u32);
+
+	ret = wait_for_space(rq);
+	if (unlikely(ret))
+		goto err_free;
 
 	/*
 	 * Record the position of the start of the request so that
@@ -1155,6 +1172,7 @@ __emit_semaphore_wait(struct i915_request *to,
 
 	GEM_BUG_ON(GRAPHICS_VER(to->engine->i915) < 8);
 	GEM_BUG_ON(i915_request_has_initial_breadcrumb(to));
+	GEM_BUG_ON(IS_SRIOV_VF(to->i915));
 
 	/* We need to pin the signaler's HWSP until we are finished reading. */
 	err = intel_timeline_read_hwsp(from, to, &hwsp_offset);
@@ -1813,6 +1831,8 @@ struct i915_request *__i915_request_commit(struct i915_request *rq)
 	cs = intel_ring_begin(rq, engine->emit_fini_breadcrumb_dw);
 	GEM_BUG_ON(IS_ERR(cs));
 	rq->postfix = intel_ring_offset(rq, cs);
+	/* postfix commands are not emitted yet, but the space is reserved */
+	intel_ring_advance(rq, cs + engine->emit_fini_breadcrumb_dw);
 
 	return __i915_request_add_to_timeline(rq);
 }
@@ -2188,7 +2208,7 @@ void i915_request_show(struct drm_printer *m,
 		       const char *prefix,
 		       int indent)
 {
-	const char *name = rq->fence.ops->get_timeline_name((struct dma_fence *)&rq->fence);
+	const char __rcu *timeline;
 	char buf[80] = "";
 	int x = 0;
 
@@ -2224,6 +2244,8 @@ void i915_request_show(struct drm_printer *m,
 
 	x = print_sched_attr(&rq->sched.attr, buf, x, sizeof(buf));
 
+	rcu_read_lock();
+	timeline = dma_fence_timeline_name((struct dma_fence *)&rq->fence);
 	drm_printf(m, "%s%.*s%c %llx:%lld%s%s %s @ %dms: %s\n",
 		   prefix, indent, "                ",
 		   queue_status(rq),
@@ -2232,7 +2254,8 @@ void i915_request_show(struct drm_printer *m,
 		   fence_status(rq),
 		   buf,
 		   jiffies_to_msecs(jiffies - rq->emitted_jiffies),
-		   name);
+		   rcu_dereference(timeline));
+	rcu_read_unlock();
 }
 
 static bool engine_match_ring(struct intel_engine_cs *engine, struct i915_request *rq)

@@ -280,6 +280,7 @@ struct intel_iov_relay {
  * @ggtt_size: size of GGTT region.
  * @num_ctxs: number of GuC submission contexts.
  * @num_dbs: number of GuC doorbells.
+ * @tile_mask: assigned tiles (as bitmask with tile0 = BIT(0)).
  */
 struct intel_iov_vf_config {
 	struct {
@@ -289,9 +290,11 @@ struct intel_iov_vf_config {
 		u8 patch;
 	} guc_abi;
 	u64 ggtt_base;
+	s64 ggtt_shift;
 	u64 ggtt_size;
 	u16 num_ctxs;
 	u16 num_dbs;
+	u32 tile_mask;
 };
 
 /**

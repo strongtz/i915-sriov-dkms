@@ -5,7 +5,6 @@
  */
 
 #include <linux/wait_bit.h>
-#include <linux/version.h>
 
 #include "intel_runtime_pm.h"
 #include "intel_wakeref.h"
@@ -28,11 +27,11 @@ int __intel_wakeref_get_first(struct intel_wakeref *wf)
 	if (!atomic_read(&wf->count)) {
 		INTEL_WAKEREF_BUG_ON(wf->wakeref);
 		wf->wakeref = wakeref;
-		wakeref = 0;
+		wakeref = NULL;
 
 		ret = wf->ops->get(wf);
 		if (ret) {
-			wakeref = xchg(&wf->wakeref, 0);
+			wakeref = xchg(&wf->wakeref, NULL);
 			wake_up_var(&wf->wakeref);
 			goto unlock;
 		}
@@ -53,7 +52,7 @@ unlock:
 
 static void ____intel_wakeref_put_last(struct intel_wakeref *wf)
 {
-	intel_wakeref_t wakeref = 0;
+	intel_wakeref_t wakeref = NULL;
 
 	INTEL_WAKEREF_BUG_ON(atomic_read(&wf->count) <= 0);
 	if (unlikely(!atomic_dec_and_test(&wf->count)))
@@ -62,7 +61,7 @@ static void ____intel_wakeref_put_last(struct intel_wakeref *wf)
 	/* ops->put() must reschedule its own release on error/deferral */
 	if (likely(!wf->ops->put(wf))) {
 		INTEL_WAKEREF_BUG_ON(!wf->wakeref);
-		wakeref = xchg(&wf->wakeref, 0);
+		wakeref = xchg(&wf->wakeref, NULL);
 		wake_up_var(&wf->wakeref);
 	}
 
@@ -108,14 +107,15 @@ void __intel_wakeref_init(struct intel_wakeref *wf,
 
 	__mutex_init(&wf->mutex, "wakeref.mutex", &key->mutex);
 	atomic_set(&wf->count, 0);
-	wf->wakeref = 0;
+	wf->wakeref = NULL;
 
 	INIT_DELAYED_WORK(&wf->work, __intel_wakeref_put_work);
 	lockdep_init_map(&wf->work.work.lockdep_map,
 			 "wakeref.work", &key->work, 0);
 
 #if IS_ENABLED(CONFIG_DRM_I915_DEBUG_WAKEREF)
-	ref_tracker_dir_init(&wf->debug, INTEL_REFTRACK_DEAD_COUNT, name);
+	if (!wf->debug.class)
+		ref_tracker_dir_init(&wf->debug, INTEL_REFTRACK_DEAD_COUNT, "intel_wakeref");
 #endif
 }
 
@@ -136,18 +136,14 @@ int intel_wakeref_wait_for_idle(struct intel_wakeref *wf)
 
 static void wakeref_auto_timeout(struct timer_list *t)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
-	struct intel_wakeref_auto *wf = from_timer(wf, t, timer);
-#else
 	struct intel_wakeref_auto *wf = timer_container_of(wf, t, timer);
-#endif
 	intel_wakeref_t wakeref;
 	unsigned long flags;
 
 	if (!refcount_dec_and_lock_irqsave(&wf->count, &wf->lock, &flags))
 		return;
 
-	wakeref = fetch_and_zero(&wf->wakeref);
+	wakeref = xchg(&wf->wakeref, NULL);
 	spin_unlock_irqrestore(&wf->lock, flags);
 
 	intel_runtime_pm_put(&wf->i915->runtime_pm, wakeref);
@@ -159,7 +155,7 @@ void intel_wakeref_auto_init(struct intel_wakeref_auto *wf,
 	spin_lock_init(&wf->lock);
 	timer_setup(&wf->timer, wakeref_auto_timeout, 0);
 	refcount_set(&wf->count, 0);
-	wf->wakeref = 0;
+	wf->wakeref = NULL;
 	wf->i915 = i915;
 }
 
@@ -168,11 +164,7 @@ void intel_wakeref_auto(struct intel_wakeref_auto *wf, unsigned long timeout)
 	unsigned long flags;
 
 	if (!timeout) {
-	#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-		if (del_timer_sync(&wf->timer))
-	#else
 		if (timer_delete_sync(&wf->timer))
-	#endif
 			wakeref_auto_timeout(&wf->timer);
 		return;
 	}

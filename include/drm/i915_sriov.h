@@ -17,6 +17,13 @@ i915_sriov_ggtt_load(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
 		     const void *buf, size_t size);
 
 ssize_t
+i915_sriov_mmio_size(struct pci_dev *pdev, unsigned int vfid, unsigned int tile);
+ssize_t i915_sriov_mmio_save(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
+			     void *buf, size_t size);
+int
+i915_sriov_mmio_load(struct pci_dev *pdev, unsigned int vfid, unsigned int tile,
+		     const void *buf, size_t size);
+ssize_t
 i915_sriov_fw_state_size(struct pci_dev *pdev, unsigned int vfid,
 			 unsigned int tile);
 ssize_t

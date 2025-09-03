@@ -3,24 +3,22 @@
  * Copyright © 2023 Intel Corporation
  */
 
-#include <linux/version.h>
 #include <drm/drm_fb_helper.h>
 
 #include "gem/i915_gem_lmem.h"
 
 #include "i915_drv.h"
+#include "intel_display_core.h"
 #include "intel_display_types.h"
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 #include "intel_fb.h"
-#endif
 #include "intel_fbdev_fb.h"
 
 struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
 					       struct drm_fb_helper_surface_size *sizes)
 {
+	struct intel_display *display = to_intel_display(helper->dev);
+	struct drm_i915_private *dev_priv = to_i915(display->drm);
 	struct drm_framebuffer *fb;
-	struct drm_device *dev = helper->dev;
-	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct drm_mode_fb_cmd2 mode_cmd = {};
 	struct drm_i915_gem_object *obj;
 	int size;
@@ -53,37 +51,32 @@ struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
 		 *
 		 * Also skip stolen on MTL as Wa_22018444074 mitigation.
 		 */
-		if (!(IS_METEORLAKE(dev_priv)) && size * 2 < dev_priv->dsm.usable_size)
+		if (!display->platform.meteorlake && size * 2 < dev_priv->dsm.usable_size)
 			obj = i915_gem_object_create_stolen(dev_priv, size);
 		if (IS_ERR(obj))
 			obj = i915_gem_object_create_shmem(dev_priv, size);
 	}
 
 	if (IS_ERR(obj)) {
-		drm_err(&dev_priv->drm, "failed to allocate framebuffer (%pe)\n", obj);
+		drm_err(display->drm, "failed to allocate framebuffer (%pe)\n", obj);
 		return ERR_PTR(-ENOMEM);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-	fb = intel_framebuffer_create(obj, &mode_cmd);
-#else
-	fb = intel_framebuffer_create(intel_bo_to_drm_bo(obj), &mode_cmd);
-#endif
+	fb = intel_framebuffer_create(intel_bo_to_drm_bo(obj),
+				      drm_get_format_info(display->drm,
+							  mode_cmd.pixel_format,
+							  mode_cmd.modifier[0]),
+				      &mode_cmd);
 	i915_gem_object_put(obj);
 
 	return to_intel_framebuffer(fb);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-int intel_fbdev_fb_fill_info(struct drm_i915_private *i915, struct fb_info *info,
-			     struct drm_i915_gem_object *obj, struct i915_vma *vma)
-{
-#else
-int intel_fbdev_fb_fill_info(struct drm_i915_private *i915, struct fb_info *info,
+int intel_fbdev_fb_fill_info(struct intel_display *display, struct fb_info *info,
 			     struct drm_gem_object *_obj, struct i915_vma *vma)
 {
+	struct drm_i915_private *i915 = to_i915(display->drm);
 	struct drm_i915_gem_object *obj = to_intel_bo(_obj);
-#endif
 	struct i915_gem_ww_ctx ww;
 	void __iomem *vaddr;
 	int ret;
@@ -114,7 +107,7 @@ int intel_fbdev_fb_fill_info(struct drm_i915_private *i915, struct fb_info *info
 
 		vaddr = i915_vma_pin_iomap(vma);
 		if (IS_ERR(vaddr)) {
-			drm_err(&i915->drm,
+			drm_err(display->drm,
 				"Failed to remap framebuffer into virtual memory (%pe)\n", vaddr);
 			ret = PTR_ERR(vaddr);
 			continue;
