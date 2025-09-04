@@ -23,8 +23,10 @@ void intel_panel_init_alloc(struct intel_connector *connector);
 int intel_panel_init(struct intel_connector *connector,
 		     const struct drm_edid *fixed_edid);
 void intel_panel_fini(struct intel_connector *connector);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 int intel_panel_register(struct intel_connector *connector);
 void intel_panel_unregister(struct intel_connector *connector);
+#endif
 enum drm_connector_status
 intel_panel_detect(struct drm_connector *connector, bool force);
 bool intel_panel_use_ssc(struct intel_display *display);
@@ -53,8 +55,10 @@ void intel_panel_add_vbt_sdvo_fixed_mode(struct intel_connector *connector);
 void intel_panel_add_encoder_fixed_mode(struct intel_connector *connector,
 					struct intel_encoder *encoder);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 void intel_panel_prepare(const struct intel_crtc_state *crtc_state,
 			 const struct drm_connector_state *conn_state);
 void intel_panel_unprepare(const struct drm_connector_state *old_conn_state);
+#endif
 
 #endif /* __INTEL_PANEL_H__ */

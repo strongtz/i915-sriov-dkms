@@ -399,19 +399,6 @@ i915-$(CONFIG_DRM_I915_PXP) += \
 # Post-mortem debug and GPU hang state capture
 i915-$(CONFIG_DRM_I915_CAPTURE_ERROR) += \
 	i915_gpu_error.o
-i915-n += \
-	gem/selftests/i915_gem_client_blt.o \
-	gem/selftests/igt_gem_utils.o \
-	selftests/i915_random.o \
-	selftests/i915_selftest.o \
-	selftests/igt_atomic.o \
-	selftests/igt_flush_test.o \
-	selftests/igt_live_test.o \
-	selftests/igt_mmap.o \
-	selftests/igt_reset.o \
-	selftests/igt_spinner.o \
-	selftests/intel_scheduler_helpers.o \
-	selftests/librapl.o
 
 # virtual gpu code
 i915-y += \

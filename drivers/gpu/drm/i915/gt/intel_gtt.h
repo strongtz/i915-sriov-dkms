@@ -338,7 +338,9 @@ struct i915_address_space {
 	u64 (*pte_encode)(dma_addr_t addr,
 			  unsigned int pat_index,
 			  u32 flags); /* Create a valid PTE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	dma_addr_t (*pte_decode)(u64 pte, bool *is_present, bool *is_local);
+#endif
 #define PTE_READ_ONLY	BIT(0)
 #define PTE_LM		BIT(1)
 
@@ -367,8 +369,10 @@ struct i915_address_space {
 				   struct i915_vma_resource *vma_res,
 				   unsigned int pat_index,
 				   u32 flags);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	dma_addr_t (*read_entry)(struct i915_address_space *vm,
 				 u64 offset, bool *is_present, bool *is_local);
+#endif
 	void (*cleanup)(struct i915_address_space *vm);
 
 	void (*foreach)(struct i915_address_space *vm,
@@ -625,9 +629,10 @@ void intel_ggtt_bind_vma(struct i915_address_space *vm,
 			 u32 flags);
 void intel_ggtt_unbind_vma(struct i915_address_space *vm,
 			   struct i915_vma_resource *vma_res);
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 dma_addr_t intel_ggtt_read_entry(struct i915_address_space *vm,
 				 u64 offset, bool *is_present, bool *is_local);
+#endif
 
 int i915_ggtt_probe_hw(struct drm_i915_private *i915);
 int i915_ggtt_init_hw(struct drm_i915_private *i915);

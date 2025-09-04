@@ -25,6 +25,7 @@
  *   Jani Nikula <jani.nikula@intel.com>
  */
 
+
 #include <drm/display/drm_dsc_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_fixed.h>
@@ -1277,7 +1278,9 @@ static void gen11_dsi_enable(struct intel_atomic_state *state,
 	intel_backlight_enable(crtc_state, conn_state);
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_BACKLIGHT_ON);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	intel_panel_prepare(crtc_state, conn_state);
+#endif
 
 	intel_crtc_vblank_on(crtc_state);
 }
@@ -1412,7 +1415,9 @@ static void gen11_dsi_disable(struct intel_atomic_state *state,
 {
 	struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	intel_panel_unprepare(old_conn_state);
+#endif
 
 	/* step1: turn off backlight */
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_BACKLIGHT_OFF);

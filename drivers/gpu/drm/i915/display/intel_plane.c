@@ -189,6 +189,7 @@ bool intel_plane_can_async_flip(struct intel_plane *plane, u32 format,
 	return plane->can_async_flip && plane->can_async_flip(modifier);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 bool intel_plane_format_mod_supported_async(struct drm_plane *plane,
 					    u32 format,
 					    u64 modifier)
@@ -199,6 +200,7 @@ bool intel_plane_format_mod_supported_async(struct drm_plane *plane,
 	return intel_plane_can_async_flip(to_intel_plane(plane),
 					format, modifier);
 }
+#endif
 
 unsigned int intel_adjusted_rate(const struct drm_rect *src,
 				 const struct drm_rect *dst,

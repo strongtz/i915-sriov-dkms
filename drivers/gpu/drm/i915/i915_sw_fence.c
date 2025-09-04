@@ -427,8 +427,12 @@ static void dma_i915_sw_fence_wake(struct dma_fence *dma,
 
 static void timer_i915_sw_fence_wake(struct timer_list *t)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+	struct i915_sw_dma_fence_cb_timer *cb = from_timer(cb, t, timer);
+#else
 	struct i915_sw_dma_fence_cb_timer *cb = timer_container_of(cb, t,
 								   timer);
+#endif
 	struct i915_sw_fence *fence;
 	const char __rcu *timeline;
 	const char __rcu *driver;

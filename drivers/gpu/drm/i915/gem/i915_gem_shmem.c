@@ -296,6 +296,50 @@ shmem_truncate(struct drm_i915_gem_object *obj)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+void __shmem_writeback(size_t size, struct address_space *mapping)
+{
+	struct writeback_control wbc = {
+		.sync_mode = WB_SYNC_NONE,
+		.nr_to_write = SWAP_CLUSTER_MAX,
+		.range_start = 0,
+		.range_end = LLONG_MAX,
+		.for_reclaim = 1,
+	};
+	unsigned long i;
+
+
+	/*
+	 * Leave mmapings intact (GTT will have been revoked on unbinding,
+	 * leaving only CPU mmapings around) and add those pages to the LRU
+	 * instead of invoking writeback so they are aged and paged out
+	 * as normal.
+	 */
+
+	/* Begin writeback on each dirty page */
+	for (i = 0; i < size >> PAGE_SHIFT; i++) {
+		struct page *page;
+
+		page = find_lock_page(mapping, i);
+		if (!page)
+			continue;
+
+		if (!page_mapped(page) && clear_page_dirty_for_io(page)) {
+			int ret;
+
+			SetPageReclaim(page);
+			ret = mapping->a_ops->writepage(page, &wbc);
+			if (!PageWriteback(page))
+				ClearPageReclaim(page);
+			if (!ret)
+				goto put;
+		}
+		unlock_page(page);
+put:
+		put_page(page);
+	}
+}
+#else
 void __shmem_writeback(size_t size, struct address_space *mapping)
 {
 	struct writeback_control wbc = {
@@ -325,6 +369,7 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 
 	}
 }
+#endif
 
 static void
 shmem_writeback(struct drm_i915_gem_object *obj)

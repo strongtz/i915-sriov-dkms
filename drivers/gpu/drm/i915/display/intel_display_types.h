@@ -387,8 +387,10 @@ struct intel_vbt_panel_data {
 };
 
 struct intel_panel {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	/* Simple drm_panel */
 	struct drm_panel *base;
+#endif
 
 	/* Fixed EDID for eDP and LVDS. May hold ERR_PTR for invalid EDID. */
 	const struct drm_edid *fixed_edid;

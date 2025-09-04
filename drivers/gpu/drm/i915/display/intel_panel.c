@@ -463,6 +463,7 @@ void intel_panel_fini(struct intel_connector *connector)
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 /*
  * If the panel was already enabled at probe, and we took over the state, the
  * panel prepared state is out of sync, and the panel followers won't be
@@ -594,3 +595,4 @@ void intel_panel_unprepare(const struct drm_connector_state *old_conn_state)
 
 	drm_panel_unprepare(panel->base);
 }
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0) */

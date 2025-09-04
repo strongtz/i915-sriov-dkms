@@ -313,6 +313,7 @@ u64 gen8_ggtt_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 static dma_addr_t gen8_ggtt_pte_decode(u64 pte, bool *is_present, bool *is_local)
 {
 	*is_present = pte & GEN8_PAGE_PRESENT;
@@ -320,6 +321,7 @@ static dma_addr_t gen8_ggtt_pte_decode(u64 pte, bool *is_present, bool *is_local
 
 	return pte & GEN12_GGTT_PTE_ADDR_MASK;
 }
+#endif
 
 static bool should_update_ggtt_with_bind(struct i915_ggtt *ggtt)
 {
@@ -467,10 +469,12 @@ static void gen8_set_pte(void __iomem *addr, gen8_pte_t pte)
 	writeq(pte, addr);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 static gen8_pte_t gen8_get_pte(void __iomem *addr)
 {
 	return readq(addr);
 }
+#endif
 
 static void gen8_ggtt_insert_page(struct i915_address_space *vm,
 				  dma_addr_t addr,
@@ -487,6 +491,7 @@ static void gen8_ggtt_insert_page(struct i915_address_space *vm,
 	ggtt->invalidate(ggtt);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 static dma_addr_t gen8_ggtt_read_entry(struct i915_address_space *vm,
 				       u64 offset, bool *is_present, bool *is_local)
 {
@@ -496,6 +501,7 @@ static dma_addr_t gen8_ggtt_read_entry(struct i915_address_space *vm,
 
 	return ggtt->vm.pte_decode(gen8_get_pte(pte), is_present, is_local);
 }
+#endif
 
 static void gen8_ggtt_insert_page_bind(struct i915_address_space *vm,
 				       dma_addr_t addr, u64 offset,
@@ -652,6 +658,7 @@ static void gen6_ggtt_insert_page(struct i915_address_space *vm,
 	ggtt->invalidate(ggtt);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 static dma_addr_t gen6_ggtt_read_entry(struct i915_address_space *vm,
 				       u64 offset,
 				       bool *is_present, bool *is_local)
@@ -662,6 +669,7 @@ static dma_addr_t gen6_ggtt_read_entry(struct i915_address_space *vm,
 
 	return vm->pte_decode(ioread32(pte), is_present, is_local);
 }
+#endif
 
 /*
  * Binds an object into the global gtt with the specified cache level.
@@ -827,6 +835,7 @@ void intel_ggtt_unbind_vma(struct i915_address_space *vm,
 	vm->clear_range(vm, vma_res->start, vma_res->vma_size);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 dma_addr_t intel_ggtt_read_entry(struct i915_address_space *vm,
 				 u64 offset, bool *is_present, bool *is_local)
 {
@@ -834,6 +843,7 @@ dma_addr_t intel_ggtt_read_entry(struct i915_address_space *vm,
 
 	return ggtt->vm.read_entry(vm, offset, is_present, is_local);
 }
+#endif
 
 /*
  * Reserve the top of the GuC address space for firmware images. Addresses
@@ -1483,7 +1493,9 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 	ggtt->vm.scratch_range = gen8_ggtt_clear_range;
 
 	ggtt->vm.insert_entries = gen8_ggtt_insert_entries;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	ggtt->vm.read_entry = gen8_ggtt_read_entry;
+#endif
 
 	/*
 	 * Serialize GTT updates with aperture access on BXT if VT-d is on,
@@ -1530,7 +1542,9 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 	else
 		ggtt->vm.pte_encode = gen8_ggtt_pte_encode;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	ggtt->vm.pte_decode = gen8_ggtt_pte_decode;
+#endif
 
 	return ggtt_probe_common(ggtt, size);
 }
@@ -1631,6 +1645,7 @@ static u64 iris_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 static dma_addr_t gen6_pte_decode(u64 pte, bool *is_present, bool *is_local)
 {
 	*is_present = pte & GEN6_PTE_VALID;
@@ -1638,6 +1653,7 @@ static dma_addr_t gen6_pte_decode(u64 pte, bool *is_present, bool *is_local)
 
 	return ((pte & 0xff0) << 28) | (pte & ~0xfff);
 }
+#endif
 
 static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 {
@@ -1677,7 +1693,9 @@ static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 	ggtt->vm.scratch_range = gen6_ggtt_clear_range;
 	ggtt->vm.insert_page = gen6_ggtt_insert_page;
 	ggtt->vm.insert_entries = gen6_ggtt_insert_entries;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	ggtt->vm.read_entry = gen6_ggtt_read_entry;
+#endif
 	ggtt->vm.cleanup = gen6_gmch_remove;
 
 	ggtt->invalidate = gen6_ggtt_invalidate;
@@ -1693,7 +1711,9 @@ static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 	else
 		ggtt->vm.pte_encode = snb_pte_encode;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	ggtt->vm.pte_decode = gen6_pte_decode;
+#endif
 
 	ggtt->vm.vma_ops.bind_vma    = intel_ggtt_bind_vma;
 	ggtt->vm.vma_ops.unbind_vma  = intel_ggtt_unbind_vma;
