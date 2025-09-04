@@ -27,12 +27,14 @@ static void gmch_ggtt_insert_page(struct i915_address_space *vm,
 	intel_gmch_gtt_insert_page(addr, offset >> PAGE_SHIFT, flags);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 static dma_addr_t gmch_ggtt_read_entry(struct i915_address_space *vm,
 				       u64 offset, bool *is_present, bool *is_local)
 {
 	return intel_gmch_gtt_read_entry(offset >> PAGE_SHIFT,
 					 is_present, is_local);
 }
+#endif
 
 static void gmch_ggtt_insert_entries(struct i915_address_space *vm,
 				     struct i915_vma_resource *vma_res,
@@ -110,7 +112,9 @@ int intel_ggtt_gmch_probe(struct i915_ggtt *ggtt)
 	ggtt->vm.insert_entries = gmch_ggtt_insert_entries;
 	ggtt->vm.clear_range = gmch_ggtt_clear_range;
 	ggtt->vm.scratch_range = gmch_ggtt_clear_range;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	ggtt->vm.read_entry = gmch_ggtt_read_entry;
+#endif
 	ggtt->vm.cleanup = gmch_ggtt_remove;
 
 	ggtt->invalidate = gmch_ggtt_invalidate;

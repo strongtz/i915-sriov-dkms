@@ -1669,7 +1669,9 @@ static void i915_oa_stream_destroy(struct i915_perf_stream *stream)
 	struct i915_perf *perf = stream->perf;
 	struct intel_gt *gt = stream->engine->gt;
 	struct i915_perf_group *g = stream->engine->oa_group;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	int m;
+#endif
 
 	if (WARN_ON(stream != g->exclusive_stream))
 		return;
@@ -1694,9 +1696,16 @@ static void i915_oa_stream_destroy(struct i915_perf_stream *stream)
 	free_oa_configs(stream);
 	free_noa_wait(stream);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+        if (perf->spurious_report_rs.missed) {
+		gt_notice(gt, "%d spurious OA report notices suppressed due to ratelimiting\n",
+			  perf->spurious_report_rs.missed);
+	}
+#else
 	m = ratelimit_state_get_miss(&perf->spurious_report_rs);
 	if (m)
 		gt_notice(gt, "%d spurious OA report notices suppressed due to ratelimiting\n", m);
+#endif
 }
 
 static void gen7_init_oa_buffer(struct i915_perf_stream *stream)

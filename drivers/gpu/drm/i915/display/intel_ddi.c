@@ -3373,7 +3373,9 @@ static void intel_ddi_enable_dp(struct intel_atomic_state *state,
 	drm_connector_update_privacy_screen(conn_state);
 	intel_edp_backlight_on(crtc_state, conn_state);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	intel_panel_prepare(crtc_state, conn_state);
+#endif
 
 	if (!intel_lspcon_active(dig_port) || intel_dp_has_hdmi_sink(&dig_port->dp))
 		intel_dp_set_infoframes(encoder, true, crtc_state, conn_state);
@@ -3572,7 +3574,9 @@ static void intel_ddi_disable_dp(struct intel_atomic_state *state,
 
 	intel_dp->link.active = false;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
 	intel_panel_unprepare(old_conn_state);
+#endif
 	intel_psr_disable(intel_dp, old_crtc_state);
 	intel_alpm_disable(intel_dp);
 	intel_edp_backlight_off(old_conn_state);

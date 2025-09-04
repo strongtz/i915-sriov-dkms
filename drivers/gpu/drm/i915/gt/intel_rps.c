@@ -74,7 +74,11 @@ static void set(struct intel_uncore *uncore, i915_reg_t reg, u32 val)
 
 static void rps_timer(struct timer_list *t)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+        struct intel_rps *rps = from_timer(rps, t, timer);
+#else
 	struct intel_rps *rps = timer_container_of(rps, t, timer);
+#endif
 	struct intel_gt *gt = rps_to_gt(rps);
 	struct intel_engine_cs *engine;
 	ktime_t dt, last, timestamp;
