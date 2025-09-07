@@ -1,4 +1,4 @@
-# Linux i915 and xe driver (dkms module) with SR-IOV support for linux 6.14 ~ 6.17
+# Linux i915 and xe driver (dkms module) with SR-IOV support for linux 6.13 ~ 6.17
 
 This repo is a code snapshot of the i915 and xe modules from the mainline linux kernel with SR-IOV support ported from the [intel/mainline-tracking.git](https://github.com/intel/mainline-tracking.git)
 

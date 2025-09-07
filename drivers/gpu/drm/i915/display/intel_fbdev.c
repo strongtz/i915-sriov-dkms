@@ -37,7 +37,9 @@
 #include <linux/tty.h>
 #include <linux/vga_switcheroo.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,14,0)
 #include <drm/clients/drm_client_setup.h>
+#endif
 #include <drm/drm_crtc.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_fb_helper.h>

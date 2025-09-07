@@ -13,13 +13,13 @@
 
 static int __init backport_init(void)
 {
-	pr_info("intel_sriov_compat: MODULE INIT\n");
+	pr_info("intel_sriov_compat: loaded\n");
 	return 0;
 }
 
 static void __exit backport_exit(void)
 {
-  pr_info("intel_sriov_compat: MODULE EXIT\n");
+  pr_info("intel_sriov_compat: exit\n");
 }
 
 module_init(backport_init);
