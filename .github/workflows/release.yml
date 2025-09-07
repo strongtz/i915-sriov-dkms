@@ -47,7 +47,6 @@ jobs:
     - name: Packaging
       working-directory: i915-sriov-dkms
       run: |
-        sed -i "s@git+https://github\.com/strongtz/i915-sriov-dkms\.git@i915-sriov-dkms::git+file://$(pwd)/.git#commit=$(git rev-parse HEAD)@" PKGBUILD
         chown -R user: .
         sudo -u user makepkg -s --noconfirm
     - name: Upload artifact

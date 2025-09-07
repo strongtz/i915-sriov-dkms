@@ -1273,6 +1273,7 @@ intel_cleanup_plane_fb(struct drm_plane *plane,
 	intel_plane_unpin_fb(old_plane_state);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 /* Handle Y-tiling, only if DPT is enabled (otherwise disabling tiling is easier)
  * All DPT hardware have 128-bytes width tiling, so Y-tile dimension is 32x32
  * pixels for 32bits pixels.
@@ -1317,6 +1318,7 @@ static unsigned int intel_4tile_get_offset(unsigned int width, unsigned int x, u
 	offset += swizzle * 4;
 	return offset;
 }
+
 
 static void intel_panic_flush(struct drm_plane *plane)
 {
@@ -1424,19 +1426,28 @@ static int intel_get_scanout_buffer(struct drm_plane *plane,
 
 	return 0;
 }
+#endif
 
 static const struct drm_plane_helper_funcs intel_plane_helper_funcs = {
 	.prepare_fb = intel_prepare_plane_fb,
 	.cleanup_fb = intel_cleanup_plane_fb,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 static const struct drm_plane_helper_funcs intel_primary_plane_helper_funcs = {
 	.prepare_fb = intel_prepare_plane_fb,
 	.cleanup_fb = intel_cleanup_plane_fb,
 	.get_scanout_buffer = intel_get_scanout_buffer,
 	.panic_flush = intel_panic_flush,
 };
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+void intel_plane_helper_add(struct intel_plane *plane)
+{
+	drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
+}
+#else
 void intel_plane_helper_add(struct intel_plane *plane)
 {
 	if (plane->base.type == DRM_PLANE_TYPE_PRIMARY)
@@ -1444,6 +1455,7 @@ void intel_plane_helper_add(struct intel_plane *plane)
 	else
 		drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
 }
+#endif
 
 void intel_plane_init_cursor_vblank_work(struct intel_plane_state *old_plane_state,
 					 struct intel_plane_state *new_plane_state)

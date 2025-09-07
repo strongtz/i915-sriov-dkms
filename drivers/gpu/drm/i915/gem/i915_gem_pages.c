@@ -368,6 +368,7 @@ struct i915_framebuffer {
 	struct i915_panic_data panic;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 static inline struct i915_panic_data *to_i915_panic_data(struct intel_framebuffer *fb)
 {
 	return &container_of_const(fb, struct i915_framebuffer, base)->panic;
@@ -440,6 +441,7 @@ static void i915_gem_object_panic_page_set_pixel(struct drm_scanout_buffer *sb, 
 		*pix = color;
 	}
 }
+#endif
 
 struct intel_framebuffer *i915_gem_object_alloc_framebuffer(void)
 {
@@ -456,6 +458,7 @@ struct intel_framebuffer *i915_gem_object_alloc_framebuffer(void)
  * Use current vaddr if it exists, or setup a list of pages.
  * pfn is not supported yet.
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 int i915_gem_object_panic_setup(struct drm_scanout_buffer *sb)
 {
 	enum i915_map_type has_type;
@@ -495,6 +498,7 @@ void i915_gem_object_panic_finish(struct intel_framebuffer *fb)
 	kfree(panic->pages);
 	panic->pages = NULL;
 }
+#endif
 
 /* get, pin, and map the pages of the object into kernel space */
 void *i915_gem_object_pin_map(struct drm_i915_gem_object *obj,

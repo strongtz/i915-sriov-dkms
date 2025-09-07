@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2024 Intel Corporation */
 
+
 #include <drm/drm_cache.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_panic.h>
@@ -76,6 +77,7 @@ struct xe_framebuffer {
 	struct xe_panic_data panic;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 static inline struct xe_panic_data *to_xe_panic_data(struct intel_framebuffer *fb)
 {
 	return &container_of_const(fb, struct xe_framebuffer, base)->panic;
@@ -122,6 +124,7 @@ static void xe_panic_page_set_pixel(struct drm_scanout_buffer *sb, unsigned int 
 		*pix = color;
 	}
 }
+#endif
 
 struct intel_framebuffer *intel_bo_alloc_framebuffer(void)
 {
@@ -133,6 +136,7 @@ struct intel_framebuffer *intel_bo_alloc_framebuffer(void)
 	return NULL;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 int intel_bo_panic_setup(struct drm_scanout_buffer *sb)
 {
 	struct intel_framebuffer *fb = (struct intel_framebuffer *)sb->private;
@@ -150,3 +154,4 @@ void intel_bo_panic_finish(struct intel_framebuffer *fb)
 	xe_panic_kunmap(panic);
 	panic->page = -1;
 }
+#endif

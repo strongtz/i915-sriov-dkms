@@ -46,8 +46,13 @@ u64 *intel_fb_plane_get_modifiers(struct intel_display *display,
 				  u8 plane_caps);
 bool intel_fb_plane_supports_modifier(struct intel_plane *plane, u64 modifier);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+const struct drm_format_info *
+intel_fb_get_format_info(const struct drm_mode_fb_cmd2 *cmd);
+#else
 const struct drm_format_info *
 intel_fb_get_format_info(u32 pixel_format, u64 modifier);
+#endif
 
 bool
 intel_format_info_is_yuv_semiplanar(const struct drm_format_info *info,
@@ -108,11 +113,18 @@ struct drm_framebuffer *
 intel_framebuffer_create(struct drm_gem_object *obj,
 			 const struct drm_format_info *info,
 			 struct drm_mode_fb_cmd2 *mode_cmd);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+struct drm_framebuffer *
+intel_user_framebuffer_create(struct drm_device *dev,
+			      struct drm_file *filp,
+			      const struct drm_mode_fb_cmd2 *user_mode_cmd);
+#else
 struct drm_framebuffer *
 intel_user_framebuffer_create(struct drm_device *dev,
 			      struct drm_file *filp,
 			      const struct drm_format_info *info,
 			      const struct drm_mode_fb_cmd2 *user_mode_cmd);
+#endif
 
 bool intel_fb_modifier_uses_dpt(struct intel_display *display, u64 modifier);
 bool intel_fb_uses_dpt(const struct drm_framebuffer *fb);

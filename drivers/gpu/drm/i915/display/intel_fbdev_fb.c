@@ -62,11 +62,17 @@ struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
 		return ERR_PTR(-ENOMEM);
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+	fb = intel_framebuffer_create(intel_bo_to_drm_bo(obj),
+				      drm_get_format_info(display->drm, &mode_cmd),
+				      &mode_cmd);
+#else
 	fb = intel_framebuffer_create(intel_bo_to_drm_bo(obj),
 				      drm_get_format_info(display->drm,
 							  mode_cmd.pixel_format,
 							  mode_cmd.modifier[0]),
 				      &mode_cmd);
+#endif
 	i915_gem_object_put(obj);
 
 	return to_intel_framebuffer(fb);

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2024 Intel Corporation */
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 #include <drm/drm_panic.h>
+#endif
 #include "display/intel_display_types.h"
 #include "gem/i915_gem_mman.h"
 #include "gem/i915_gem_object.h"
@@ -65,6 +68,7 @@ struct intel_framebuffer *intel_bo_alloc_framebuffer(void)
 	return i915_gem_object_alloc_framebuffer();
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 int intel_bo_panic_setup(struct drm_scanout_buffer *sb)
 {
 	return i915_gem_object_panic_setup(sb);
@@ -74,3 +78,4 @@ void intel_bo_panic_finish(struct intel_framebuffer *fb)
 {
 	return i915_gem_object_panic_finish(fb);
 }
+#endif

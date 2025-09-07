@@ -66,11 +66,18 @@ struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
 		goto err;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+        fb = intel_framebuffer_create(&obj->ttm.base,
+				      drm_get_format_info(dev,
+							  &mode_cmd),
+				      &mode_cmd);
+#else
 	fb = intel_framebuffer_create(&obj->ttm.base,
 				      drm_get_format_info(dev,
 							  mode_cmd.pixel_format,
 							  mode_cmd.modifier[0]),
 				      &mode_cmd);
+#endif
 	if (IS_ERR(fb)) {
 		xe_bo_unpin_map_no_vm(obj);
 		goto err;

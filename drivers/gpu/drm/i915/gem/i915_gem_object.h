@@ -6,6 +6,7 @@
 #ifndef __I915_GEM_OBJECT_H__
 #define __I915_GEM_OBJECT_H__
 
+
 #include <drm/drm_gem.h>
 #include <drm/drm_file.h>
 #include <drm/drm_device.h>
@@ -16,7 +17,9 @@
 #include "i915_gem_ww.h"
 #include "i915_vma_types.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 struct drm_scanout_buffer;
+#endif
 enum intel_region_id;
 struct intel_framebuffer;
 
@@ -694,8 +697,10 @@ int __i915_gem_object_put_pages(struct drm_i915_gem_object *obj);
 int i915_gem_object_truncate(struct drm_i915_gem_object *obj);
 
 struct intel_framebuffer *i915_gem_object_alloc_framebuffer(void);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 int i915_gem_object_panic_setup(struct drm_scanout_buffer *sb);
 void i915_gem_object_panic_finish(struct intel_framebuffer *fb);
+#endif
 
 /**
  * i915_gem_object_pin_map - return a contiguous mapping of the entire object

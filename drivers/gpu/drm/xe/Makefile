@@ -330,7 +330,7 @@ endif
 xe-$(CONFIG_DRM_XE_DP_TUNNEL) += \
 	i915-display/intel_dp_tunnel.o
 
-obj-$(CONFIG_DRM_XE) += xe.o
+obj-m += xe.o
 
 uses_generated_oob := $(addprefix $(obj)/, $(xe-y))
 $(uses_generated_oob): $(obj)/generated/xe_wa_oob.h $(obj)/generated/xe_device_wa_oob.h
