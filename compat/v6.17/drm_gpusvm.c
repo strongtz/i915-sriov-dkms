@@ -7,7 +7,7 @@
  */
 
 #include <linux/mm.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
 #include <drm/drm_gpusvm.h>
 /**
  * drm_gpusvm_find_vma_start() - Find start address for first VMA in range

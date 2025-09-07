@@ -1017,7 +1017,11 @@ void i915_driver_shutdown(struct drm_i915_private *i915)
 	intel_runtime_pm_disable(&i915->runtime_pm);
 	intel_power_domains_disable(display);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+        intel_fbdev_set_suspend(&i915->drm, FBINFO_STATE_SUSPENDED, true);
+#else
 	drm_client_dev_suspend(&i915->drm, false);
+#endif
 	if (HAS_DISPLAY(i915)) {
 		drm_kms_helper_poll_disable(&i915->drm);
 		intel_display_driver_disable_user_access(display);
@@ -1102,7 +1106,11 @@ static int i915_drm_suspend(struct drm_device *dev)
 	/* We do a lot of poking in a lot of registers, make sure they work
 	 * properly. */
 	intel_power_domains_disable(display);
-	drm_client_dev_suspend(dev, false);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+        intel_fbdev_set_suspend(dev, FBINFO_STATE_SUSPENDED, true);
+#else
+        drm_client_dev_suspend(dev, false);
+#endif
 	if (HAS_DISPLAY(dev_priv)) {
 		drm_kms_helper_poll_disable(dev);
 		intel_display_driver_disable_user_access(display);
@@ -1304,7 +1312,11 @@ static int i915_drm_resume(struct drm_device *dev)
 
 	intel_opregion_resume(display);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+        intel_fbdev_set_suspend(dev, FBINFO_STATE_RUNNING, false);
+#else
 	drm_client_dev_resume(dev, false);
+#endif
 
 	intel_power_domains_enable(display);
 
@@ -1879,7 +1891,9 @@ static const struct drm_driver i915_drm_driver = {
 	.dumb_create = i915_gem_dumb_create,
 	.dumb_map_offset = i915_gem_dumb_mmap_offset,
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 	INTEL_FBDEV_DRIVER_OPS,
+#endif
 
 	.ioctls = i915_ioctls,
 	.num_ioctls = ARRAY_SIZE(i915_ioctls),

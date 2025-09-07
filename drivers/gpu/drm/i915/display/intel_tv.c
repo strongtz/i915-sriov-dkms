@@ -956,8 +956,13 @@ static const struct tv_mode *intel_tv_mode_find(const struct drm_connector_state
 }
 
 static enum drm_mode_status
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+intel_tv_mode_valid(struct drm_connector *connector,
+		    struct drm_display_mode *mode)
+#else
 intel_tv_mode_valid(struct drm_connector *connector,
 		    const struct drm_display_mode *mode)
+#endif
 {
 	struct intel_display *display = to_intel_display(connector->dev);
 	const struct tv_mode *tv_mode = intel_tv_mode_find(connector->state);

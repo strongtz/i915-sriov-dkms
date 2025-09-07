@@ -1535,8 +1535,13 @@ static const struct drm_encoder_funcs intel_dsi_funcs = {
 	.destroy = intel_encoder_destroy,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+static enum drm_mode_status vlv_dsi_mode_valid(struct drm_connector *connector,
+					       struct drm_display_mode *mode)
+#else
 static enum drm_mode_status vlv_dsi_mode_valid(struct drm_connector *connector,
 					       const struct drm_display_mode *mode)
+#endif
 {
 	struct intel_display *display = to_intel_display(connector->dev);
 
