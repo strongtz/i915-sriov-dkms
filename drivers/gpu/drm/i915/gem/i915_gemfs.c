@@ -11,17 +11,26 @@
 #include "i915_gemfs.h"
 #include "i915_utils.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 static int add_param(struct fs_context *fc, const char *key, const char *val)
 {
 	return vfs_parse_fs_string(fc, key, val, strlen(val));
 }
+#endif
 
 void i915_gemfs_init(struct drm_i915_private *i915)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+        char huge_opt[] = "huge=within_size"; /* r/w */
+#endif
 	struct file_system_type *type;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 	struct fs_context *fc;
+#endif
 	struct vfsmount *gemfs;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 	int ret;
+#endif
 
 	/*
 	 * By creating our own shmemfs mountpoint, we can pass in
@@ -45,6 +54,11 @@ void i915_gemfs_init(struct drm_i915_private *i915)
 	if (!type)
 		goto err;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+	gemfs = vfs_kern_mount(type, SB_KERNMOUNT, type->name, huge_opt);
+	if (IS_ERR(gemfs))
+                goto err;
+#else
 	fc = fs_context_for_mount(type, SB_KERNMOUNT);
 	if (IS_ERR(fc))
 		goto err;
@@ -56,6 +70,7 @@ void i915_gemfs_init(struct drm_i915_private *i915)
 	put_fs_context(fc);
 	if (ret)
 		goto err;
+#endif
 
 	i915->mm.gemfs = gemfs;
 	drm_info(&i915->drm, "Using Transparent Hugepages\n");

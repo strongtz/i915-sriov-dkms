@@ -1174,9 +1174,14 @@ void xe_device_declare_wedged(struct xe_device *xe)
 			dev_name(xe->drm.dev));
 
 		/* Notify userspace of wedged device */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+		drm_dev_wedged_event(&xe->drm,
+				     DRM_WEDGE_RECOVERY_REBIND | DRM_WEDGE_RECOVERY_BUS_RESET);
+#else
 		drm_dev_wedged_event(&xe->drm,
 				     DRM_WEDGE_RECOVERY_REBIND | DRM_WEDGE_RECOVERY_BUS_RESET,
 				     NULL);
+#endif
 	}
 
 	for_each_gt(gt, xe, id)

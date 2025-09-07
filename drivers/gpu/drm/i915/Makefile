@@ -399,7 +399,7 @@ i915-$(CONFIG_DRM_I915_PXP) += \
 # Post-mortem debug and GPU hang state capture
 i915-$(CONFIG_DRM_I915_CAPTURE_ERROR) += \
 	i915_gpu_error.o
-i915-$(CONFIG_DRM_I915_SELFTEST) += \
+i915-n += \
 	gem/selftests/i915_gem_client_blt.o \
 	gem/selftests/igt_gem_utils.o \
 	selftests/i915_random.o \
@@ -422,5 +422,5 @@ i915-$(CONFIG_DRM_I915_GVT) += \
 	intel_gvt_mmio_table.o
 include $(src)/gvt/Makefile
 
-obj-$(CONFIG_DRM_I915) += i915.o
-obj-$(CONFIG_DRM_I915_GVT_KVMGT) += kvmgt.o
+obj-m += i915.o
+obj-m += kvmgt.o
