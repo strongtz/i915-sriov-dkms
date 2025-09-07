@@ -1412,8 +1412,13 @@ bool intel_dp_has_dsc(const struct intel_connector *connector)
 }
 
 static enum drm_mode_status
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+intel_dp_mode_valid(struct drm_connector *_connector,
+		    struct drm_display_mode *mode)
+#else
 intel_dp_mode_valid(struct drm_connector *_connector,
 		    const struct drm_display_mode *mode)
+#endif
 {
 	struct intel_display *display = to_intel_display(_connector->dev);
 	struct intel_connector *connector = to_intel_connector(_connector);

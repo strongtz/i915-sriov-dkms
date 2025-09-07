@@ -70,8 +70,13 @@ struct intel_dvo_dev_ops {
 	 *
 	 * \return MODE_OK if the mode is valid, or another MODE_* otherwise.
 	 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+	enum drm_mode_status (*mode_valid)(struct intel_dvo_device *dvo,
+					   struct drm_display_mode *mode);
+#else
 	enum drm_mode_status (*mode_valid)(struct intel_dvo_device *dvo,
 					   const struct drm_display_mode *mode);
+#endif
 
 	/*
 	 * Callback for setting up a video mode after fixups have been made.

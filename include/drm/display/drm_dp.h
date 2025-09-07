@@ -2,6 +2,10 @@
 #ifndef __BACKPORT_DRM_DP_H__
 #define __BACKPORT_DRM_DP_H__
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+# define DP_EDP_15			    0x06    /* eDP 1.5 */
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
 # define DP_EDP_SMOOTH_BRIGHTNESS_CAPABLE		(1 << 6) /* eDP 2.0 */
 #endif

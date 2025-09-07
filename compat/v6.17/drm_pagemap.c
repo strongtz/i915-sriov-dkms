@@ -3,7 +3,7 @@
  * Copyright © 2024-2025 Intel Corporation
  */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
 #include <linux/dma-mapping.h>
 #include <linux/migrate.h>
 #include <linux/pagemap.h>

@@ -1,3 +1,4 @@
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 #include_next <drm/drm_gpusvm.h>
 #ifndef __BACKPORT_DRM_GPUSVM_H__
 #define __BACKPORT_DRM_GPUSVM_H__
@@ -10,3 +11,4 @@ drm_gpusvm_find_vma_start(struct drm_gpusvm *gpusvm,
 #endif
 
 #endif /* __BACKPORT_DRM_GPUSVM_H__ */
+#endif

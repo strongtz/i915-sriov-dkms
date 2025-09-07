@@ -217,8 +217,13 @@ static void intel_enable_dvo(struct intel_atomic_state *state,
 }
 
 static enum drm_mode_status
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+intel_dvo_mode_valid(struct drm_connector *_connector,
+		     struct drm_display_mode *mode)
+#else
 intel_dvo_mode_valid(struct drm_connector *_connector,
 		     const struct drm_display_mode *mode)
+#endif
 {
 	struct intel_display *display = to_intel_display(_connector->dev);
 	struct intel_connector *connector = to_intel_connector(_connector);

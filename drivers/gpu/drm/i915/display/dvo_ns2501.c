@@ -524,8 +524,13 @@ static enum drm_connector_status ns2501_detect(struct intel_dvo_device *dvo)
 	return connector_status_connected;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+static enum drm_mode_status ns2501_mode_valid(struct intel_dvo_device *dvo,
+					      struct drm_display_mode *mode)
+#else
 static enum drm_mode_status ns2501_mode_valid(struct intel_dvo_device *dvo,
 					      const struct drm_display_mode *mode)
+#endif
 {
 	DRM_DEBUG_KMS
 	    ("is mode valid (hdisplay=%d,htotal=%d,vdisplay=%d,vtotal=%d)\n",
