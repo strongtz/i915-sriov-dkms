@@ -1315,4 +1315,8 @@ int intel_gvt_iterate_mmio_table(struct intel_gvt_mmio_table_iter *iter)
 err:
 	return ret;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+EXPORT_SYMBOL_NS_GPL(intel_gvt_iterate_mmio_table, I915_GVT);
+#else
 EXPORT_SYMBOL_NS_GPL(intel_gvt_iterate_mmio_table, "I915_GVT");
+#endif

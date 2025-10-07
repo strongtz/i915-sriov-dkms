@@ -41,8 +41,10 @@
 #include <linux/vt.h>
 
 #include <drm/drm_atomic_helper.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 #include <drm/drm_client.h>
 #include <drm/drm_client_event.h>
+#endif
 #include <drm/drm_ioctl.h>
 #include <drm/drm_managed.h>
 #include <drm/drm_probe_helper.h>

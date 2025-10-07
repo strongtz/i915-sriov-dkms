@@ -1,3 +1,6 @@
+DKMS_MODULE_VERSION := "2025.09.03-sriov"
+DKMS_MODULE_ORIGIN_KERNEL := "6.17"
+
 LINUXINCLUDE := \
 	-I$(src)/include \
 	-I$(src)/include/trace \
@@ -5,11 +8,11 @@ LINUXINCLUDE := \
 	-include $(src)/include/config.h
 
 subdir-ccflags-y += \
-	-DDKMS_MODULE_VERSION="\"2025.09.03-sriov\"" \
-	-DDKMS_MODULE_ORIGIN_KERNEL="\"6.17-rc4\""
+	-DDKMS_MODULE_VERSION='$(DKMS_MODULE_VERSION)' \
+	-DDKMS_MODULE_ORIGIN_KERNEL='$(DKMS_MODULE_ORIGIN_KERNEL)'
 
 obj-m += compat/
 obj-m += drivers/gpu/drm/i915/
-obj-m += drivers/gpu/drm/xe/
+#obj-m += drivers/gpu/drm/xe/
 
 .PHONY: default clean modules load unload install patch
