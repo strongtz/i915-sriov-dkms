@@ -3,7 +3,6 @@
  * Copyright © 2024-2025 Intel Corporation
  */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
 #include <linux/dma-mapping.h>
 #include <linux/migrate.h>
 #include <linux/pagemap.h>
@@ -837,4 +836,3 @@ int drm_pagemap_populate_mm(struct drm_pagemap *dpagemap,
 	return err;
 }
 EXPORT_SYMBOL(drm_pagemap_populate_mm);
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0) */

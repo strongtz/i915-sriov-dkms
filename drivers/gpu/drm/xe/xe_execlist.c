@@ -336,6 +336,7 @@ static const struct drm_sched_backend_ops drm_sched_ops = {
 static int execlist_exec_queue_init(struct xe_exec_queue *q)
 {
 	struct drm_gpu_scheduler *sched;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 	const struct drm_sched_init_args args = {
 		.ops = &drm_sched_ops,
 		.num_rqs = 1,
@@ -345,6 +346,7 @@ static int execlist_exec_queue_init(struct xe_exec_queue *q)
 		.name = q->hwe->name,
 		.dev = gt_to_xe(q->gt)->drm.dev,
 	};
+#endif
 	struct xe_execlist_exec_queue *exl;
 	struct xe_device *xe = gt_to_xe(q->gt);
 	int err;
@@ -359,7 +361,15 @@ static int execlist_exec_queue_init(struct xe_exec_queue *q)
 
 	exl->q = q;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+	err = drm_sched_init(&exl->sched, &drm_sched_ops, NULL, 1,
+			     q->lrc[0]->ring.size / MAX_JOB_SIZE_BYTES,
+			     XE_SCHED_HANG_LIMIT, XE_SCHED_JOB_TIMEOUT,
+			     NULL, NULL, q->hwe->name,
+			     gt_to_xe(q->gt)->drm.dev);
+#else
 	err = drm_sched_init(&exl->sched, &args);
+#endif
 	if (err)
 		goto err_free;
 

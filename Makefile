@@ -13,6 +13,6 @@ subdir-ccflags-y += \
 
 obj-m += compat/
 obj-m += drivers/gpu/drm/i915/
-#obj-m += drivers/gpu/drm/xe/
+obj-m += drivers/gpu/drm/xe/
 
 .PHONY: default clean modules load unload install patch

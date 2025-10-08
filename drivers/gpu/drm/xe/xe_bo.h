@@ -413,6 +413,7 @@ static inline unsigned int xe_sg_segment_size(struct device *dev)
  * @purge: Only purging allowed. Don't shrink if bo not purgeable.
  * @writeback: Attempt to immediately move content to swap.
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 struct xe_bo_shrink_flags {
 	u32 purge : 1;
 	u32 writeback : 1;
@@ -421,6 +422,7 @@ struct xe_bo_shrink_flags {
 long xe_bo_shrink(struct ttm_operation_ctx *ctx, struct ttm_buffer_object *bo,
 		  const struct xe_bo_shrink_flags flags,
 		  unsigned long *scanned);
+#endif
 
 /**
  * xe_bo_is_mem_type - Whether the bo currently resides in the given

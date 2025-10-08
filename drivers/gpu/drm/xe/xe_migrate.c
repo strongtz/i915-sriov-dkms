@@ -17,7 +17,6 @@
 #include "instructions/xe_gpu_commands.h"
 #include "instructions/xe_mi_commands.h"
 #include "regs/xe_gtt_defs.h"
-#include "tests/xe_test.h"
 #include "xe_assert.h"
 #include "xe_bb.h"
 #include "xe_bo.h"
@@ -1261,18 +1260,12 @@ static struct dma_fence *
 xe_migrate_update_pgtables_cpu(struct xe_migrate *m,
 			       struct xe_migrate_pt_update *pt_update)
 {
-	XE_TEST_DECLARE(struct migrate_test_params *test =
-			to_migrate_test_params
-			(xe_cur_kunit_priv(XE_TEST_LIVE_MIGRATE));)
 	const struct xe_migrate_pt_update_ops *ops = pt_update->ops;
 	struct xe_vm *vm = pt_update->vops->vm;
 	struct xe_vm_pgtable_update_ops *pt_update_ops =
 		&pt_update->vops->pt_update_ops[pt_update->tile_id];
 	int err;
 	u32 i, j;
-
-	if (XE_TEST_ONLY(test && test->force_gpu))
-		return ERR_PTR(-ETIME);
 
 	if (ops->pre_commit) {
 		pt_update->job = NULL;
