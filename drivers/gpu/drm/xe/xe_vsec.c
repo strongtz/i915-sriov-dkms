@@ -222,4 +222,8 @@ void xe_vsec_init(struct xe_device *xe)
 	 */
 	intel_vsec_register(pdev, info);
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+MODULE_IMPORT_NS(INTEL_VSEC);
+#else
 MODULE_IMPORT_NS("INTEL_VSEC");
+#endif

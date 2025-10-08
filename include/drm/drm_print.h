@@ -2,6 +2,21 @@
 #ifndef __BACKPORT_DRM_PRINT_H__
 #define __BACKPORT_DRM_PRINT_H__
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+void __drm_printfn_line_dummy(struct drm_printer *p, struct va_format *vaf);
+static inline struct drm_printer drm_line_printer(struct drm_printer *p,
+						  const char *prefix,
+						  unsigned int series)
+{
+	struct drm_printer lp = {
+		.printfn = __drm_printfn_line_dummy,
+		.arg = p,
+		.prefix = prefix,
+	};
+	return lp;
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 #include <drm/drm_device.h>
 void drm_print_hex_dump(struct drm_printer *p, const char *prefix,

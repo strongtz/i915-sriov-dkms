@@ -1,4 +1,15 @@
+/*
+ * Copyright (c) 2025
+ *
+ * Backport functionality for older kernels
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
 #include <linux/hrtimer.h>
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 static enum hrtimer_restart hrtimer_dummy_timeout(struct hrtimer *unused)
 {
