@@ -21,7 +21,7 @@ int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
 #define INTEL_FBDEV_DRIVER_OPS \
 	.fbdev_probe = intel_fbdev_driver_fbdev_probe
 void intel_fbdev_setup(struct intel_display *display);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous);
 #endif
 struct intel_framebuffer *intel_fbdev_framebuffer(struct intel_fbdev *fbdev);
@@ -34,7 +34,7 @@ static inline void intel_fbdev_setup(struct intel_display *display)
 {
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static inline void intel_fbdev_set_suspend(struct drm_device *dev, int state, bool synchronous)
 {
 }

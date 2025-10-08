@@ -5804,7 +5804,7 @@ intel_dp_detect_sdp_caps(struct intel_dp *intel_dp)
 		drm_dp_as_sdp_supported(&intel_dp->aux, intel_dp->dpcd);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 static bool intel_dp_needs_dpcd_probe(struct intel_dp *intel_dp, bool force_on_external)
 {
 	struct intel_connector *connector = intel_dp->attached_connector;
@@ -5824,7 +5824,7 @@ static bool intel_dp_needs_dpcd_probe(struct intel_dp *intel_dp, bool force_on_e
 
 void intel_dp_dpcd_set_probe(struct intel_dp *intel_dp, bool force_on_external)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
         // No-op, the quirk doesn't exist
 #else
 	drm_dp_dpcd_set_probe(&intel_dp->aux,

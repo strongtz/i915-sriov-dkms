@@ -292,7 +292,7 @@ void intel_gvt_resume(struct drm_i915_private *dev_priv)
  * Exported here so that the exports only get created when GVT support is
  * actually enabled.
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 EXPORT_SYMBOL_NS_GPL(i915_gem_object_alloc, I915_GVT);
 EXPORT_SYMBOL_NS_GPL(i915_gem_object_create_shmem, I915_GVT);
 EXPORT_SYMBOL_NS_GPL(i915_gem_object_init, I915_GVT);

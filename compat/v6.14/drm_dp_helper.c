@@ -13,7 +13,7 @@
 #include <drm/display/drm_dp_helper.h>
 #include <drm/drm_print.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 static int read_payload_update_status(struct drm_dp_aux *aux)
 {
 	int ret;

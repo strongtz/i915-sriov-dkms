@@ -119,7 +119,7 @@ static int i915_gem_framebuffer_info(struct seq_file *m, void *data)
 	struct intel_framebuffer *fbdev_fb = NULL;
 	struct drm_framebuffer *drm_fb;
 
-#if defined(CONFIG_DRM_FBDEV_EMULATION) || LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if defined(CONFIG_DRM_FBDEV_EMULATION) || LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	fbdev_fb = intel_fbdev_framebuffer(display->fbdev.fbdev);
 	if (fbdev_fb) {
 		seq_printf(m, "fbcon size: %d x %d, depth %d, %d bpp, modifier 0x%llx, refcount %d, obj ",

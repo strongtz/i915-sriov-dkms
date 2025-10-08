@@ -893,7 +893,7 @@ static const struct drm_plane_funcs i965_plane_funcs = {
 	.atomic_duplicate_state = intel_plane_duplicate_state,
 	.atomic_destroy_state = intel_plane_destroy_state,
 	.format_mod_supported = i965_plane_format_mod_supported,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	.format_mod_supported_async = intel_plane_format_mod_supported_async,
 #endif
 };
@@ -905,7 +905,7 @@ static const struct drm_plane_funcs i8xx_plane_funcs = {
 	.atomic_duplicate_state = intel_plane_duplicate_state,
 	.atomic_destroy_state = intel_plane_destroy_state,
 	.format_mod_supported = i8xx_plane_format_mod_supported,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	.format_mod_supported_async = intel_plane_format_mod_supported_async,
 #endif
 };

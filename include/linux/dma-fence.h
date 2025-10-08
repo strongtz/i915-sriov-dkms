@@ -2,7 +2,7 @@
 #ifndef __BACKPORT_DMA_FENCE_H__
 #define __BACKPORT_DMA_FENCE_H__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0) // unsafe before 6.17
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) // unsafe before 6.17
 static inline const char *dma_fence_driver_name(struct dma_fence *fence)
 {
 	return fence->ops->get_driver_name(fence);

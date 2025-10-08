@@ -1159,7 +1159,7 @@ guc_exec_queue_timedout_job(struct drm_sched_job *drm_job)
 	 * list so job can be freed and kick scheduler ensuring free job is not
 	 * lost.
 	 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &job->fence->flags)) {
 		xe_sched_add_pending_job(sched, job);
 		xe_sched_submission_start(sched);
@@ -1338,7 +1338,7 @@ trigger_reset:
 	/* Start fence signaling */
 	xe_hw_fence_irq_start(q->fence_irq);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
         return DRM_GPU_SCHED_STAT_NOMINAL;
 #else
 	return DRM_GPU_SCHED_STAT_RESET;
@@ -1352,7 +1352,7 @@ rearm:
 	 * but there is not currently an easy way to do in DRM scheduler. With
 	 * some thought, do this in a follow up.
 	 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
         xe_sched_add_pending_job(sched, job);
 	xe_sched_submission_start(sched);
 

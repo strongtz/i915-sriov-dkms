@@ -54,7 +54,7 @@ intel_reuse_initial_plane_obj(struct intel_crtc *this,
 	return false;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 static bool
 initial_plane_phys_lmem(struct intel_display *display,
 			struct intel_initial_plane_config *plane_config)

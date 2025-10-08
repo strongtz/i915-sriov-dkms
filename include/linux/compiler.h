@@ -2,7 +2,7 @@
 #ifndef __BACKPORT_LINUX_COMPILER_H__
 #define __BACKPORT_LINUX_COMPILER_H__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 /*
  * Similar to statically_true() but produces a constant expression
  *

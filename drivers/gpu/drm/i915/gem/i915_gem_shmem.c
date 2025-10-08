@@ -296,7 +296,7 @@ shmem_truncate(struct drm_i915_gem_object *obj)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 void __shmem_writeback(size_t size, struct address_space *mapping)
 {
 	struct writeback_control wbc = {
@@ -361,7 +361,7 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 		if (folio_mapped(folio))
 			folio_redirty_for_writepage(&wbc, folio);
 		else
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
                         error = shmem_writeout(folio, &wbc);
 #else
 			error = shmem_writeout(folio, NULL, NULL);

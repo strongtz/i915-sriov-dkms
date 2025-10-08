@@ -313,7 +313,7 @@ u64 gen8_ggtt_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static dma_addr_t gen8_ggtt_pte_decode(u64 pte, bool *is_present, bool *is_local)
 {
 	*is_present = pte & GEN8_PAGE_PRESENT;
@@ -469,7 +469,7 @@ static void gen8_set_pte(void __iomem *addr, gen8_pte_t pte)
 	writeq(pte, addr);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static gen8_pte_t gen8_get_pte(void __iomem *addr)
 {
 	return readq(addr);
@@ -491,7 +491,7 @@ static void gen8_ggtt_insert_page(struct i915_address_space *vm,
 	ggtt->invalidate(ggtt);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static dma_addr_t gen8_ggtt_read_entry(struct i915_address_space *vm,
 				       u64 offset, bool *is_present, bool *is_local)
 {
@@ -658,7 +658,7 @@ static void gen6_ggtt_insert_page(struct i915_address_space *vm,
 	ggtt->invalidate(ggtt);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static dma_addr_t gen6_ggtt_read_entry(struct i915_address_space *vm,
 				       u64 offset,
 				       bool *is_present, bool *is_local)
@@ -835,7 +835,7 @@ void intel_ggtt_unbind_vma(struct i915_address_space *vm,
 	vm->clear_range(vm, vma_res->start, vma_res->vma_size);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 dma_addr_t intel_ggtt_read_entry(struct i915_address_space *vm,
 				 u64 offset, bool *is_present, bool *is_local)
 {
@@ -1493,7 +1493,7 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 	ggtt->vm.scratch_range = gen8_ggtt_clear_range;
 
 	ggtt->vm.insert_entries = gen8_ggtt_insert_entries;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	ggtt->vm.read_entry = gen8_ggtt_read_entry;
 #endif
 
@@ -1542,7 +1542,7 @@ static int gen8_gmch_probe(struct i915_ggtt *ggtt)
 	else
 		ggtt->vm.pte_encode = gen8_ggtt_pte_encode;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	ggtt->vm.pte_decode = gen8_ggtt_pte_decode;
 #endif
 
@@ -1645,7 +1645,7 @@ static u64 iris_pte_encode(dma_addr_t addr,
 	return pte;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static dma_addr_t gen6_pte_decode(u64 pte, bool *is_present, bool *is_local)
 {
 	*is_present = pte & GEN6_PTE_VALID;
@@ -1693,7 +1693,7 @@ static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 	ggtt->vm.scratch_range = gen6_ggtt_clear_range;
 	ggtt->vm.insert_page = gen6_ggtt_insert_page;
 	ggtt->vm.insert_entries = gen6_ggtt_insert_entries;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	ggtt->vm.read_entry = gen6_ggtt_read_entry;
 #endif
 	ggtt->vm.cleanup = gen6_gmch_remove;
@@ -1711,7 +1711,7 @@ static int gen6_gmch_probe(struct i915_ggtt *ggtt)
 	else
 		ggtt->vm.pte_encode = snb_pte_encode;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	ggtt->vm.pte_decode = gen6_pte_decode;
 #endif
 

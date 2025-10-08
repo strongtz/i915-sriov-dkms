@@ -221,7 +221,7 @@ static int lspcon_change_mode(struct intel_lspcon *lspcon,
 		return 0;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	err = drm_lspcon_set_mode(intel_dp->aux.drm_dev, ddc, mode);
 #else
 	err = drm_lspcon_set_mode(intel_dp->aux.drm_dev, ddc, mode,

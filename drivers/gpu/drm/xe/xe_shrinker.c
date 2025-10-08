@@ -2,7 +2,7 @@
 /*
  * Copyright © 2024 Intel Corporation
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 #include <linux/shrinker.h>
 
 #include <drm/drm_managed.h>
@@ -66,7 +66,7 @@ static s64 __xe_shrinker_walk(struct xe_device *xe,
 		struct ttm_resource_manager *man = ttm_manager_type(&xe->ttm, mem_type);
 		struct ttm_bo_lru_cursor curs;
 		struct ttm_buffer_object *ttm_bo;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 		struct ttm_lru_walk_arg arg = {
 			.ctx = ctx,
 			.trylock_only = true,
@@ -76,7 +76,7 @@ static s64 __xe_shrinker_walk(struct xe_device *xe,
 		if (!man || !man->use_tt)
 			continue;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 		ttm_bo_lru_for_each_reserved_guarded(&curs, man, ctx, ttm_bo) {
 			if (!ttm_bo_shrink_suitable(ttm_bo, ctx))
 				continue;

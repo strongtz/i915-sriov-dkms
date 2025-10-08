@@ -487,7 +487,7 @@ static umode_t vf_attr_is_visible(struct kobject *kobj,
 	return attr->mode;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 static ssize_t bin_attr_state_read(struct file *filp, struct kobject *kobj,
 				   struct bin_attribute *bin_attr, char *buf,
 				   loff_t off, size_t count)
@@ -511,7 +511,7 @@ static ssize_t bin_attr_state_read(struct file *filp, struct kobject *kobj,
 	return SZ_4K;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 static ssize_t bin_attr_state_write(struct file *filp, struct kobject *kobj,
 				    struct bin_attribute *bin_attr, char *buf,
 				    loff_t off, size_t count)
@@ -537,7 +537,7 @@ static ssize_t bin_attr_state_write(struct file *filp, struct kobject *kobj,
 
 static BIN_ATTR(state, 0600, bin_attr_state_read, bin_attr_state_write, SZ_4K);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 static struct bin_attribute *vf_bin_attrs[] = {
 	&bin_attr_state,
 	NULL

@@ -167,7 +167,7 @@ static bool xe_hw_fence_signaled(struct dma_fence *dma_fence)
 	struct xe_device *xe = fence->xe;
 	u32 seqno = xe_map_rd(xe, &fence->seqno_map, 0, u32);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 	return dma_fence->error ||
 		!__dma_fence_is_later(dma_fence->seqno, seqno, dma_fence->ops);
 #else

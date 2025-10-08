@@ -132,7 +132,7 @@ static void pf_engine_activity_stats(struct xe_device *xe, unsigned int num_vfs,
 	}
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,17,0)  // incompatible before 6.17
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)  // incompatible before 6.17
 static int resize_vf_vram_bar(struct xe_device *xe, int num_vfs)
 {
 	struct pci_dev *pdev = to_pci_dev(xe->drm.dev);
@@ -176,7 +176,7 @@ static int pf_enable_vfs(struct xe_device *xe, int num_vfs)
 	if (err < 0)
 		goto failed;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,17,0) 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0) 
 	if (IS_DGFX(xe)) {
 		err = resize_vf_vram_bar(xe, num_vfs);
 		if (err)
