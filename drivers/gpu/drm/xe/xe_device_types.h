@@ -415,8 +415,10 @@ struct xe_device {
 		struct xe_vram_region vram;
 		/** @mem.sys_mgr: system TTM manager */
 		struct ttm_resource_manager sys_mgr;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 		/** @mem.sys_mgr: system memory shrinker. */
 		struct xe_shrinker *shrinker;
+#endif
 	} mem;
 
 	/** @sriov: device level virtualization data */

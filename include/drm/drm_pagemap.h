@@ -1,9 +1,3 @@
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,17,0)
-#include_next <drm/drm_pagemap.h>
-#endif
-#ifndef __BACKPORT_DRM_PAGEMAP_H__
-#define __BACKPORT_DRM_PAGEMAP_H__
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0) && LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
 /* SPDX-License-Identifier: MIT */
 #ifndef _DRM_PAGEMAP_H_
 #define _DRM_PAGEMAP_H_
@@ -11,6 +5,8 @@
 #include <linux/dma-direction.h>
 #include <linux/hmm.h>
 #include <linux/types.h>
+
+#include "backport.h"
 
 struct drm_pagemap;
 struct drm_pagemap_zdd;
@@ -54,6 +50,7 @@ struct drm_pagemap_device_addr {
  *
  * Return: A struct drm_pagemap_device_addr encoding the above information.
  */
+#define drm_pagemap_device_addr_encode LINUX_BACKPORT(drm_pagemap_device_addr_encode)
 static inline struct drm_pagemap_device_addr
 drm_pagemap_device_addr_encode(dma_addr_t addr,
 			       enum drm_interconnect_protocol proto,
@@ -223,28 +220,32 @@ struct drm_pagemap_devmem {
 	u64 timeslice_expiration;
 };
 
+#define drm_pagemap_migrate_to_devmem LINUX_BACKPORT(drm_pagemap_migrate_to_devmem)
 int drm_pagemap_migrate_to_devmem(struct drm_pagemap_devmem *devmem_allocation,
 				  struct mm_struct *mm,
 				  unsigned long start, unsigned long end,
 				  unsigned long timeslice_ms,
 				  void *pgmap_owner);
 
+#define drm_pagemap_evict_to_ram LINUX_BACKPORT(drm_pagemap_evict_to_ram)
 int drm_pagemap_evict_to_ram(struct drm_pagemap_devmem *devmem_allocation);
 
+#define drm_pagemap_pagemap_ops_get LINUX_BACKPORT(drm_pagemap_pagemap_ops_get)
 const struct dev_pagemap_ops *drm_pagemap_pagemap_ops_get(void);
 
+#define drm_pagemap_page_to_dpagemap LINUX_BACKPORT(drm_pagemap_page_to_dpagemap)
 struct drm_pagemap *drm_pagemap_page_to_dpagemap(struct page *page);
 
+#define drm_pagemap_devmem_init LINUX_BACKPORT(drm_pagemap_devmem_init)
 void drm_pagemap_devmem_init(struct drm_pagemap_devmem *devmem_allocation,
 			     struct device *dev, struct mm_struct *mm,
 			     const struct drm_pagemap_devmem_ops *ops,
 			     struct drm_pagemap *dpagemap, size_t size);
 
+#define drm_pagemap_migrate_to_ram LINUX_BACKPORT(drm_pagemap_migrate_to_ram)
 int drm_pagemap_populate_mm(struct drm_pagemap *dpagemap,
 			    unsigned long start, unsigned long end,
 			    struct mm_struct *mm,
 			    unsigned long timeslice_ms);
 
-#endif /* _DRM_PAGEMAP_H_ */
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0) */
-#endif /* __BACKPORT_DRM_PAGEMAP_H__ */
+#endif

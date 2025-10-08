@@ -13,7 +13,6 @@
 #include <drm/drm_prime.h>
 #include <drm/ttm/ttm_tt.h>
 
-#include "tests/xe_test.h"
 #include "xe_bo.h"
 #include "xe_device.h"
 #include "xe_pm.h"
@@ -257,9 +256,6 @@ struct dma_buf_test_params {
 struct drm_gem_object *xe_gem_prime_import(struct drm_device *dev,
 					   struct dma_buf *dma_buf)
 {
-	XE_TEST_DECLARE(struct dma_buf_test_params *test =
-			to_dma_buf_test_params
-			(xe_cur_kunit_priv(XE_TEST_LIVE_DMA_BUF));)
 	const struct dma_buf_attach_ops *attach_ops;
 	struct dma_buf_attachment *attach;
 	struct drm_gem_object *obj;
@@ -267,8 +263,7 @@ struct drm_gem_object *xe_gem_prime_import(struct drm_device *dev,
 
 	if (dma_buf->ops == &xe_dmabuf_ops) {
 		obj = dma_buf->priv;
-		if (obj->dev == dev &&
-		    !XE_TEST_ONLY(test && test->force_different_devices)) {
+		if (obj->dev == dev) {
 			/*
 			 * Importing dmabuf exported from out own gem increases
 			 * refcount on gem itself instead of f_count of dmabuf.

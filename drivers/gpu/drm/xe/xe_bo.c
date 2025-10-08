@@ -11,7 +11,9 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_gem_ttm_helper.h>
 #include <drm/drm_managed.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 #include <drm/ttm/ttm_backup.h>
+#endif
 #include <drm/ttm/ttm_device.h>
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_tt.h>
@@ -398,6 +400,7 @@ struct sg_table *xe_bo_sg(struct xe_bo *bo)
 	return xe_tt->sg;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 /*
  * Account ttm pages against the device shrinker's shrinkable and
  * purgeable counts.
@@ -421,7 +424,9 @@ static void xe_ttm_tt_account_subtract(struct xe_device *xe, struct ttm_tt *tt)
 	else
 		xe_shrinker_mod_pages(xe->mem.shrinker, -(long)tt->num_pages, 0);
 }
+#endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 static void update_global_total_pages(struct ttm_device *ttm_dev,
 				      long num_pages)
 {
@@ -434,6 +439,7 @@ static void update_global_total_pages(struct ttm_device *ttm_dev,
 			    global_total_pages << PAGE_SHIFT);
 #endif
 }
+#endif
 
 static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 				       u32 page_flags)
@@ -505,6 +511,7 @@ static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 		return NULL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 	if (ttm_bo->type != ttm_bo_type_sg) {
 		err = ttm_tt_setup_backup(tt);
 		if (err) {
@@ -513,6 +520,7 @@ static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 			return NULL;
 		}
 	}
+#endif
 
 	return tt;
 }
@@ -531,19 +539,24 @@ static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
 	    !(tt->page_flags & TTM_TT_FLAG_EXTERNAL_MAPPABLE))
 		return 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+        err = ttm_pool_alloc(&ttm_dev->pool, tt, ctx);
+#else
 	if (ttm_tt_is_backed_up(tt) && !xe_tt->purgeable) {
 		err = ttm_tt_restore(ttm_dev, tt, ctx);
 	} else {
 		ttm_tt_clear_backed_up(tt);
 		err = ttm_pool_alloc(&ttm_dev->pool, tt, ctx);
 	}
+#endif
 	if (err)
 		return err;
 
 	xe_tt->purgeable = false;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	xe_ttm_tt_account_add(ttm_to_xe_device(ttm_dev), tt);
 	update_global_total_pages(ttm_dev, tt->num_pages);
-
+#endif
 	return 0;
 }
 
@@ -558,8 +571,10 @@ static void xe_ttm_tt_unpopulate(struct ttm_device *ttm_dev, struct ttm_tt *tt)
 	xe_tt_unmap_sg(xe, tt);
 
 	ttm_pool_free(&ttm_dev->pool, tt);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	xe_ttm_tt_account_subtract(xe, tt);
 	update_global_total_pages(ttm_dev, -(long)tt->num_pages);
+#endif
 }
 
 static void xe_ttm_tt_destroy(struct ttm_device *ttm_dev, struct ttm_tt *tt)
@@ -982,6 +997,7 @@ out:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 static long xe_bo_shrink_purge(struct ttm_operation_ctx *ctx,
 			       struct ttm_buffer_object *bo,
 			       unsigned long *scanned)
@@ -1016,6 +1032,7 @@ static long xe_bo_shrink_purge(struct ttm_operation_ctx *ctx,
 
 	return lret;
 }
+#endif
 
 static bool
 xe_bo_eviction_valuable(struct ttm_buffer_object *bo, const struct ttm_place *place)
@@ -1036,6 +1053,7 @@ xe_bo_eviction_valuable(struct ttm_buffer_object *bo, const struct ttm_place *pl
 	return true;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 /**
  * xe_bo_shrink() - Try to shrink an xe bo.
  * @ctx: The struct ttm_operation_ctx used for shrinking.
@@ -1106,6 +1124,7 @@ out_unref:
 
 	return lret;
 }
+#endif
 
 /**
  * xe_bo_notifier_prepare_pinned() - Prepare a pinned VRAM object to be backed
@@ -2300,8 +2319,10 @@ int xe_bo_pin_external(struct xe_bo *bo, bool in_place)
 	}
 
 	ttm_bo_pin(&bo->ttm);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
 		xe_ttm_tt_account_subtract(xe, bo->ttm.ttm);
+#endif
 
 	/*
 	 * FIXME: If we always use the reserve / unreserve functions for locking
@@ -2348,8 +2369,10 @@ int xe_bo_pin(struct xe_bo *bo)
 	}
 
 	ttm_bo_pin(&bo->ttm);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
 		xe_ttm_tt_account_subtract(xe, bo->ttm.ttm);
+#endif
 
 	/*
 	 * FIXME: If we always use the reserve / unreserve functions for locking
@@ -2384,8 +2407,10 @@ void xe_bo_unpin_external(struct xe_bo *bo)
 	spin_unlock(&xe->pinned.lock);
 
 	ttm_bo_unpin(&bo->ttm);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
 		xe_ttm_tt_account_add(xe, bo->ttm.ttm);
+#endif
 
 	/*
 	 * FIXME: If we always use the reserve / unreserve functions for locking
@@ -2416,8 +2441,10 @@ void xe_bo_unpin(struct xe_bo *bo)
 		}
 	}
 	ttm_bo_unpin(&bo->ttm);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	if (bo->ttm.ttm && ttm_tt_is_populated(bo->ttm.ttm))
 		xe_ttm_tt_account_add(xe, bo->ttm.ttm);
+#endif
 }
 
 /**

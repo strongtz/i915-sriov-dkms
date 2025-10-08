@@ -2,7 +2,7 @@
 /*
  * Copyright © 2024 Intel Corporation
  */
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
 #include <linux/shrinker.h>
 
 #include <drm/drm_managed.h>
@@ -321,3 +321,4 @@ int xe_shrinker_create(struct xe_device *xe)
 
 	return drmm_add_action_or_reset(&xe->drm, xe_shrinker_fini, shrinker);
 }
+#endif
