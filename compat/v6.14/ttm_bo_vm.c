@@ -14,7 +14,7 @@
 #include <drm/ttm/ttm_placement.h>
 #include <drm/ttm/ttm_tt.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 static int ttm_bo_vm_access_kmap(struct ttm_buffer_object *bo,
 				 unsigned long offset,
 				 uint8_t *buf, int len, int write)

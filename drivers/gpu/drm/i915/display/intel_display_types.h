@@ -387,7 +387,7 @@ struct intel_vbt_panel_data {
 };
 
 struct intel_panel {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	/* Simple drm_panel */
 	struct drm_panel *base;
 #endif

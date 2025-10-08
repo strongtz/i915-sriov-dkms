@@ -10,7 +10,7 @@
 
 #include <drm/display/drm_dp_helper.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 /* See DP Standard v2.1 2.6.4.4.1.1, 2.8.4.4, 2.8.7 */
 static int drm_dp_link_data_symbol_cycles(int lane_count, int pixels,
 					  int bpp_x16, int symbol_size,

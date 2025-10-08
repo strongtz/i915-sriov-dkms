@@ -2,13 +2,13 @@
 #ifndef __BACKPORT_DRM_PRINT_H__
 #define __BACKPORT_DRM_PRINT_H__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 #include <drm/drm_device.h>
 void drm_print_hex_dump(struct drm_printer *p, const char *prefix,
 			const u8 *buf, size_t len);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 /**
  * drm_coredump_printer_is_full() - DRM coredump printer output is full
  * @p: DRM coredump printer

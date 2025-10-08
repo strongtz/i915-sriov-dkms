@@ -11,7 +11,7 @@
 #include <drm/drm_print.h>
 #include <drm/drm_device.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,14,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 /**
  * drm_print_hex_dump - print a hex dump to a &drm_printer stream
  * @p: The &drm_printer

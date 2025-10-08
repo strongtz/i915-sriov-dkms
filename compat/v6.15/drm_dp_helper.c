@@ -11,7 +11,7 @@
 #include <drm/display/drm_dp_helper.h>
 #include <drm/drm_print.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 /**
  * drm_dp_lttpr_set_transparent_mode() - set the LTTPR in transparent mode
  * @aux: DisplayPort AUX channel

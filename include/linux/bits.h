@@ -3,7 +3,7 @@
 #ifndef __BACKPORT_LINUX_BITS_H__
 #define __BACKPORT_LINUX_BITS_H__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 #include <linux/overflow.h>
 /*
  * Fixed-type variants of BIT(), with additional checks like GENMASK_TYPE(). The

@@ -37,7 +37,7 @@
 #include <linux/tty.h>
 #include <linux/vga_switcheroo.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,14,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 #include <drm/clients/drm_client_setup.h>
 #endif
 #include <drm/drm_crtc.h>
@@ -63,13 +63,13 @@
 #include "i915_drv.h"
 
 struct intel_fbdev {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
         struct drm_fb_helper helper;
 #endif
 	struct intel_framebuffer *fb;
 	struct i915_vma *vma;
 	unsigned long vma_flags;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	int preferred_bpp;
 
 	/* Whether or not fbdev hpd processing is temporarily suspended */
@@ -196,7 +196,7 @@ static int intelfb_dirty(struct drm_fb_helper *helper, struct drm_clip_rect *cli
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 static void intelfb_restore(struct drm_fb_helper *fb_helper)
 {
 	struct intel_fbdev *ifbdev = to_intel_fbdev(fb_helper);
@@ -227,7 +227,7 @@ static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
 };
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
         .fb_probe = intel_fbdev_driver_fbdev_probe,
 	.fb_dirty = intelfb_dirty,
@@ -248,7 +248,7 @@ int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
 	struct drm_gem_object *obj;
 	int ret;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 	mutex_lock(&ifbdev->hpd_lock);
 	ret = ifbdev->hpd_suspended ? -EAGAIN : 0;
 	mutex_unlock(&ifbdev->hpd_lock);
@@ -467,7 +467,7 @@ static bool intel_fbdev_init_bios(struct intel_display *display,
 		goto out;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
         ifbdev->preferred_bpp = fb->base.format->cpp[0] * 8;
 #endif
 	ifbdev->fb = fb;
@@ -500,7 +500,7 @@ out:
 	return false;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static void intel_fbdev_suspend_worker(struct work_struct *work)
 {
 	intel_fbdev_set_suspend(container_of(work,
@@ -702,7 +702,7 @@ static const struct drm_client_funcs intel_fbdev_client_funcs = {
 };
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 static unsigned int intel_fbdev_color_mode(const struct drm_format_info *info)
 {
 	unsigned int bpp;
@@ -721,7 +721,7 @@ static unsigned int intel_fbdev_color_mode(const struct drm_format_info *info)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 void intel_fbdev_setup(struct intel_display *display)
 {
 	struct drm_device *dev = display->drm;

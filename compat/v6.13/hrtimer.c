@@ -1,5 +1,5 @@
 #include <linux/hrtimer.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 static enum hrtimer_restart hrtimer_dummy_timeout(struct hrtimer *unused)
 {
 	return HRTIMER_NORESTART;

@@ -46,7 +46,7 @@ u64 *intel_fb_plane_get_modifiers(struct intel_display *display,
 				  u8 plane_caps);
 bool intel_fb_plane_supports_modifier(struct intel_plane *plane, u64 modifier);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 const struct drm_format_info *
 intel_fb_get_format_info(const struct drm_mode_fb_cmd2 *cmd);
 #else
@@ -113,7 +113,7 @@ struct drm_framebuffer *
 intel_framebuffer_create(struct drm_gem_object *obj,
 			 const struct drm_format_info *info,
 			 struct drm_mode_fb_cmd2 *mode_cmd);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 struct drm_framebuffer *
 intel_user_framebuffer_create(struct drm_device *dev,
 			      struct drm_file *filp,

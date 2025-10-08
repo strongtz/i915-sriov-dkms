@@ -624,7 +624,7 @@ int i915_ttm_move(struct ttm_buffer_object *bo, bool evict,
 
 	/* Populate ttm with pages if needed. Typically system memory. */
 	if (ttm && (dst_man->use_tt || (ttm->page_flags & TTM_TT_FLAG_SWAPPED))) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,13,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 		ret = ttm_tt_populate(bo->bdev, ttm, ctx);
 #else
 		ret = ttm_bo_populate(bo, ctx);

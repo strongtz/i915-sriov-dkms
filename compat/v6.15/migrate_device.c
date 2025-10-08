@@ -11,7 +11,7 @@
 #include <linux/migrate.h>
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 /**
  * migrate_device_pfns() - migrate device private pfns to normal memory.
  * @src_pfns: pre-popluated array of source device private pfns to migrate.

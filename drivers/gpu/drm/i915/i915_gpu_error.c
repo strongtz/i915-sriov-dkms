@@ -2469,7 +2469,7 @@ void i915_gpu_error_debugfs_register(struct drm_i915_private *i915)
 			    &i915_gpu_info_fops);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 static ssize_t error_state_read(struct file *filp, struct kobject *kobj,
 				struct bin_attribute *attr, char *buf,
 				loff_t off, size_t count)
@@ -2511,7 +2511,7 @@ static ssize_t error_state_read(struct file *filp, struct kobject *kobj,
 	return ret;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 static ssize_t error_state_write(struct file *file, struct kobject *kobj,
 				 struct bin_attribute *attr, char *buf,
 				 loff_t off, size_t count)

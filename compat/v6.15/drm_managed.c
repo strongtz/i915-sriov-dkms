@@ -10,7 +10,7 @@
 
 #include <drm/drm_managed.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 void __drmm_workqueue_release(struct drm_device *device, void *res)
 {
 	struct workqueue_struct *wq = res;

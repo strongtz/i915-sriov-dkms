@@ -145,7 +145,7 @@ intel_dp_aux_supports_hdr_backlight(struct intel_connector *connector)
 	 * HDR static metadata we need to start maintaining table of
 	 * ranges for such panels.
 	 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 	if (display->params.enable_dpcd_backlight != INTEL_DP_AUX_BACKLIGHT_FORCE_INTEL &&
 	    !(connector->base.hdr_sink_metadata.hdmi_type1.metadata_type &
 	      BIT(HDMI_STATIC_METADATA_TYPE1))) {
@@ -489,7 +489,7 @@ static u32 intel_dp_aux_vesa_get_backlight(struct intel_connector *connector, en
 	return connector->panel.backlight.level;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 static int
 intel_dp_aux_vesa_set_luminance(struct intel_connector *connector, u32 level)
 {
@@ -523,7 +523,7 @@ intel_dp_aux_vesa_set_backlight(const struct drm_connector_state *conn_state, u3
 	struct intel_panel *panel = &connector->panel;
 	struct intel_dp *intel_dp = enc_to_intel_dp(connector->encoder);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 	if (panel->backlight.edp.vesa.luminance_control_support) {
 		if (!intel_dp_aux_vesa_set_luminance(connector, level))
 			return;
@@ -547,7 +547,7 @@ intel_dp_aux_vesa_enable_backlight(const struct intel_crtc_state *crtc_state,
 	struct intel_panel *panel = &connector->panel;
 	struct intel_dp *intel_dp = enc_to_intel_dp(connector->encoder);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 	int ret;
 
 	if (panel->backlight.edp.vesa.luminance_control_support) {
@@ -594,7 +594,7 @@ static void intel_dp_aux_vesa_disable_backlight(const struct drm_connector_state
 						    intel_backlight_invert_pwm_level(connector, 0));
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,17,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 static int intel_dp_aux_vesa_setup_backlight(struct intel_connector *connector, enum pipe pipe)
 {
 	struct intel_display *display = to_intel_display(connector);

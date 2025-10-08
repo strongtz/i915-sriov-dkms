@@ -11,7 +11,7 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_gem_ttm_helper.h>
 #include <drm/drm_managed.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 #include <drm/ttm/ttm_backup.h>
 #endif
 #include <drm/ttm/ttm_device.h>
@@ -400,7 +400,7 @@ struct sg_table *xe_bo_sg(struct xe_bo *bo)
 	return xe_tt->sg;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 /*
  * Account ttm pages against the device shrinker's shrinkable and
  * purgeable counts.
@@ -511,7 +511,7 @@ static struct ttm_tt *xe_ttm_tt_create(struct ttm_buffer_object *ttm_bo,
 		return NULL;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	if (ttm_bo->type != ttm_bo_type_sg) {
 		err = ttm_tt_setup_backup(tt);
 		if (err) {
