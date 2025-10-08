@@ -261,7 +261,9 @@ static void show_meminfo(struct drm_printer *p, struct drm_file *file)
 		if (man) {
 			drm_print_memory_stats(p,
 					       &stats[mem_type],
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 					       DRM_GEM_OBJECT_ACTIVE |
+#endif
 					       DRM_GEM_OBJECT_RESIDENT |
 					       (mem_type != XE_PL_SYSTEM ? 0 :
 					       DRM_GEM_OBJECT_PURGEABLE),
