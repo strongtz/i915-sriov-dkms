@@ -3,9 +3,8 @@
 
 subdir-ccflags-y += -DDEFAULT_SYMBOL_NAMESPACE="\"INTEL_SRIOV_COMPAT\""
 
-intel_sriov_compat-y += main.o
-
-intel_sriov_compat-y += v6.13/hrtimer.o
+intel_sriov_compat-y += v6.13/drm_print.o \
+			v6.13/hrtimer.o
 
 intel_sriov_compat-y += v6.14/drm_dp_helper.o \
 			v6.14/drm_print.o \
@@ -19,5 +18,7 @@ intel_sriov_compat-y += v6.16/drm_dp_helper.o
 
 intel_sriov_compat-y += drm_gpusvm.o \
 			drm_pagemap.o
+
+intel_sriov_compat-y += main.o
 
 obj-m := intel_sriov_compat.o

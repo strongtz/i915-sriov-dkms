@@ -1347,4 +1347,8 @@ int xe_hwmon_register(struct xe_device *xe)
 
 	return 0;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+MODULE_IMPORT_NS(INTEL_PMT_TELEMETRY);
+#else
 MODULE_IMPORT_NS("INTEL_PMT_TELEMETRY");
+#endif

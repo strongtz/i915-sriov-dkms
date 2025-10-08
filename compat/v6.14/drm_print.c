@@ -7,7 +7,7 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#include <linux/version.h>
+
 #include <drm/drm_print.h>
 #include <drm/drm_device.h>
 

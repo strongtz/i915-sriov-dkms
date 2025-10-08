@@ -70,7 +70,11 @@ int xe_observation_ioctl(struct drm_device *dev, void *data, struct drm_file *fi
 	}
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+static struct ctl_table observation_ctl_table[] = {
+#else
 static const struct ctl_table observation_ctl_table[] = {
+#endif
 	{
 	 .procname = "observation_paranoid",
 	 .data = &xe_observation_paranoid,
