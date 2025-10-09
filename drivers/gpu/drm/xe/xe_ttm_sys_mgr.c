@@ -111,6 +111,11 @@ int xe_ttm_sys_mgr_init(struct xe_device *xe)
 	/* Potentially restrict amount of TT memory here. */
 	gtt_size = (u64)si.totalram * si.mem_unit;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+        /* TTM limits allocation of all TTM devices by 50% of system memory */
+	gtt_size /= 2;
+#endif
+
 	man->use_tt = true;
 	man->func = &xe_ttm_sys_mgr_func;
 	ttm_resource_manager_init(man, &xe->ttm, gtt_size >> PAGE_SHIFT);
