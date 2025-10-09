@@ -1,4 +1,4 @@
-# Linux i915 and xe driver (dkms module) with SR-IOV support for linux 6.13 ~ 6.17
+# Linux i915 and xe driver (dkms module) with SR-IOV support for linux 6.12 ~ 6.17
 
 This repo is a code snapshot of the i915 and xe modules from the mainline linux kernel with SR-IOV support ported from the [intel/mainline-tracking.git](https://github.com/intel/mainline-tracking.git)
 
@@ -7,6 +7,15 @@ This repo is a code snapshot of the i915 and xe modules from the mainline linux 
 This package is **highly experimental**, you should only use it when you know what you are doing.
 
 You need to install this dkms module in **both host and guest!**
+
+## Required kernel versions
+Required kernel: **6.12.20 ~ 6.17.x**
+
+For older versions of the kernel (v6.8 ~ v6.12), please use the [2025.07.22](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.07.22) release.
+
+For v6.1 ~ v6.7, please use [intel-lts-v6.1](https://github.com/strongtz/i915-sriov-dkms/tree/intel-lts-v6.1) branch instead.
+
+It is recommended that to upgrade to a supported kernel, the older branches will no longer be maintained.
 
 ## Required Kernel Parameters
 
@@ -47,6 +56,7 @@ You also can download the package from the [releases page](https://github.com/st
    ```
 1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2025.10.09_amd64.deb`
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or add to it if you have other arguments there already.
+1. You can also use `xe` driver instead of `i915` as described in the [Required Kernel Parameters](https://github.com/strongtz/i915-sriov-dkms?tab=readme-ov-file#required-kernel-parameters) section.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`.
