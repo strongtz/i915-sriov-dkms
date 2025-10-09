@@ -70,6 +70,26 @@ jobs:
         KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
         KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
         sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+  
+  test-archlinux-lts:
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+    - name: Install Dependencies
+      run: |
+        pacman-key --init
+        pacman -Syu --noconfirm git linux-lts linux-lts-headers
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Build Module
+      working-directory: i915-sriov-dkms
+      run: |
+        KERNEL_SOURCE_DIR=$(pacman -Qql linux-lts-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux-mainline:
     runs-on: ubuntu-24.04
