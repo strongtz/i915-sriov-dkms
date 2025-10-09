@@ -4821,7 +4821,11 @@ err_unlock:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+static struct ctl_table oa_table[] = {
+#else
 static const struct ctl_table oa_table[] = {
+#endif
 	{
 	 .procname = "perf_stream_paranoid",
 	 .data = &i915_perf_stream_paranoid,
