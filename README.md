@@ -52,7 +52,7 @@ You also can download the package from the [releases page](https://github.com/st
 1. Install the kernel and headers for desired version: `apt install proxmox-headers-6.14 proxmox-kernel-6.14` (for unsigned kernel).
 1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
    ```sh
-   wget -O /tmp/i915-sriov-dkms_2025.10.09_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.10.09/i915-sriov-dkms_2025.10.09_amd64.deb"
+   wget -O /tmp/i915-sriov-dkms_2025.10.09_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.10.09-2/i915-sriov-dkms_2025.10.09_amd64.deb"
    ```
 1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2025.10.09_amd64.deb`
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or add to it if you have other arguments there already.
@@ -72,7 +72,7 @@ We will need to run the same driver under Linux guests.
    ```
 2. Download and install the `.deb`
    ```
-   wget -O /tmp/i915-sriov-dkms_2025.10.09_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.10.09/i915-sriov-dkms_2025.10.09_amd64.deb"
+   wget -O /tmp/i915-sriov-dkms_2025.10.09_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.10.09-2/i915-sriov-dkms_2025.10.09_amd64.deb"
    dpkg -i /tmp/i915-sriov-dkms_2025.10.09_amd64.deb
    ```
 3. Update kernel parameters
