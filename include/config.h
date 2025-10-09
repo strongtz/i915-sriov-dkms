@@ -1,5 +1,7 @@
 #include <linux/version.h>
 
+#include "backport.h"
+
 #ifdef CONFIG_DRM_XE_PAGEMAP
 #undef CONFIG_DRM_XE_PAGEMAP
 #endif

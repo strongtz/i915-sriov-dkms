@@ -21,7 +21,7 @@ jobs:
       run: | 
         LATEST_VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | sed 's/.*\?"\([^"]*\)".*/\1/')
         sed -i "s/###LATEST_VERSION###/$LATEST_VERSION/g" debian/control debian/changelog
-        dpkg-buildpackage -tc
+        dpkg-buildpackage -b -tc -us -uc
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:

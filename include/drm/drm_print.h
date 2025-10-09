@@ -3,6 +3,7 @@
 #define __BACKPORT_DRM_PRINT_H__
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+#define __drm_printfn_line_dummy LINUX_BACKPORT(__drm_printfn_line_dummy)
 void __drm_printfn_line_dummy(struct drm_printer *p, struct va_format *vaf);
 static inline struct drm_printer drm_line_printer(struct drm_printer *p,
 						  const char *prefix,
@@ -19,6 +20,7 @@ static inline struct drm_printer drm_line_printer(struct drm_printer *p,
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
 #include <drm/drm_device.h>
+#define drm_print_hex_dump LINUX_BACKPORT(drm_print_hex_dump)
 void drm_print_hex_dump(struct drm_printer *p, const char *prefix,
 			const u8 *buf, size_t len);
 #endif
@@ -34,6 +36,7 @@ void drm_print_hex_dump(struct drm_printer *p, const char *prefix,
  * RETURNS:
  * True if DRM coredump printer output buffer is full, False otherwise
  */
+#define drm_coredump_printer_is_full LINUX_BACKPORT(drm_coredump_printer_is_full)
 static inline bool drm_coredump_printer_is_full(struct drm_printer *p)
 {
 	struct drm_print_iterator *iterator = p->arg;

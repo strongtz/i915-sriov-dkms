@@ -6,8 +6,6 @@
 #include <linux/hmm.h>
 #include <linux/types.h>
 
-#include "backport.h"
-
 struct drm_pagemap;
 struct drm_pagemap_zdd;
 struct device;
@@ -242,7 +240,7 @@ void drm_pagemap_devmem_init(struct drm_pagemap_devmem *devmem_allocation,
 			     const struct drm_pagemap_devmem_ops *ops,
 			     struct drm_pagemap *dpagemap, size_t size);
 
-#define drm_pagemap_migrate_to_ram LINUX_BACKPORT(drm_pagemap_migrate_to_ram)
+#define drm_pagemap_populate_mm LINUX_BACKPORT(drm_pagemap_populate_mm)
 int drm_pagemap_populate_mm(struct drm_pagemap *dpagemap,
 			    unsigned long start, unsigned long end,
 			    struct mm_struct *mm,

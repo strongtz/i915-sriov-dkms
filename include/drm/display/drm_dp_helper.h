@@ -89,9 +89,11 @@ static inline int drm_dp_dpcd_write_byte(struct drm_dp_aux *aux,
 	return drm_dp_dpcd_write_data(aux, offset, &value, 1);
 }
 
+#define drm_dp_dpcd_write_payload LINUX_BACKPORT(drm_dp_dpcd_write_payload)
 int drm_dp_dpcd_write_payload(struct drm_dp_aux *aux,
 			      int vcpid, u8 start_time_slot, u8 time_slot_count);
 
+#define drm_dp_dpcd_poll_act_handled LINUX_BACKPORT(drm_dp_dpcd_poll_act_handled)
 int drm_dp_dpcd_poll_act_handled(struct drm_dp_aux *aux, int timeout_ms);
 #endif
 
@@ -111,13 +113,17 @@ int drm_dp_dpcd_poll_act_handled(struct drm_dp_aux *aux, int timeout_ms);
 # define DP_EXTENDED_WAKE_TIMEOUT_REQUEST_MASK		0x7f
 # define DP_EXTENDED_WAKE_TIMEOUT_GRANT			(1 << 7)
 
+#define drm_dp_lttpr_set_transparent_mode LINUX_BACKPORT(drm_dp_lttpr_set_transparent_mode)
 int drm_dp_lttpr_set_transparent_mode(struct drm_dp_aux *aux, bool enable);
+#define drm_dp_lttpr_init LINUX_BACKPORT(drm_dp_lttpr_init)
 int drm_dp_lttpr_init(struct drm_dp_aux *aux, int lttpr_count);
 
+#define drm_dp_lttpr_wake_timeout_setup LINUX_BACKPORT(drm_dp_lttpr_wake_timeout_setup)
 void drm_dp_lttpr_wake_timeout_setup(struct drm_dp_aux *aux, bool transparent_mode);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#define drm_dp_link_symbol_cycles LINUX_BACKPORT(drm_dp_link_symbol_cycles)
 int drm_dp_link_symbol_cycles(int lane_count, int pixels, int dsc_slice_count,
 			      int bpp_x16, int symbol_size, bool is_mst);
 #endif

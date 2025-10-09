@@ -4,6 +4,7 @@
 #define __BACKPORT_LINUX_MIGRATE_H__
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+#define migrate_device_pfns LINUX_BACKPORT(migrate_device_pfns)
 int migrate_device_pfns(unsigned long *src_pfns, unsigned long npages);
 #endif
 
