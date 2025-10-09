@@ -1,9 +1,9 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
-  * Base on kernel 6.17
+  * Rebase to the v6.17 kernel
   * Add xe driver support
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Wed, 03 Sep 2025 13:13:42 +0800
+ -- bbaa bbaa <bbaa@bbaa.moe>  Thu, 09 Oct 2025 10:35:50 +0800
 
 i915-sriov-dkms (2025.07.22) UNRELEASED; urgency=medium
 
