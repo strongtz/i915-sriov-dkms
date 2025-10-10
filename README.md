@@ -35,6 +35,8 @@ intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
 intel_iommu=on xe.max_vfs=7 xe.force_probe=${device_id} module_blacklist=i915
 ```
 
+**Xe module only supports Gen12(Alder Lake), Gen13(Raptor Lake) and Gen14(Raptor Lake Refresh) for now**
+
 Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command
 
 ## Creating Virtual Functions (VF)
