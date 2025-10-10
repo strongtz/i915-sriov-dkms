@@ -9,7 +9,7 @@ This package is **highly experimental**, you should only use it when you know wh
 You need to install this dkms module in **both host and guest!**
 
 ## Required kernel versions
-Required kernel: **6.12.20 ~ 6.17.x**
+Required kernel: **6.12.19 ~ 6.17.x**
 
 For older versions of the kernel (v6.8 ~ v6.12), please use the [2025.07.22](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.07.22) release.
 
