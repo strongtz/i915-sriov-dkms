@@ -2,6 +2,9 @@
 
 This repo is a code snapshot of the i915 and xe modules from the mainline linux kernel with SR-IOV support ported from the [intel/mainline-tracking.git](https://github.com/intel/mainline-tracking.git)
 
+**Disclaimer:** This repository is a community port of the mainline kernel and Intel’s mainline-tracking tree.  
+It includes some experimental and unstable features and is not an official Intel project.
+
 ## Warning
 
 This package is **highly experimental**, you should only use it when you know what you are doing.
