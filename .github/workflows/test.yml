@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
 
+
 jobs:
   test-ubuntu-plucky:
     runs-on: ubuntu-24.04
@@ -24,7 +25,7 @@ jobs:
         KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
         KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
         make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
-        
+
   test-proxmox-trixie:
     runs-on: ubuntu-24.04
     container:
@@ -70,7 +71,7 @@ jobs:
         KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
         KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
         sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
-  
+
   test-archlinux-lts:
     runs-on: ubuntu-24.04
     container:
@@ -116,19 +117,19 @@ jobs:
         KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
         sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
-  # test-nixos:
-  #   runs-on: ubuntu-24.04
-  #   steps:
-  #   - name: 'Install Nix'
-  #     uses: cachix/install-nix-action@v31.5.1
-  #   - name: Checkout
-  #     uses: actions/checkout@v4
-  #     with:
-  #       path: i915-sriov-dkms
-  #   - name: Build i915-sriov kernel module for NixOS
-  #     working-directory: i915-sriov-dkms
-  #     env:
-  #       GC_DONT_GC: '1'
-  #     run: |
-  #       nix --version
-  #       nix flake check
+  test-nixos:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: 'Install Nix'
+      uses: cachix/install-nix-action@v31.5.1
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        path: i915-sriov-dkms
+    - name: Build i915-sriov kernel module for NixOS
+      working-directory: i915-sriov-dkms
+      env:
+        GC_DONT_GC: '1'
+      run: |
+        nix --version
+        nix flake check
