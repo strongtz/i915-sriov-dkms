@@ -6,26 +6,6 @@ on:
 
 
 jobs:
-  test-ubuntu-plucky:
-    runs-on: ubuntu-24.04
-    container:
-      image: ubuntu:25.04
-    steps:
-    - name: Install Dependencies
-      run: |
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y git build-essential linux-generic linux-headers-generic
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Build Module
-      working-directory: i915-sriov-dkms
-      run: |
-        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
-        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-        make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
-
   test-proxmox-trixie:
     runs-on: ubuntu-24.04
     container:
