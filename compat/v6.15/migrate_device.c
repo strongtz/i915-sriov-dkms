@@ -24,7 +24,7 @@ int migrate_device_pfns(unsigned long *src_pfns, unsigned long npages)
 {
 	unsigned long i;
 
-        //TODO: use kallsyms to avoid call migrate_device_unmap per page
+	//TODO: use kallsyms to avoid call migrate_device_unmap per page
 	for (i = 0; i < npages; i++)
 		migrate_device_range(&src_pfns[i], src_pfns[i], 1);
 

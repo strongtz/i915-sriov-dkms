@@ -64,7 +64,7 @@
 
 struct intel_fbdev {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        struct drm_fb_helper helper;
+	struct drm_fb_helper helper;
 #endif
 	struct intel_framebuffer *fb;
 	struct i915_vma *vma;
@@ -229,7 +229,7 @@ static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
 static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
-        .fb_probe = intel_fbdev_driver_fbdev_probe,
+	.fb_probe = intel_fbdev_driver_fbdev_probe,
 	.fb_dirty = intelfb_dirty,
 };
 #endif
@@ -468,7 +468,7 @@ static bool intel_fbdev_init_bios(struct intel_display *display,
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        ifbdev->preferred_bpp = fb->base.format->cpp[0] * 8;
+	ifbdev->preferred_bpp = fb->base.format->cpp[0] * 8;
 #endif
 	ifbdev->fb = fb;
 

@@ -1339,7 +1339,7 @@ trigger_reset:
 	xe_hw_fence_irq_start(q->fence_irq);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-        return DRM_GPU_SCHED_STAT_NOMINAL;
+	return DRM_GPU_SCHED_STAT_NOMINAL;
 #else
 	return DRM_GPU_SCHED_STAT_RESET;
 #endif
@@ -1353,7 +1353,7 @@ rearm:
 	 * some thought, do this in a follow up.
 	 */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-        xe_sched_add_pending_job(sched, job);
+	xe_sched_add_pending_job(sched, job);
 	xe_sched_submission_start(sched);
 
 	return DRM_GPU_SCHED_STAT_NOMINAL;

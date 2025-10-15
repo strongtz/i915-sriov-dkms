@@ -288,8 +288,8 @@ int intel_dp_mtp_tu_compute_config(struct intel_dp *intel_dp,
 			return PTR_ERR(mst_state);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
-                mst_state->pbn_div = drm_dp_get_vc_payload_bw(&intel_dp->mst.mgr,
-                                                              crtc_state->port_clock,
+		mst_state->pbn_div = drm_dp_get_vc_payload_bw(&intel_dp->mst.mgr,
+							      crtc_state->port_clock,
 							      crtc_state->lane_count);
 #else
 		mst_state->pbn_div = drm_dp_get_vc_payload_bw(crtc_state->port_clock,
@@ -1756,7 +1756,7 @@ mst_topology_add_connector(struct drm_dp_mst_topology_mgr *mgr,
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
-        ret = drm_connector_init(display->drm, &connector->base, &mst_connector_funcs,
+	ret = drm_connector_init(display->drm, &connector->base, &mst_connector_funcs,
 					 DRM_MODE_CONNECTOR_DisplayPort);
 #else
 	ret = drm_connector_dynamic_init(display->drm, &connector->base, &mst_connector_funcs,

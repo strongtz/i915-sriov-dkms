@@ -391,7 +391,7 @@ struct intel_display {
 		/* list of fbdev register on this device */
 		struct intel_fbdev *fbdev;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-                struct work_struct suspend_work;
+		struct work_struct suspend_work;
 #endif
 	} fbdev;
 

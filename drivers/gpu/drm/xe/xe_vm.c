@@ -3086,8 +3086,8 @@ static int vm_bind_ioctl_ops_lock_and_prep(struct drm_exec *exec,
 static void op_trace(struct xe_vma_op *op)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        __diag_push();
-        __diag_ignore_all("-Wswitch", "We need extend enum in older kernels");
+	__diag_push();
+	__diag_ignore_all("-Wswitch", "We need extend enum in older kernels");
 #endif
 
 	switch (op->base.op) {
@@ -3112,9 +3112,9 @@ static void op_trace(struct xe_vma_op *op)
 	default:
 		XE_WARN_ON("NOT POSSIBLE");
 	}
-        
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        __diag_pop();
+	__diag_pop();
 #endif
 }
 

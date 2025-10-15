@@ -367,7 +367,7 @@ void xe_display_pm_shutdown(struct xe_device *xe)
 
 	intel_power_domains_disable(display);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-        intel_fbdev_set_suspend(&xe->drm, FBINFO_STATE_SUSPENDED, true);
+	intel_fbdev_set_suspend(&xe->drm, FBINFO_STATE_SUSPENDED, true);
 #else
 	drm_client_dev_suspend(&xe->drm, false);
 #endif

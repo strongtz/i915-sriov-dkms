@@ -758,7 +758,7 @@ static int plane_atomic_check(struct intel_atomic_state *state,
 	const struct intel_plane_state *old_plane_state =
 		intel_atomic_get_old_plane_state(state, plane);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        struct intel_plane_state *new_primary_crtc_plane_state;
+	struct intel_plane_state *new_primary_crtc_plane_state;
 #else
 	const struct intel_plane_state *new_primary_crtc_plane_state;
 #endif

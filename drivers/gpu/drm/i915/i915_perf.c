@@ -1697,7 +1697,7 @@ static void i915_oa_stream_destroy(struct i915_perf_stream *stream)
 	free_noa_wait(stream);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-        if (perf->spurious_report_rs.missed) {
+	if (perf->spurious_report_rs.missed) {
 		gt_notice(gt, "%d spurious OA report notices suppressed due to ratelimiting\n",
 			  perf->spurious_report_rs.missed);
 	}

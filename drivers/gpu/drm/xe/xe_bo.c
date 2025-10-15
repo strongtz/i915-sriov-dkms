@@ -540,7 +540,7 @@ static int xe_ttm_tt_populate(struct ttm_device *ttm_dev, struct ttm_tt *tt,
 		return 0;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        err = ttm_pool_alloc(&ttm_dev->pool, tt, ctx);
+	err = ttm_pool_alloc(&ttm_dev->pool, tt, ctx);
 #else
 	if (ttm_tt_is_backed_up(tt) && !xe_tt->purgeable) {
 		err = ttm_tt_restore(ttm_dev, tt, ctx);

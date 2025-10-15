@@ -67,7 +67,7 @@ struct intel_framebuffer *intel_fbdev_fb_alloc(struct drm_fb_helper *helper,
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-        fb = intel_framebuffer_create(&obj->ttm.base,
+	fb = intel_framebuffer_create(&obj->ttm.base,
 				      drm_get_format_info(dev,
 							  &mode_cmd),
 				      &mode_cmd);

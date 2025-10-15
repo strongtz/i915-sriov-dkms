@@ -17,7 +17,7 @@ void __drm_printfn_line_dummy(struct drm_printer *p, struct va_format *vaf)
 	const char *prefix = p->prefix ?: "";
 	const char *pad = p->prefix ? " " : "";
 
-        drm_printf(p->arg, "%s%s: %pV", prefix, pad, vaf);
+	drm_printf(p->arg, "%s%s: %pV", prefix, pad, vaf);
 }
 EXPORT_SYMBOL(__drm_printfn_line_dummy);
 #endif

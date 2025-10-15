@@ -112,7 +112,7 @@ int xe_ttm_sys_mgr_init(struct xe_device *xe)
 	gtt_size = (u64)si.totalram * si.mem_unit;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-        /* TTM limits allocation of all TTM devices by 50% of system memory */
+	/* TTM limits allocation of all TTM devices by 50% of system memory */
 	gtt_size /= 2;
 #endif
 

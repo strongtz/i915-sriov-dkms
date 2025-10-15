@@ -2278,7 +2278,7 @@ int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-        drm_helper_mode_fill_fb_struct(display->drm, fb, mode_cmd);
+	drm_helper_mode_fill_fb_struct(display->drm, fb, mode_cmd);
 #else
 	drm_helper_mode_fill_fb_struct(display->drm, fb, info, mode_cmd);
 #endif
@@ -2371,11 +2371,11 @@ intel_user_framebuffer_create(struct drm_device *dev,
 		return ERR_CAST(obj);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-        fb = intel_framebuffer_create(obj, 
-                                 drm_get_format_info(dev, &mode_cmd),
-                             &mode_cmd);
+	fb = intel_framebuffer_create(obj, 
+				      drm_get_format_info(dev, &mode_cmd),
+				      &mode_cmd);
 #else
-        fb = intel_framebuffer_create(obj, info, &mode_cmd);
+	fb = intel_framebuffer_create(obj, info, &mode_cmd);
 #endif
 	drm_gem_object_put(obj);
 

@@ -5825,7 +5825,7 @@ static bool intel_dp_needs_dpcd_probe(struct intel_dp *intel_dp, bool force_on_e
 void intel_dp_dpcd_set_probe(struct intel_dp *intel_dp, bool force_on_external)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-        // No-op, the quirk doesn't exist
+	// No-op, the quirk doesn't exist
 #else
 	drm_dp_dpcd_set_probe(&intel_dp->aux,
 			      intel_dp_needs_dpcd_probe(intel_dp, force_on_external));
