@@ -2,6 +2,8 @@
 
 #include "backport.h"
 
+#define MODULE_ABS_PATH(path) DKMS_MODULE_SOURCE_DIR/path
+
 #ifdef CONFIG_DRM_XE_PAGEMAP
 #undef CONFIG_DRM_XE_PAGEMAP
 #endif

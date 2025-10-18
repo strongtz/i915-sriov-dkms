@@ -154,6 +154,6 @@ TRACE_EVENT(xe_guc_engine_activity,
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/xe
+#define TRACE_INCLUDE_PATH MODULE_ABS_PATH(drivers/gpu/drm/xe)
 #define TRACE_INCLUDE_FILE xe_trace_guc
 #include <trace/define_trace.h>
