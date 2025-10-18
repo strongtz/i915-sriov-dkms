@@ -46,10 +46,6 @@
 		assign, print, reg, unreg)			\
 	DEFINE_TRACE_FN(name, reg, unreg, PARAMS(proto), PARAMS(args))
 
-#undef TRACE_EVENT_SYSCALL
-#define TRACE_EVENT_SYSCALL(name, proto, args, struct, assign, print, reg, unreg) \
-	DEFINE_TRACE_SYSCALL(name, reg, unreg, PARAMS(proto), PARAMS(args))
-
 #undef TRACE_EVENT_NOP
 #define TRACE_EVENT_NOP(name, proto, args, struct, assign, print)
 
@@ -74,26 +70,7 @@
 
 #undef DECLARE_TRACE
 #define DECLARE_TRACE(name, proto, args)	\
-	DEFINE_TRACE(name##_tp, PARAMS(proto), PARAMS(args))
-
-#undef DECLARE_TRACE_CONDITION
-#define DECLARE_TRACE_CONDITION(name, proto, args, cond)	\
-	DEFINE_TRACE(name##_tp, PARAMS(proto), PARAMS(args))
-
-#undef DECLARE_TRACE_EVENT
-#define DECLARE_TRACE_EVENT(name, proto, args)	\
 	DEFINE_TRACE(name, PARAMS(proto), PARAMS(args))
-
-#undef DECLARE_TRACE_EVENT_CONDITION
-#define DECLARE_TRACE_EVENT_CONDITION(name, proto, args, cond)	\
-	DEFINE_TRACE(name, PARAMS(proto), PARAMS(args))
-
-/* If requested, create helpers for calling these tracepoints from Rust. */
-#ifdef CREATE_RUST_TRACE_POINTS
-#undef DEFINE_RUST_DO_TRACE
-#define DEFINE_RUST_DO_TRACE(name, proto, args)	\
-	__DEFINE_RUST_DO_TRACE(name, PARAMS(proto), PARAMS(args))
-#endif
 
 #undef TRACE_INCLUDE
 #undef __TRACE_INCLUDE
@@ -120,13 +97,6 @@
 /* Make all open coded DECLARE_TRACE nops */
 #undef DECLARE_TRACE
 #define DECLARE_TRACE(name, proto, args)
-#undef DECLARE_TRACE_CONDITION
-#define DECLARE_TRACE_CONDITION(name, proto, args, cond)
-
-#undef DECLARE_TRACE_EVENT
-#define DECLARE_TRACE_EVENT(name, proto, args)
-#undef DECLARE_TRACE_EVENT_CONDITION
-#define DECLARE_TRACE_EVENT_CONDITION(name, proto, args, cond)
 
 #ifdef TRACEPOINTS_ENABLED
 #include <trace/trace_events.h>
@@ -137,7 +107,6 @@
 #undef TRACE_EVENT
 #undef TRACE_EVENT_FN
 #undef TRACE_EVENT_FN_COND
-#undef TRACE_EVENT_SYSCALL
 #undef TRACE_EVENT_CONDITION
 #undef TRACE_EVENT_NOP
 #undef DEFINE_EVENT_NOP
@@ -148,9 +117,6 @@
 #undef DEFINE_EVENT_CONDITION
 #undef TRACE_HEADER_MULTI_READ
 #undef DECLARE_TRACE
-#undef DECLARE_TRACE_CONDITION
-#undef DECLARE_TRACE_EVENT
-#undef DECLARE_TRACE_EVENT_CONDITION
 
 /* Only undef what we defined in this file */
 #ifdef UNDEF_TRACE_INCLUDE_FILE
@@ -161,11 +127,6 @@
 #ifdef UNDEF_TRACE_INCLUDE_PATH
 # undef TRACE_INCLUDE_PATH
 # undef UNDEF_TRACE_INCLUDE_PATH
-#endif
-
-#ifdef CREATE_RUST_TRACE_POINTS
-# undef DEFINE_RUST_DO_TRACE
-# define DEFINE_RUST_DO_TRACE(name, proto, args)
 #endif
 
 /* We may be processing more files */

@@ -462,6 +462,6 @@ TRACE_EVENT(xe_eu_stall_data_read,
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/xe
+#define TRACE_INCLUDE_PATH MODULE_ABS_PATH(drivers/gpu/drm/xe)
 #define TRACE_INCLUDE_FILE xe_trace
 #include <trace/define_trace.h>

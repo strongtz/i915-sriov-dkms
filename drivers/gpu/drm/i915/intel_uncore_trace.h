@@ -44,6 +44,6 @@ TRACE_EVENT_CONDITION(i915_reg_rw,
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/i915
+#define TRACE_INCLUDE_PATH MODULE_ABS_PATH(drivers/gpu/drm/i915)
 #define TRACE_INCLUDE_FILE intel_uncore_trace
 #include <trace/define_trace.h>
