@@ -258,6 +258,6 @@ DEFINE_EVENT(xe_vm, xe_vm_ops_fail,
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/xe
+#define TRACE_INCLUDE_PATH MODULE_ABS_PATH(drivers/gpu/drm/xe)
 #define TRACE_INCLUDE_FILE xe_trace_bo
 #include <trace/define_trace.h>

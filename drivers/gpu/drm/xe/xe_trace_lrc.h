@@ -47,6 +47,6 @@ TRACE_EVENT(xe_lrc_update_timestamp,
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH
 #undef TRACE_INCLUDE_FILE
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/xe
+#define TRACE_INCLUDE_PATH MODULE_ABS_PATH(drivers/gpu/drm/xe)
 #define TRACE_INCLUDE_FILE xe_trace_lrc
 #include <trace/define_trace.h>
