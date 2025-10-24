@@ -4,112 +4,149 @@ on:
   workflow_dispatch:
   push:
 
-
 jobs:
   test-proxmox-trixie:
     runs-on: ubuntu-24.04
     container:
       image: debian:trixie
     steps:
-    - name: Install Dependencies
-      run: |
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential  elfutils libelf-dev curl
-        sh -c "echo deb http://download.proxmox.com/debian/pve trixie pve-no-subscription >> /etc/apt/sources.list"
-        curl -o /etc/apt/trusted.gpg.d/proxmox-release-trixie.gpg https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-archive-keyring
-        DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-        DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-default-kernel proxmox-default-headers
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Build Module
-      working-directory: i915-sriov-dkms
-      run: |
-        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s $(dpkg -s proxmox-default-headers | grep "Depends: " | cut -d " " -f2) | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
-        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-        make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+      - name: Install Dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential  elfutils libelf-dev curl
+          sh -c "echo deb http://download.proxmox.com/debian/pve trixie pve-no-subscription >> /etc/apt/sources.list"
+          curl -o /etc/apt/trusted.gpg.d/proxmox-release-trixie.gpg https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-archive-keyring
+          DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+          DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-default-kernel proxmox-default-headers
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Build Module
+        working-directory: i915-sriov-dkms
+        run: |
+          KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s $(dpkg -s proxmox-default-headers | grep "Depends: " | cut -d " " -f2) | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+          make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux:
     runs-on: ubuntu-24.04
     container:
       image: archlinux:base-devel
     steps:
-    - name: Install Dependencies
-      run: |
-        pacman-key --init
-        pacman -Syu --noconfirm git linux linux-headers
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Build Module
-      working-directory: i915-sriov-dkms
-      run: |
-        KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
-        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+      - name: Install Dependencies
+        run: |
+          pacman-key --init
+          pacman -Syu --noconfirm git linux linux-headers
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Check Kernel Compatibility
+        if: github.event_name != 'workflow_dispatch'
+        id: check_kernel
+        working-directory: i915-sriov-dkms
+        run: |
+          KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+          echo "Detected kernel: $KERNELRELEASE"
+
+          REGEX=$(grep '^BUILD_EXCLUSIVE_KERNEL=' dkms.conf | cut -d'"' -f2)
+
+          if [[ ! "$KERNELRELEASE" =~ $REGEX ]]; then
+            echo "Kernel $KERNELRELEASE not supported yet."
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "Kernel $KERNELRELEASE is supported."
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Build Module
+        if: github.event_name == 'workflow_dispatch' || steps.check_kernel.outputs.skip_build == 'false'
+        working-directory: i915-sriov-dkms
+        run: |
+          KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+          sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux-lts:
     runs-on: ubuntu-24.04
     container:
       image: archlinux:base-devel
     steps:
-    - name: Install Dependencies
-      run: |
-        pacman-key --init
-        pacman -Syu --noconfirm git linux-lts linux-lts-headers
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Build Module
-      working-directory: i915-sriov-dkms
-      run: |
-        KERNEL_SOURCE_DIR=$(pacman -Qql linux-lts-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
-        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+      - name: Install Dependencies
+        run: |
+          pacman-key --init
+          pacman -Syu --noconfirm git linux-lts linux-lts-headers
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Build Module
+        working-directory: i915-sriov-dkms
+        run: |
+          KERNEL_SOURCE_DIR=$(pacman -Qql linux-lts-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+          sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux-mainline:
     runs-on: ubuntu-24.04
     container:
       image: archlinux:base-devel
     steps:
-    - name: Install Dependencies
-      run: |
-        pacman-key --init
-        cat <<EOF >> /etc/pacman.conf
-        [archlinuxcn]
-        Server = https://repo.archlinuxcn.org/\$arch
-        SigLevel = Never
-        EOF
-        pacman -Syu --noconfirm git linux-mainline linux-mainline-headers
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Build Module
-      working-directory: i915-sriov-dkms
-      run: |
-        KERNEL_SOURCE_DIR=$(pacman -Qql linux-mainline-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
-        KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+      - name: Install Dependencies
+        run: |
+          pacman-key --init
+          cat <<EOF >> /etc/pacman.conf
+          [archlinuxcn]
+          Server = https://repo.archlinuxcn.org/\$arch
+          SigLevel = Never
+          EOF
+          pacman -Syu --noconfirm git linux-mainline linux-mainline-headers
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Check Kernel Compatibility
+        if: github.event_name != 'workflow_dispatch'
+        id: check_kernel
+        working-directory: i915-sriov-dkms
+        run: |
+          KERNEL_SOURCE_DIR=$(pacman -Qql linux-mainline-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+          echo "Detected kernel: $KERNELRELEASE"
+
+          REGEX=$(grep '^BUILD_EXCLUSIVE_KERNEL=' dkms.conf | cut -d'"' -f2)
+
+          if [[ ! "$KERNELRELEASE" =~ $REGEX ]]; then
+            echo "Kernel $KERNELRELEASE not supported yet."
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "Kernel $KERNELRELEASE is supported."
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Build Module
+        if: github.event_name == 'workflow_dispatch' || steps.check_kernel.outputs.skip_build == 'false'
+        working-directory: i915-sriov-dkms
+        run: |
+          KERNEL_SOURCE_DIR=$(pacman -Qql linux-mainline-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
+          sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-nixos:
     runs-on: ubuntu-24.04
     steps:
-    - name: 'Install Nix'
-      uses: cachix/install-nix-action@v31.5.1
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Build i915-sriov kernel module for NixOS
-      working-directory: i915-sriov-dkms
-      env:
-        GC_DONT_GC: '1'
-      run: |
-        nix --version
-        nix flake check
+      - name: "Install Nix"
+        uses: cachix/install-nix-action@v31.5.1
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Build i915-sriov kernel module for NixOS
+        working-directory: i915-sriov-dkms
+        env:
+          GC_DONT_GC: "1"
+        run: |
+          nix --version
+          nix flake check
