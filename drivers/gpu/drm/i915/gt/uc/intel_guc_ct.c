@@ -5,11 +5,12 @@
 
 #include <linux/circ_buf.h>
 #include <linux/ktime.h>
-#include <linux/time64.h>
 #include <linux/string_helpers.h>
+#include <linux/time64.h>
 #include <linux/timekeeping.h>
 
 #include "i915_drv.h"
+#include "i915_wait_util.h"
 #include "intel_guc_ct.h"
 #include "intel_guc_print.h"
 #include "gt/iov/intel_iov_event.h"
@@ -17,7 +18,7 @@
 #include "gt/iov/intel_iov_service.h"
 #include "gt/iov/intel_iov_state.h"
 
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 enum {
 	CT_DEAD_ALIVE = 0,
 	CT_DEAD_SETUP,
@@ -162,7 +163,7 @@ void intel_guc_ct_init_early(struct intel_guc_ct *ct)
 	spin_lock_init(&ct->requests.lock);
 	INIT_LIST_HEAD(&ct->requests.pending);
 	INIT_LIST_HEAD(&ct->requests.incoming);
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 	INIT_WORK(&ct->dead_ct_worker, ct_dead_ct_worker_func);
 #endif
 	INIT_WORK(&ct->requests.worker, ct_incoming_request_worker_func);
@@ -419,7 +420,7 @@ int intel_guc_ct_enable(struct intel_guc_ct *ct)
 
 	ct->enabled = true;
 	ct->stall_time = KTIME_MAX;
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 	ct->dead_ct_reported = false;
 	ct->dead_ct_reason = CT_DEAD_ALIVE;
 #endif
@@ -1415,9 +1416,16 @@ static int ct_receive(struct intel_guc_ct *ct)
 
 static void ct_try_receive_message(struct intel_guc_ct *ct)
 {
+	struct intel_guc *guc = ct_to_guc(ct);
 	int ret;
 
-	if (GEM_WARN_ON(!ct->enabled))
+	if (!ct->enabled) {
+		GEM_WARN_ON(!guc_to_gt(guc)->uc.reset_in_progress);
+		return;
+	}
+
+	/* When interrupt disabled, message handling is not expected */
+	if (!guc->interrupts.enabled)
 		return;
 
 	ret = ct_receive(ct);
@@ -1649,13 +1657,16 @@ void intel_guc_ct_print_info(struct intel_guc_ct *ct,
 		   ct->ctbs.recv.desc->tail);
 }
 
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 static void ct_dead_ct_worker_func(struct work_struct *w)
 {
 	struct intel_guc_ct *ct = container_of(w, struct intel_guc_ct, dead_ct_worker);
 	struct intel_guc *guc = ct_to_guc(ct);
 
 	if (ct->dead_ct_reported)
+		return;
+
+	if (i915_error_injected())
 		return;
 
 	ct->dead_ct_reported = true;

@@ -12,6 +12,7 @@
 #include "i915_pci.h"
 #include "i915_utils.h"
 #include "i915_reg.h"
+#include "i915_wait_util.h"
 #include "intel_pci_config.h"
 #include "gem/i915_gem_context.h"
 #include "gem/i915_gem_pm.h"
@@ -291,7 +292,7 @@ extern const struct intel_display_device_info no_display;
 static void vf_tweak_device_info(struct drm_i915_private *i915)
 {
 	/* FIXME: info shouldn't be written to outside of intel_device_info.c */
-	struct intel_display_runtime_info *drinfo = DISPLAY_RUNTIME_INFO(i915);
+	struct intel_display_runtime_info *drinfo = DISPLAY_RUNTIME_INFO(i915->display);
 	struct intel_display *display = i915->display;
 
 	/* Force PCH_NOOP. We have no access to display */

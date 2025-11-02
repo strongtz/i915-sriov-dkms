@@ -110,7 +110,7 @@ struct intel_guc_ct {
 		struct delayed_work work;
 	} mtl_workaround;
 
-#if IS_ENABLED(CONFIG_DRM_I915_DEBUG_GUC)
+#if IS_ENABLED(CONFIG_DRM_I915_DEBUG)
 	int dead_ct_reason;
 	bool dead_ct_reported;
 	struct work_struct dead_ct_worker;

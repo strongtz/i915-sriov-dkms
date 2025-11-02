@@ -27,6 +27,7 @@
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+#include "display/intel_display_device.h"
 
 #include <linux/slab.h>
 #include <linux/sysrq.h>
@@ -164,11 +165,6 @@ static void ivb_parity_work(struct work_struct *work)
 	u32 misccpctl;
 	u8 slice = 0;
 
-	/* We must turn off DOP level clock gating to access the L3 registers.
-	 * In order to prevent a get/put style interface, acquire struct mutex
-	 * any time we access those registers.
-	 */
-	mutex_lock(&dev_priv->drm.struct_mutex);
 
 	/* If we've screwed up tracking, just let the interrupt fire again */
 	if (drm_WARN_ON(&dev_priv->drm, !dev_priv->l3_parity.which_slice))
@@ -226,7 +222,6 @@ out:
 	gen5_gt_enable_irq(gt, GT_PARITY_ERROR(dev_priv));
 	spin_unlock_irq(gt->irq_lock);
 
-	mutex_unlock(&dev_priv->drm.struct_mutex);
 }
 
 static irqreturn_t valleyview_irq_handler(int irq, void *arg)
@@ -440,7 +435,7 @@ static irqreturn_t ilk_irq_handler(int irq, void *arg)
 	 * able to process them after we restore SDEIER (as soon as we restore
 	 * it, we'll get an interrupt if SDEIIR still has something to process
 	 * due to its back queue). */
-	if (!HAS_PCH_NOP(i915)) {
+	if (!HAS_PCH_NOP(display)) {
 		sde_ier = raw_reg_read(regs, SDEIER);
 		raw_reg_write(regs, SDEIER, 0);
 	}
@@ -460,7 +455,7 @@ static irqreturn_t ilk_irq_handler(int irq, void *arg)
 	de_iir = raw_reg_read(regs, DEIIR);
 	if (de_iir) {
 		raw_reg_write(regs, DEIIR, de_iir);
-		if (DISPLAY_VER(i915) >= 7)
+		if (DISPLAY_VER(display) >= 7)
 			ivb_display_irq_handler(display, de_iir);
 		else
 			ilk_display_irq_handler(display, de_iir);
@@ -877,6 +872,7 @@ static void cherryview_irq_postinstall(struct drm_i915_private *dev_priv)
 
 static u32 i9xx_error_mask(struct drm_i915_private *i915)
 {
+	struct intel_display *display = i915->display;
 	/*
 	 * On gen2/3 FBC generates (seemingly spurious)
 	 * display INVALID_GTT/INVALID_GTT_PTE table errors.
@@ -889,7 +885,7 @@ static u32 i9xx_error_mask(struct drm_i915_private *i915)
 	 * Unfortunately we can't mask off individual PGTBL_ER bits,
 	 * so we just have to mask off all page table errors via EMR.
 	 */
-	if (HAS_FBC(i915))
+	if (HAS_FBC(display))
 		return I915_ERROR_MEMORY_REFRESH;
 	else
 		return I915_ERROR_PAGE_TABLE |
@@ -967,12 +963,12 @@ static void i915_irq_postinstall(struct drm_i915_private *dev_priv)
 		I915_MASTER_ERROR_INTERRUPT |
 		I915_USER_INTERRUPT;
 
-	if (DISPLAY_VER(dev_priv) >= 3) {
+	if (DISPLAY_VER(display) >= 3) {
 		dev_priv->irq_mask &= ~I915_ASLE_INTERRUPT;
 		enable_mask |= I915_ASLE_INTERRUPT;
 	}
 
-	if (HAS_HOTPLUG(dev_priv)) {
+	if (HAS_HOTPLUG(display)) {
 		dev_priv->irq_mask &= ~I915_DISPLAY_PORT_INTERRUPT;
 		enable_mask |= I915_DISPLAY_PORT_INTERRUPT;
 	}
@@ -1006,7 +1002,7 @@ static irqreturn_t i915_irq_handler(int irq, void *arg)
 
 		ret = IRQ_HANDLED;
 
-		if (HAS_HOTPLUG(dev_priv) &&
+		if (HAS_HOTPLUG(display) &&
 		    iir & I915_DISPLAY_PORT_INTERRUPT)
 			hotplug_status = i9xx_hpd_irq_ack(display);
 
@@ -1196,77 +1192,68 @@ void intel_irq_fini(struct drm_i915_private *i915)
 
 static irq_handler_t intel_irq_handler(struct drm_i915_private *dev_priv)
 {
-	if (HAS_GMCH(dev_priv)) {
-		if (IS_CHERRYVIEW(dev_priv))
-			return cherryview_irq_handler;
-		else if (IS_VALLEYVIEW(dev_priv))
-			return valleyview_irq_handler;
-		else if (GRAPHICS_VER(dev_priv) == 4)
-			return i965_irq_handler;
-		else
-			return i915_irq_handler;
-	} else {
-		if (HAS_MEMORY_IRQ_STATUS(dev_priv))
-			return vf_mem_irq_handler;
-		else if (GRAPHICS_VER_FULL(dev_priv) >= IP_VER(12, 10))
-			return dg1_irq_handler;
-		else if (GRAPHICS_VER(dev_priv) >= 11)
-			return gen11_irq_handler;
-		else if (GRAPHICS_VER(dev_priv) >= 8)
-			return gen8_irq_handler;
-		else
-			return ilk_irq_handler;
-	}
+	if (HAS_MEMORY_IRQ_STATUS(dev_priv) && !HAS_GMCH(dev_priv->display))
+		return vf_mem_irq_handler;
+	else if (GRAPHICS_VER_FULL(dev_priv) >= IP_VER(12, 10))
+		return dg1_irq_handler;
+	else if (GRAPHICS_VER(dev_priv) >= 11)
+		return gen11_irq_handler;
+	else if (IS_CHERRYVIEW(dev_priv))
+		return cherryview_irq_handler;
+	else if (GRAPHICS_VER(dev_priv) >= 8)
+		return gen8_irq_handler;
+	else if (IS_VALLEYVIEW(dev_priv))
+		return valleyview_irq_handler;
+	else if (GRAPHICS_VER(dev_priv) >= 5)
+		return ilk_irq_handler;
+	else if (GRAPHICS_VER(dev_priv) == 4)
+		return i965_irq_handler;
+	else
+		return i915_irq_handler;
 }
 
 static void intel_irq_reset(struct drm_i915_private *dev_priv)
 {
-	if (HAS_GMCH(dev_priv)) {
-		if (IS_CHERRYVIEW(dev_priv))
-			cherryview_irq_reset(dev_priv);
-		else if (IS_VALLEYVIEW(dev_priv))
-			valleyview_irq_reset(dev_priv);
-		else if (GRAPHICS_VER(dev_priv) == 4)
-			i965_irq_reset(dev_priv);
-		else
-			i915_irq_reset(dev_priv);
-	} else {
-		if (HAS_MEMORY_IRQ_STATUS(dev_priv))
-			vf_mem_irq_reset(dev_priv);
-		else if (GRAPHICS_VER_FULL(dev_priv) >= IP_VER(12, 10))
-			dg1_irq_reset(dev_priv);
-		else if (GRAPHICS_VER(dev_priv) >= 11)
-			gen11_irq_reset(dev_priv);
-		else if (GRAPHICS_VER(dev_priv) >= 8)
-			gen8_irq_reset(dev_priv);
-		else
-			ilk_irq_reset(dev_priv);
-	}
+	if (HAS_MEMORY_IRQ_STATUS(dev_priv) && !HAS_GMCH(dev_priv->display))
+		vf_mem_irq_reset(dev_priv);
+	else if (GRAPHICS_VER_FULL(dev_priv) >= IP_VER(12, 10))
+		dg1_irq_reset(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) >= 11)
+		gen11_irq_reset(dev_priv);
+	else if (IS_CHERRYVIEW(dev_priv))
+		cherryview_irq_reset(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) >= 8)
+		gen8_irq_reset(dev_priv);
+	else if (IS_VALLEYVIEW(dev_priv))
+		valleyview_irq_reset(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) >= 5)
+		ilk_irq_reset(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) == 4)
+		i965_irq_reset(dev_priv);
+	else
+		i915_irq_reset(dev_priv);
 }
 
 static void intel_irq_postinstall(struct drm_i915_private *dev_priv)
 {
-	if (HAS_GMCH(dev_priv)) {
-		if (IS_CHERRYVIEW(dev_priv))
-			cherryview_irq_postinstall(dev_priv);
-		else if (IS_VALLEYVIEW(dev_priv))
-			valleyview_irq_postinstall(dev_priv);
-		else if (GRAPHICS_VER(dev_priv) == 4)
-			i965_irq_postinstall(dev_priv);
-		else
-			i915_irq_postinstall(dev_priv);
-	} else {
-		if (HAS_MEMORY_IRQ_STATUS(dev_priv))
-			vf_mem_irq_postinstall(dev_priv);
-		else if (GRAPHICS_VER_FULL(dev_priv) >= IP_VER(12, 10))
-			dg1_irq_postinstall(dev_priv);
-		else if (GRAPHICS_VER(dev_priv) >= 11)
-			gen11_irq_postinstall(dev_priv);
-		else if (GRAPHICS_VER(dev_priv) >= 8)
-			gen8_irq_postinstall(dev_priv);
-		else
-			ilk_irq_postinstall(dev_priv);
-	}
+	if (HAS_MEMORY_IRQ_STATUS(dev_priv) && !HAS_GMCH(dev_priv->display))
+		vf_mem_irq_postinstall(dev_priv);
+	else if (GRAPHICS_VER_FULL(dev_priv) >= IP_VER(12, 10))
+		dg1_irq_postinstall(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) >= 11)
+		gen11_irq_postinstall(dev_priv);
+	else if (IS_CHERRYVIEW(dev_priv))
+		cherryview_irq_postinstall(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) >= 8)
+		gen8_irq_postinstall(dev_priv);
+	else if (IS_VALLEYVIEW(dev_priv))
+		valleyview_irq_postinstall(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) >= 5)
+		ilk_irq_postinstall(dev_priv);
+	else if (GRAPHICS_VER(dev_priv) == 4)
+		i965_irq_postinstall(dev_priv);
+	else
+		i915_irq_postinstall(dev_priv);
 }
 
 /**

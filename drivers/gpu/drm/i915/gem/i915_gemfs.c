@@ -11,13 +11,6 @@
 #include "i915_gemfs.h"
 #include "i915_utils.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
-static int add_param(struct fs_context *fc, const char *key, const char *val)
-{
-	return vfs_parse_fs_string(fc, key, val, strlen(val));
-}
-#endif
-
 void i915_gemfs_init(struct drm_i915_private *i915)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
@@ -62,9 +55,9 @@ void i915_gemfs_init(struct drm_i915_private *i915)
 	fc = fs_context_for_mount(type, SB_KERNMOUNT);
 	if (IS_ERR(fc))
 		goto err;
-	ret = add_param(fc, "source", "tmpfs");
+	ret = vfs_parse_fs_string(fc, "source", "tmpfs");
 	if (!ret)
-		ret = add_param(fc, "huge", "within_size");
+		ret = vfs_parse_fs_string(fc, "huge", "within_size");
 	if (!ret)
 		gemfs = fc_mount_longterm(fc);
 	put_fs_context(fc);

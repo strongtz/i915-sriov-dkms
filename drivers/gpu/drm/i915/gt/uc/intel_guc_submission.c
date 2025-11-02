@@ -25,15 +25,15 @@
 #include "gt/intel_mocs.h"
 #include "gt/intel_ring.h"
 
+#include "i915_drv.h"
+#include "i915_irq.h"
+#include "i915_reg.h"
+#include "i915_trace.h"
+#include "i915_wait_util.h"
 #include "intel_guc_ads.h"
 #include "intel_guc_capture.h"
 #include "intel_guc_print.h"
 #include "intel_guc_submission.h"
-
-#include "i915_drv.h"
-#include "i915_reg.h"
-#include "i915_irq.h"
-#include "i915_trace.h"
 
 /**
  * DOC: GuC-based command submission
@@ -2405,7 +2405,7 @@ static int new_slrc_guc_id(struct intel_guc *guc, struct intel_context *ce)
 {
 	GEM_BUG_ON(intel_context_is_parent(ce));
 
-	return ida_simple_get(&guc->submission_state.guc_ids,
+	return ida_alloc_range(&guc->submission_state.guc_ids,
 			      0, number_slrc_guc_id(guc),
 			      GFP_KERNEL | __GFP_RETRY_MAYFAIL |
 			      __GFP_NOWARN);

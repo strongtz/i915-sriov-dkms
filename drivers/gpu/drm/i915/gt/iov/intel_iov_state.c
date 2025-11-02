@@ -4,6 +4,7 @@
  */
 
 #include "i915_pci.h"
+#include "i915_wait_util.h"
 #include "intel_iov.h"
 #include "intel_iov_event.h"
 #include "intel_iov_ggtt.h"
