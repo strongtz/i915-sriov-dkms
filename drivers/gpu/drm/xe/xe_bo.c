@@ -1784,7 +1784,11 @@ static int xe_bo_fault_migrate(struct xe_bo *bo, struct ttm_operation_ctx *ctx,
 	if (ttm_manager_type(tbo->bdev, tbo->resource->mem_type)->use_tt) {
 		err = xe_bo_wait_usage_kernel(bo, ctx);
 		if (!err)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+			err = ttm_tt_populate(bo->ttm.bdev, bo->ttm.ttm, ctx);
+#else
 			err = ttm_bo_populate(&bo->ttm, ctx);
+#endif
 	} else if (should_migrate_to_smem(bo)) {
 		xe_assert(xe_bo_device(bo), bo->flags & XE_BO_FLAG_SYSTEM);
 		err = xe_bo_migrate(bo, XE_PL_TT, ctx, exec);

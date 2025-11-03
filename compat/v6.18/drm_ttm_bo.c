@@ -9,6 +9,7 @@
  */
 
 #include <drm/ttm/ttm_bo.h>
+#include <drm/ttm/ttm_tt.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
 int ttm_bo_setup_export(struct ttm_buffer_object *bo,
@@ -20,7 +21,11 @@ int ttm_bo_setup_export(struct ttm_buffer_object *bo,
 	if (ret != 0)
 		return ret;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
+	ret = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
+#else
 	ret = ttm_bo_populate(bo, ctx);
+#endif
 	ttm_bo_unreserve(bo);
 	return ret;
 }

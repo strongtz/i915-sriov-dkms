@@ -11,7 +11,7 @@
 #include <drm/drm_print.h>
 #include <drm/drm_device.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 14, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 void __drm_printfn_line_dummy(struct drm_printer *p, struct va_format *vaf)
 {
 	const char *prefix = p->prefix ?: "";
