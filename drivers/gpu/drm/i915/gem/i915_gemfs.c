@@ -6,6 +6,7 @@
 #include <linux/fs.h>
 #include <linux/mount.h>
 #include <linux/fs_context.h>
+#include <linux/string.h>
 
 #include "i915_drv.h"
 #include "i915_gemfs.h"
@@ -55,9 +56,17 @@ void i915_gemfs_init(struct drm_i915_private *i915)
 	fc = fs_context_for_mount(type, SB_KERNMOUNT);
 	if (IS_ERR(fc))
 		goto err;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+	ret = vfs_parse_fs_string(fc, "source", "tmpfs", 5);
+#else
 	ret = vfs_parse_fs_string(fc, "source", "tmpfs");
+#endif
 	if (!ret)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+		ret = vfs_parse_fs_string(fc, "huge", "within_size", 11);
+#else
 		ret = vfs_parse_fs_string(fc, "huge", "within_size");
+#endif
 	if (!ret)
 		gemfs = fc_mount_longterm(fc);
 	put_fs_context(fc);

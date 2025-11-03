@@ -3,6 +3,7 @@ DKMS_MODULE_ORIGIN_KERNEL := "6.18-rc3"
 
 LINUXINCLUDE := \
 	-I$(src)/include \
+	-I$(src)/include/uapi \
 	-I$(src)/include/trace \
 	$(LINUXINCLUDE) \
 	-include $(src)/include/config.h
