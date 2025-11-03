@@ -75,6 +75,7 @@ xe_dep_scheduler_create(struct xe_device *xe,
 {
 	struct xe_dep_scheduler *dep_scheduler;
 	struct drm_gpu_scheduler *sched;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	const struct drm_sched_init_args args = {
 		.ops = &sched_ops,
 		.submit_wq = submit_wq,
@@ -84,13 +85,20 @@ xe_dep_scheduler_create(struct xe_device *xe,
 		.name = name,
 		.dev = xe->drm.dev,
 	};
+#endif
 	int err;
 
 	dep_scheduler = kzalloc(sizeof(*dep_scheduler), GFP_KERNEL);
 	if (!dep_scheduler)
 		return ERR_PTR(-ENOMEM);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+	err = drm_sched_init(&dep_scheduler->sched, &sched_ops, submit_wq, 1, job_limit,
+			      0, MAX_SCHEDULE_TIMEOUT, NULL, NULL, name,
+			      xe->drm.dev);
+#else
 	err = drm_sched_init(&dep_scheduler->sched, &args);
+#endif
 	if (err)
 		goto err_free;
 

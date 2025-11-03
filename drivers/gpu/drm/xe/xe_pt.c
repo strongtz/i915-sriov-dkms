@@ -1452,6 +1452,11 @@ static int op_check_svm_userptr(struct xe_vm *vm, struct xe_vma_op *op,
 
 	xe_svm_assert_held_read(vm);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+	__diag_push();
+	__diag_ignore_all("-Wswitch", "We need extend enum in older kernels");
+#endif
+
 	switch (op->base.op) {
 	case DRM_GPUVA_OP_MAP:
 		if (!op->map.immediate && xe_vm_in_fault_mode(vm))
@@ -1505,6 +1510,10 @@ static int op_check_svm_userptr(struct xe_vm *vm, struct xe_vma_op *op,
 	default:
 		drm_warn(&vm->xe->drm, "NOT POSSIBLE");
 	}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+	__diag_pop();
+#endif
 
 	return err;
 }
