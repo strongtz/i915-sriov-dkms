@@ -2241,9 +2241,11 @@ int intel_framebuffer_init(struct intel_framebuffer *intel_fb,
 	int ret;
 	int i;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 	intel_fb->panic = intel_panic_alloc();
 	if (!intel_fb->panic)
 		return -ENOMEM;
+#endif
 
 	/*
 	 * intel_frontbuffer_get() must be done before

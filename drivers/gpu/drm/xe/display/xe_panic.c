@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2025 Intel Corporation */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 #include <drm/drm_cache.h>
 #include <drm/drm_panic.h>
 
@@ -78,3 +79,4 @@ void intel_panic_finish(struct intel_panic *panic)
 	xe_panic_kunmap(panic);
 	panic->page = -1;
 }
+#endif

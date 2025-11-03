@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2025 Intel Corporation */
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 #include <drm/drm_panic.h>
 
 #include "gem/i915_gem_object.h"
@@ -25,3 +25,4 @@ void intel_panic_finish(struct intel_panic *panic)
 {
 	return i915_gem_object_panic_finish(panic);
 }
+#endif
