@@ -1,5 +1,11 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
+  * Sync with the latest v6.18-rc4 code from the mainline kernel
+
+ -- bbaa bbaa <bbaa@bbaa.moe>  Tue, 04 Nov 2025 13:06:10 +0800
+
+i915-sriov-dkms (2025.10.10) UNRELEASED; urgency=medium
+
   * Disable sriov support for mtl/lnl in xe driver
 
  -- bbaa bbaa <bbaa@bbaa.moe>  Fri, 10 Oct 2025 13:04:13 +0800
