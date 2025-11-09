@@ -8,72 +8,66 @@ jobs:
   packaging-debian:
     runs-on: ubuntu-24.04
     steps:
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential devscripts dh-make dh-dkms dkms
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Packaging
-      working-directory: i915-sriov-dkms
-      run: | 
-        LATEST_VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | sed 's/.*\?"\([^"]*\)".*/\1/')
-        sed -i "s/###LATEST_VERSION###/$LATEST_VERSION/g" debian/control debian/changelog
-        dpkg-buildpackage -b -tc -us -uc
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: debain-package
-        path: "*.deb"
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential devscripts dh-make dh-dkms dkms
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Packaging
+        working-directory: i915-sriov-dkms
+        run: |
+          LATEST_VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | sed 's/.*\?"\([^"]*\)".*/\1/')
+          sed -i "s/###LATEST_VERSION###/$LATEST_VERSION/g" debian/control debian/changelog
+          dpkg-buildpackage -b -tc -us -uc
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debain-package
+          path: "*.deb"
 
   packaging-archlinux:
     runs-on: ubuntu-24.04
     container:
       image: archlinux:base-devel
     steps:
-    - name: Install Dependencies
-      run: |
-        pacman-key --init
-        pacman -Syu --noconfirm git dkms
-        useradd -m user
-        sed -i 's/COMPRESSZST=.*/COMPRESSZST=(zstd -c -T0 --ultra -22 -)/' /etc/makepkg.conf
-        echo "user ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        path: i915-sriov-dkms
-    - name: Packaging
-      working-directory: i915-sriov-dkms
-      run: |
-        chown -R user: .
-        sudo -u user makepkg -s --noconfirm
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: arch-package
-        path: "i915-sriov-dkms/*.pkg*"
+      - name: Install Dependencies
+        run: |
+          pacman-key --init
+          pacman -Syu --noconfirm git dkms
+          useradd -m user
+          sed -i 's/COMPRESSZST=.*/COMPRESSZST=(zstd -c -T0 --ultra -22 -)/' /etc/makepkg.conf
+          echo "user ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: i915-sriov-dkms
+      - name: Packaging
+        working-directory: i915-sriov-dkms
+        run: |
+          chown -R user: .
+          sudo -u user makepkg -s --noconfirm
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: "i915-sriov-dkms/*.pkg*"
   release:
     runs-on: ubuntu-24.04
     needs: [packaging-debian, packaging-archlinux]
+    if: github.ref_type == 'tag'
     permissions:
       contents: write
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        fetch-tags: true
-        path: i915-sriov-dkms
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        merge-multiple: true
-    - name: Create Release
-      if: github.ref_type == 'tag'
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          *.pkg*
-          *.deb
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.pkg*
+            *.deb
