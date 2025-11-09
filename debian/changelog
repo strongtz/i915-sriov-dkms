@@ -1,46 +1,47 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
   * Sync with the latest v6.18-rc4 code from the mainline kernel
+  * Fixes the blocky artifact when sharing surfaces between VAAPI and OpenCL.
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Tue, 04 Nov 2025 13:06:10 +0800
+ -- bbaa <bbaa@bbaa.moe>  Sun, 09 Nov 2025 14:32:23 +0800
 
 i915-sriov-dkms (2025.10.10) UNRELEASED; urgency=medium
 
   * Disable sriov support for mtl/lnl in xe driver
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Fri, 10 Oct 2025 13:04:13 +0800
+ -- bbaa <bbaa@bbaa.moe>  Fri, 10 Oct 2025 13:04:13 +0800
 
 i915-sriov-dkms (2025.10.09) UNRELEASED; urgency=medium
 
   * Rebase to the v6.17 kernel
   * Add xe driver support
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Thu, 09 Oct 2025 10:35:50 +0800
+ -- bbaa <bbaa@bbaa.moe>  Thu, 09 Oct 2025 10:35:50 +0800
 
 i915-sriov-dkms (2025.07.22) UNRELEASED; urgency=medium
 
   * Support for 6.16 kernel
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Tue, 22 Jul 2025 18:43:15 +0800
+ -- bbaa <bbaa@bbaa.moe>  Tue, 22 Jul 2025 18:43:15 +0800
 
 i915-sriov-dkms (2025.05.18) UNRELEASED; urgency=medium
 
   * Add Arrow Lake pciids
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Sun, 18 May 2025 21:37:48 +0800
+ -- bbaa <bbaa@bbaa.moe>  Sun, 18 May 2025 21:37:48 +0800
 
 i915-sriov-dkms (2025.05.11) UNRELEASED; urgency=medium
 
   * Initial support for 6.15 kernel
   * Merge upstream patches from linux-stable.git (tag v6.12.28)
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Sun, 11 May 2025 23:08:21 +0800
+ -- bbaa <bbaa@bbaa.moe>  Sun, 11 May 2025 23:08:21 +0800
 
 i915-sriov-dkms (2025.03.27) UNRELEASED; urgency=medium
 
   * Fix the module cannot be installed via deb package
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Wed, 26 Mar 2025 00:07:37 +0800
+ -- bbaa <bbaa@bbaa.moe>  Wed, 26 Mar 2025 00:07:37 +0800
 
 i915-sriov-dkms (2025.03.26) UNRELEASED; urgency=medium
 
@@ -49,14 +50,14 @@ i915-sriov-dkms (2025.03.26) UNRELEASED; urgency=medium
   * Build kvmgt agaginst the i915 module for compatibility
   * Remove unused ccflags, let kernel determine
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Wed, 26 Mar 2025 00:07:37 +0800
+ -- bbaa <bbaa@bbaa.moe>  Wed, 26 Mar 2025 00:07:37 +0800
 
 i915-sriov-dkms (2025.02.03) UNRELEASED; urgency=medium
 
   * Initial support for 6.14 kernel
   * Readme update
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Mon, 03 Feb 2025 12:40:34 +0800
+ -- bbaa <bbaa@bbaa.moe>  Mon, 03 Feb 2025 12:40:34 +0800
 
 i915-sriov-dkms (2025.01.22) UNRELEASED; urgency=medium
 
@@ -64,10 +65,10 @@ i915-sriov-dkms (2025.01.22) UNRELEASED; urgency=medium
   * Merge upstream patches from linux-stable.git (tag v6.12.10)
   * Add postinst/postrm script to handle initramfs updates
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Wed, 22 Jan 2025 19:32:09 +0800
+ -- bbaa <bbaa@bbaa.moe>  Wed, 22 Jan 2025 19:32:09 +0800
 
 i915-sriov-dkms (2024.12.30) UNRELEASED; urgency=medium
 
   * 2024.12.30: backport missing pciids for ADL-N CPU
 
- -- bbaa bbaa <bbaa@bbaa.moe>  Thu, 2 Jan 2025 17:37:04 +0800
+ -- bbaa <bbaa@bbaa.moe>  Thu, 2 Jan 2025 17:37:04 +0800

@@ -14,7 +14,7 @@ You need to install this dkms module in **both host and guest!**
 ## Required kernel versions
 Required kernel: **6.12.19 ~ 6.18.x**
 
-For **v6.18**, please use the latest **prerelease** [2025.11.04-rc1](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.11.04-rc1).
+For **v6.18**, please use the latest **prerelease** [2025.11.09-rc2](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.11.09-rc2).
 
 For older kernel (v6.8 ~ v6.12), please use the [2025.07.22](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.07.22) release.
 
@@ -75,11 +75,11 @@ For NixOS users, the i915-sriov kernel module can be directly included in your N
 1. When the system is back up again, you should see the number of VFs under 02:00.1 - 02:00.7.
 1. You can passthrough the VFs to LXCs or VMs. However, never pass the **PF (02:00.0)** to **VM** which would crash all other VFs.
 
-## Linux Guest Installation Steps (Tested Ubuntu 25.04/Kernel 6.14)
+## Linux Guest Installation Steps (Ubuntu 25.04/Kernel 6.14)
 We will need to run the same driver under Linux guests. 
 1. Install build tools
    ```
-   apt install build-* dkms linux-headers-$(uname -r) linux-modules-extra-$(uname -r)
+   apt install build-* dkms linux-headers-$(uname -r)
    ```
 2. Download and install the `.deb`
    ```
