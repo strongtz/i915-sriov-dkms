@@ -71,7 +71,7 @@ void xe_display_driver_set_hooks(struct drm_driver *driver)
 	if (!xe_modparam.probe_display)
 		return;
 
-#ifdef CONFIG_DRM_FBDEV_EMULATION
+#if defined(CONFIG_DRM_FBDEV_EMULATION) && LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 19)
 	driver->fbdev_probe = intel_fbdev_driver_fbdev_probe;
 #endif
 

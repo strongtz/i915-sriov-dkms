@@ -1,9 +1,9 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
-  * Sync with the latest v6.18-rc4 code from the mainline kernel
+  * Sync with the latest v6.18-rc5 code from the mainline kernel
   * Fixes the blocky artifact when sharing surfaces between VAAPI and OpenCL.
 
- -- bbaa <bbaa@bbaa.moe>  Sun, 09 Nov 2025 14:32:23 +0800
+ -- bbaa <bbaa@bbaa.moe>  Mon, 10 Nov 2025 13:09:08 +0800
 
 i915-sriov-dkms (2025.10.10) UNRELEASED; urgency=medium
 
