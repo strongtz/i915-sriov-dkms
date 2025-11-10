@@ -411,5 +411,10 @@ i915-$(CONFIG_DRM_I915_GVT) += \
 	intel_gvt_mmio_table.o
 include $(src)/gvt/Makefile
 
+# Enable locally for CONFIG_DRM_I915_WERROR=y. See also scripts/Makefile.build
+ifdef CONFIG_DRM_I915_WERROR
+    cmd_checkdoc = PYTHONDONTWRITEBYTECODE=1 $(PYTHON3) $(KERNELDOC) -none -Werror $<
+endif
+
 obj-m += i915.o
 obj-m += kvmgt.o
