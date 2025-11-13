@@ -8,6 +8,8 @@ LINUXINCLUDE := \
 	$(LINUXINCLUDE) \
 	-include $(src)/include/config.h
 
+CONFIG_DRM_GPUSVM := y # we vendor our own copy of the GPUSVM module
+
 subdir-ccflags-y += \
 	-DDKMS_MODULE_VERSION='$(DKMS_MODULE_VERSION)' \
 	-DDKMS_MODULE_ORIGIN_KERNEL='$(DKMS_MODULE_ORIGIN_KERNEL)' \

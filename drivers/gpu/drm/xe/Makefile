@@ -183,7 +183,7 @@ xe-y += tests/xe_kunit_helpers.o
 endif
 
 # i915 Display compat #defines and #includes
-subdir-ccflags-$(CONFIG_DRM_XE_DISPLAY) += \
+subdir-ccflags-y += \
 	-I$(src)/display/ext \
 	-I$(src)/compat-i915-headers \
 	-I$(KBUILD_EXTMOD)/drivers/gpu/drm/i915/display/ \
@@ -200,7 +200,7 @@ $(obj)/i915-display/%.o: $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/display/%.c FORCE
 	$(call if_changed_rule,cc_o_c)
 
 # Display code specific to xe
-xe-$(CONFIG_DRM_XE_DISPLAY) += \
+xe-y += \
 	display/ext/i915_irq.o \
 	display/ext/i915_utils.o \
 	display/intel_bo.o \
@@ -218,12 +218,12 @@ xe-$(CONFIG_DRM_XE_DISPLAY) += \
 	display/xe_tdf.o
 
 # SOC code shared with i915
-xe-$(CONFIG_DRM_XE_DISPLAY) += \
+xe-y += \
 	i915-soc/intel_dram.o \
 	i915-soc/intel_rom.o
 
 # Display code shared with i915
-xe-$(CONFIG_DRM_XE_DISPLAY) += \
+xe-y += \
 	i915-display/icl_dsi.o \
 	i915-display/intel_alpm.o \
 	i915-display/intel_atomic.o \
@@ -313,13 +313,13 @@ xe-$(CONFIG_DRM_XE_DISPLAY) += \
 	i915-display/skl_watermark.o
 
 ifeq ($(CONFIG_ACPI),y)
-	xe-$(CONFIG_DRM_XE_DISPLAY) += \
+	xe-y += \
 		i915-display/intel_acpi.o \
 		i915-display/intel_opregion.o
 endif
 
 ifeq ($(CONFIG_DRM_FBDEV_EMULATION),y)
-	xe-$(CONFIG_DRM_XE_DISPLAY) += i915-display/intel_fbdev.o
+	xe-y += i915-display/intel_fbdev.o
 endif
 
 ifeq ($(CONFIG_DEBUG_FS),y)
@@ -334,13 +334,13 @@ ifeq ($(CONFIG_DEBUG_FS),y)
 
 	xe-$(CONFIG_PCI_IOV) += xe_gt_sriov_pf_debugfs.o
 
-	xe-$(CONFIG_DRM_XE_DISPLAY) += \
+	xe-y += \
 		i915-display/intel_display_debugfs.o \
 		i915-display/intel_display_debugfs_params.o \
 		i915-display/intel_pipe_crc.o
 endif
 
-xe-$(CONFIG_DRM_XE_DP_TUNNEL) += \
+xe-y += \
 	i915-display/intel_dp_tunnel.o
 
 obj-m += xe.o

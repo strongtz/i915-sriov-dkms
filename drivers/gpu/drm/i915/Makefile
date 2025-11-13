@@ -378,7 +378,7 @@ i915-y += \
 	display/vlv_dsi.o \
 	display/vlv_dsi_pll.o
 
-i915-$(CONFIG_DRM_I915_DP_TUNNEL) += \
+i915-y += \
 	display/intel_dp_tunnel.o
 
 i915-y += \
@@ -390,7 +390,7 @@ i915-y += \
 	pxp/intel_pxp_huc.o \
 	pxp/intel_pxp_tee.o
 
-i915-$(CONFIG_DRM_I915_PXP) += \
+i915-y += \
 	pxp/intel_pxp_cmd.o \
 	pxp/intel_pxp_debugfs.o \
 	pxp/intel_pxp_gsccs.o \
@@ -399,14 +399,14 @@ i915-$(CONFIG_DRM_I915_PXP) += \
 	pxp/intel_pxp_session.o
 
 # Post-mortem debug and GPU hang state capture
-i915-$(CONFIG_DRM_I915_CAPTURE_ERROR) += \
+i915-y += \
 	i915_gpu_error.o
 
 # virtual gpu code
 i915-y += \
 	i915_vgpu.o
 
-i915-$(CONFIG_DRM_I915_GVT) += \
+i915-y += \
 	intel_gvt.o \
 	intel_gvt_mmio_table.o
 include $(src)/gvt/Makefile
