@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # Makefile for the i915-sriov-dkms compatibility module
 
-subdir-ccflags-y += -DDEFAULT_SYMBOL_NAMESPACE="\"INTEL_SRIOV_COMPAT\""
+subdir-ccflags-y += -include $(src)/export.h
 
 intel_sriov_compat-y += v6.13/drm_print.o \
 			v6.13/hrtimer.o

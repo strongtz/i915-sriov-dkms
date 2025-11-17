@@ -707,12 +707,16 @@ bool intel_audio_compute_config(struct intel_encoder *encoder,
 	const struct drm_display_mode *adjusted_mode =
 		&crtc_state->hw.adjusted_mode;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 14)
 	mutex_lock(&connector->eld_mutex);
+#endif
 	if (!connector->eld[0]) {
 		drm_dbg_kms(display->drm,
 			    "Bogus ELD on [CONNECTOR:%d:%s]\n",
 			    connector->base.id, connector->name);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 14)
 		mutex_unlock(&connector->eld_mutex);
+#endif
 		return false;
 	}
 
@@ -720,7 +724,9 @@ bool intel_audio_compute_config(struct intel_encoder *encoder,
 	memcpy(crtc_state->eld, connector->eld, sizeof(crtc_state->eld));
 
 	crtc_state->eld[6] = drm_av_sync_delay(connector, adjusted_mode) / 2;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 14)
 	mutex_unlock(&connector->eld_mutex);
+#endif
 
 	return true;
 }
