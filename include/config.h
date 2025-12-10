@@ -6,7 +6,16 @@
 
 #define MODULE_ABS_PATH(path) DKMS_MODULE_SOURCE_DIR/path
 
-// We vendor our own copy of the GPUSVM module, so enable it here.
+// We vendor our own copy of the DRM_GPUSVM module, so enable it here.
+
+#ifndef CONFIG_HMM_MIRROR 
+#error "CONFIG_HMM_MIRROR is required for DRM_GPUSVM"
+#endif
+
+#ifndef CONFIG_MMU_NOTIFIER
+#error "CONFIG_MMU_NOTIFIER is required for DRM_GPUSVM"
+#endif
+
 #ifdef CONFIG_DRM_GPUSVM
 #undef CONFIG_DRM_GPUSVM
 #endif
