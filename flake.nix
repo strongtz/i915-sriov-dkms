@@ -48,9 +48,9 @@
 
           installPhase = ''
             install -D drivers/gpu/drm/i915/i915.ko \
-              $out/lib/modules/${kernel.modDirVersion}/kernel/drivers/gpu/drm/i915/i915.ko
+              $out/lib/modules/${kernel.modDirVersion}/updates/drivers/gpu/drm/i915/i915.ko
             install -D compat/intel_sriov_compat.ko \
-              $out/lib/modules/${kernel.modDirVersion}/kernel/compat/gpu/drm/i915/intel_sriov_compat.ko
+              $out/lib/modules/${kernel.modDirVersion}/updates/compat/gpu/drm/i915/intel_sriov_compat.ko
           '';
 
           meta = {
@@ -92,9 +92,9 @@
 
           installPhase = ''
             install -D drivers/gpu/drm/xe/xe.ko \
-              $out/lib/modules/${kernel.modDirVersion}/kernel/drivers/gpu/drm/xe/xe.ko
+              $out/lib/modules/${kernel.modDirVersion}/updates/drivers/gpu/drm/xe/xe.ko
             install -D compat/intel_sriov_compat.ko \
-              $out/lib/modules/${kernel.modDirVersion}/kernel/compat/gpu/drm/xe/intel_sriov_compat.ko
+              $out/lib/modules/${kernel.modDirVersion}/updates/compat/gpu/drm/xe/intel_sriov_compat.ko
           '';
 
           meta = {
