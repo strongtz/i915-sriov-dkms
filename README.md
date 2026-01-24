@@ -153,7 +153,7 @@ Here are the steps, tested on `Arch Linux`, `Ubuntu`, `PVE` host:
 
    You should typically only see card0 and renderD128. If you see a long list (e.g., renderD130 through renderD135), the VFs have not been blocked successfully.
 
-## UEFI Secure Boot Enabled Configuration
+## UEFI Secure Boot Enabled Configuration (Optional)
 
 Note: Only applicable to Ubuntu, PVE, or other distributions based on Debian. If secure boot support is required for you, please enable UEFI secure boot before installing i915-sriov-dkms. For PVE, it is important to ensure that secure boot is enabled when installing PVE, otherwise in some ZFS based installations, a kernel that is not signed may be installed by default, which cannot support secure boot. In this situation, it is necessary to first refer to the PVE documentation to configure secure boot. Arch Linux users please refer to the [Arch Linux Wiki](https://wiki.archlinux.org/title/Unified_Extensible_Firmware_Interface/Secure_Boot#shim).
 
