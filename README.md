@@ -61,23 +61,11 @@ You can create up to 7 VFs on Intel UHD Graphics
 
 4. Regenerate the initramfs images. Such as `sudo mkinitcpio -P`.
 
-5. Create a systemd service file `/etc/systemd/system/i915-sriov.service` to automatically enable Virtual Functions (VFs):
+5. Optionally use `systemd-tmpfiles` to set the number of VFs on boot. The package includes a configuration file at `/etc/tmpfiles.d/i915-set-sriov-numvfs.conf`. Edit it and uncomment the line, changing the argument to the number of VFs you want:
 
-   ```properties
-   [Unit]
-   Description=Enable Intel i915 SR-IOV VFs
-   Before=display-manager.service
-
-   [Service]
-   Type=oneshot
-   ExecStart=/usr/bin/bash -c 'echo 7 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs'
-   RemainAfterExit=yes
-
-   [Install]
-   WantedBy=multi-user.target
    ```
-
-   After saving the file, enable this service by running: `sudo systemctl enable i915-sriov.service`
+   w /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs -    -    -    -   7
+   ```
 
 6. Reboot.
 
