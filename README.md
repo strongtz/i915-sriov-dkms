@@ -11,7 +11,7 @@ This package is **highly experimental**, you should only use it when you know wh
 
 You need to install this dkms module in **both host and guest!**
 
-## Required kernel versions
+## Required kernel
 
 Required kernel: **6.12.x ~ 6.18.x**
 
@@ -20,6 +20,8 @@ For older kernel (v6.8 ~ v6.12), please use the [2025.07.22](https://github.com/
 For v6.1 ~ v6.7, please use [intel-lts-v6.1](https://github.com/strongtz/i915-sriov-dkms/tree/intel-lts-v6.1) branch instead.
 
 It is recommended that to upgrade to a supported kernel, the older branches will no longer be maintained.
+
+**Note on Secure Boot:** Loading out-of-tree kernel modules requires Secure Boot to be disabled. If you require Secure Boot, ensure you are using a signed kernel and follow the instructions in the [UEFI Secure Boot Enabled Configuration](#uefi-secure-boot-enabled-configuration-optional) section to sign the module.
 
 ## Required Kernel Parameters
 
@@ -38,7 +40,7 @@ intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
 intel_iommu=on xe.max_vfs=7 xe.force_probe=${device_id} module_blacklist=i915
 ```
 
-**Xe module only supports Gen12(Alder Lake), Gen13(Raptor Lake) and Gen14(Raptor Lake Refresh) for now**
+**Xe module currently does not support MTL (Meteor Lake) and LNL (Lunar Lake) platforms. Please use i915 instead.**
 
 Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command
 
@@ -49,6 +51,7 @@ echo 7 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs
 ```
 
 You can create up to 7 VFs on Intel UHD Graphics
+
 
 ## Arch Linux Host Installation Steps
 
@@ -73,10 +76,10 @@ You can create up to 7 VFs on Intel UHD Graphics
 
 For NixOS users, the i915-sriov kernel module can be directly included in your NixOS configuration without the use of DKMS. In particular, the kernel module is provided as a NixOS module that must be included in your NixOS configuration. This NixOS module places the i915-sriov kernel module via an overlay in your `pkgs` attribute set with the attribute name `i915-sriov`. This kernel module can then be included in your configuration by declaring `boot.extraModulePackages = [ pkgs.i915-sriov ];` The same applies also to `xe-sriov`. It is recommened to set `inputs.nixpkgs.follows = "nixpkgs"` to avoid version mismatch.
 
-## PVE Host Installation Steps (PVE 9 with Kernel 6.14)
+## PVE Host Installation Steps (PVE 9.1)
 
 1. Install build tools: `apt install build-* dkms`
-2. Install the kernel and headers for desired version: `apt install proxmox-headers-6.14 proxmox-kernel-6.14` (for unsigned kernel).
+2. Install the kernel and headers for desired version: `apt install proxmox-default-kernel proxmox-default-headers` (for unsigned kernel).
 3. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
    ```sh
    wget -O /tmp/i915-sriov-dkms_2025.12.10_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2025.12.10/i915-sriov-dkms_2025.12.10_amd64.deb"
