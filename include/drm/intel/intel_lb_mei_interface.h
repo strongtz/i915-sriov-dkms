@@ -3,11 +3,9 @@
  * Copyright (c) 2025 Intel Corporation
  */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
-#include_next <drm/intel/intel_lb_mei_interface.h>
-#else
 #ifndef _INTEL_LB_MEI_INTERFACE_H_
 #define _INTEL_LB_MEI_INTERFACE_H_
+
 #include <linux/types.h>
 
 struct device;
@@ -70,4 +68,3 @@ struct intel_lb_component_ops {
 };
 
 #endif /* _INTEL_LB_MEI_INTERFACE_H_ */
-#endif

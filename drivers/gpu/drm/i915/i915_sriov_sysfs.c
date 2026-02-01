@@ -3,6 +3,8 @@
  * Copyright © 2022 Intel Corporation
  */
 
+#include <drm/drm_print.h>
+
 #include "i915_drv.h"
 #include "i915_sriov_sysfs.h"
 #include "i915_sriov_sysfs_types.h"

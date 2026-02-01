@@ -15,6 +15,8 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_managed.h>
 #include <drm/drm_probe_helper.h>
+#include <drm/intel/display_member.h>
+#include <drm/intel/display_parent_interface.h>
 #include <uapi/drm/xe_drm.h>
 
 #include "soc/intel_dram.h"
@@ -35,7 +37,11 @@
 #include "intel_hotplug.h"
 #include "intel_opregion.h"
 #include "skl_watermark.h"
+#include "xe_display_rpm.h"
 #include "xe_module.h"
+
+/* Ensure drm and display members are placed properly. */
+INTEL_DISPLAY_MEMBER_STATIC_ASSERT(struct xe_device, drm, display);
 
 /* Xe device functions */
 
@@ -225,15 +231,14 @@ void xe_display_irq_reset(struct xe_device *xe)
 	gen11_display_irq_reset(display);
 }
 
-void xe_display_irq_postinstall(struct xe_device *xe, struct xe_gt *gt)
+void xe_display_irq_postinstall(struct xe_device *xe)
 {
 	struct intel_display *display = xe->display;
 
 	if (!xe->info.probe_display)
 		return;
 
-	if (gt->info.id == XE_GT0)
-		gen11_de_irq_postinstall(display);
+	gen11_de_irq_postinstall(display);
 }
 
 static bool suspend_to_idle(void)
@@ -326,11 +331,15 @@ void xe_display_pm_suspend(struct xe_device *xe)
 	 * properly.
 	 */
 	intel_power_domains_disable(display);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	intel_fbdev_set_suspend(&xe->drm, FBINFO_STATE_SUSPENDED, true);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
 	drm_client_dev_suspend(&xe->drm, false);
+#else
+	drm_client_dev_suspend(&xe->drm);
 #endif
+
 
 	if (intel_display_device_present(display)) {
 		drm_kms_helper_poll_disable(&xe->drm);
@@ -362,10 +371,13 @@ void xe_display_pm_shutdown(struct xe_device *xe)
 		return;
 
 	intel_power_domains_disable(display);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	intel_fbdev_set_suspend(&xe->drm, FBINFO_STATE_SUSPENDED, true);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
 	drm_client_dev_suspend(&xe->drm, false);
+#else 
+	drm_client_dev_suspend(&xe->drm);
 #endif
 
 	if (intel_display_device_present(display)) {
@@ -493,8 +505,10 @@ void xe_display_pm_resume(struct xe_device *xe)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
 	intel_fbdev_set_suspend(&xe->drm, FBINFO_STATE_RUNNING, false);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
 	drm_client_dev_resume(&xe->drm, false);
+#else
+	drm_client_dev_resume(&xe->drm);
 #endif
 
 	intel_power_domains_enable(display);
@@ -525,6 +539,10 @@ static void display_device_remove(struct drm_device *dev, void *arg)
 	intel_display_device_remove(display);
 }
 
+static const struct intel_display_parent_interface parent = {
+	.rpm = &xe_display_rpm_interface,
+};
+
 /**
  * xe_display_probe - probe display and create display struct
  * @xe: XE device instance
@@ -545,7 +563,7 @@ int xe_display_probe(struct xe_device *xe)
 	if (!xe->info.probe_display)
 		goto no_display;
 
-	display = intel_display_device_probe(pdev);
+	display = intel_display_device_probe(pdev, &parent);
 	if (IS_ERR(display))
 		return PTR_ERR(display);
 

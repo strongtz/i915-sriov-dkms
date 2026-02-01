@@ -15,6 +15,15 @@
 	(FIELD_PREP(GUC_KLV_0_KEY, GUC_KLV_##__K##_KEY) | \
 	 FIELD_PREP(GUC_KLV_0_LEN, GUC_KLV_##__K##_LEN))
 
+#define check_round_up_overflow(a, b, d) __must_check_overflow(({              \
+	typeof(a) __a = (a);                                                    \
+	typeof(b) __b = (b);                                                    \
+	typeof(d) __d = (d);                                                    \
+	(void) (&__a == &__b);                                                  \
+	(void) (&__a == __d);                                                   \
+	(*__d = __a) && __builtin_add_overflow((__a-1) | (__b-1), 1, __d);      \
+}))
+
 static int pf_verify_config_klvs(struct intel_iov *iov, const u32 *cfg, u32 cfg_size);
 
 static void pf_init_reprovisioning_worker(struct intel_iov *iov);

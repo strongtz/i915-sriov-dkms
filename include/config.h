@@ -1,7 +1,7 @@
 #include <linux/version.h>
 
 #ifndef __ASSEMBLY__
-#define LINUX_BACKPORT(__sym) backport_ ##__sym
+#define LINUX_BACKPORT(__sym) backport_##__sym
 #endif
 
 #define MODULE_ABS_PATH(path) DKMS_MODULE_SOURCE_DIR/path

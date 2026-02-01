@@ -18,6 +18,7 @@
 #include "xe_lmtt_types.h"
 #include "xe_memirq_types.h"
 #include "xe_oa_types.h"
+#include "xe_pagefault_types.h"
 #include "xe_platform_types.h"
 #include "xe_pmu_types.h"
 #include "xe_pt_types.h"
@@ -27,6 +28,7 @@
 #include "xe_sriov_vf_ccs_types.h"
 #include "xe_step_types.h"
 #include "xe_survivability_mode_types.h"
+#include "xe_tile_sriov_vf_types.h"
 #include "xe_validation.h"
 
 #if IS_ENABLED(CONFIG_DRM_XE_DEBUG)
@@ -41,6 +43,22 @@ struct xe_i2c;
 struct xe_pat_ops;
 struct xe_pxp;
 struct xe_vram_region;
+
+/**
+ * enum xe_wedged_mode - possible wedged modes
+ * @XE_WEDGED_MODE_NEVER: Device will never be declared wedged.
+ * @XE_WEDGED_MODE_UPON_CRITICAL_ERROR: Device will be declared wedged only
+ *	when critical error occurs like GT reset failure or firmware failure.
+ *	This is the default mode.
+ * @XE_WEDGED_MODE_UPON_ANY_HANG_NO_RESET: Device will be declared wedged on
+ *	any hang. In this mode, engine resets are disabled to avoid automatic
+ *	recovery attempts. This mode is primarily intended for debugging hangs.
+ */
+enum xe_wedged_mode {
+	XE_WEDGED_MODE_NEVER = 0,
+	XE_WEDGED_MODE_UPON_CRITICAL_ERROR = 1,
+	XE_WEDGED_MODE_UPON_ANY_HANG_NO_RESET = 2,
+};
 
 #define XE_BO_INVALID_OFFSET	LONG_MAX
 
@@ -158,7 +176,15 @@ struct xe_tile {
 	/** @mem: memory management info for tile */
 	struct {
 		/**
-		 * @mem.vram: VRAM info for tile.
+		 * @mem.kernel_vram: kernel-dedicated VRAM info for tile.
+		 *
+		 * Although VRAM is associated with a specific tile, it can
+		 * still be accessed by all tiles' GTs.
+		 */
+		struct xe_vram_region *kernel_vram;
+
+		/**
+		 * @mem.vram: general purpose VRAM info for tile.
 		 *
 		 * Although VRAM is associated with a specific tile, it can
 		 * still be accessed by all tiles' GTs.
@@ -185,6 +211,8 @@ struct xe_tile {
 		struct {
 			/** @sriov.vf.ggtt_balloon: GGTT regions excluded from use. */
 			struct xe_ggtt_node *ggtt_balloon[2];
+			/** @sriov.vf.self_config: VF configuration data */
+			struct xe_tile_sriov_vf_selfconfig self_config;
 		} vf;
 	} sriov;
 
@@ -211,11 +239,16 @@ struct xe_tile {
 };
 
 /**
- * struct xe_device - Top level struct of XE device
+ * struct xe_device - Top level struct of Xe device
  */
 struct xe_device {
 	/** @drm: drm device */
 	struct drm_device drm;
+
+#if IS_ENABLED(CONFIG_DRM_XE_DISPLAY)
+	/** @display: display device data, must be placed after drm device member */
+	struct intel_display *display;
+#endif
 
 	/** @devcoredump: device coredump */
 	struct xe_devcoredump devcoredump;
@@ -234,9 +267,9 @@ struct xe_device {
 		u32 media_verx100;
 		/** @info.mem_region_mask: mask of valid memory regions */
 		u32 mem_region_mask;
-		/** @info.platform: XE platform enum */
+		/** @info.platform: Xe platform enum */
 		enum xe_platform platform;
-		/** @info.subplatform: XE subplatform enum */
+		/** @info.subplatform: Xe subplatform enum */
 		enum xe_subplatform subplatform;
 		/** @info.devid: device ID */
 		u16 devid;
@@ -289,6 +322,8 @@ struct xe_device {
 		 * pcode mailbox commands.
 		 */
 		u8 has_mbx_power_limits:1;
+		/** @info.has_mem_copy_instr: Device supports MEM_COPY instruction */
+		u8 has_mem_copy_instr:1;
 		/** @info.has_pxp: Device has PXP support */
 		u8 has_pxp:1;
 		/** @info.has_range_tlb_inval: Has range based TLB invalidations */
@@ -318,6 +353,8 @@ struct xe_device {
 		u8 skip_mtcfg:1;
 		/** @info.skip_pcode: skip access to PCODE uC */
 		u8 skip_pcode:1;
+		/** @info.needs_shared_vf_gt_wq: needs shared GT WQ on VF */
+		u8 needs_shared_vf_gt_wq:1;
 	} info;
 
 	/** @wa_active: keep track of active workarounds */
@@ -400,6 +437,16 @@ struct xe_device {
 		u32 next_asid;
 		/** @usm.lock: protects UM state */
 		struct rw_semaphore lock;
+		/** @usm.pf_wq: page fault work queue, unbound, high priority */
+		struct workqueue_struct *pf_wq;
+		/*
+		 * We pick 4 here because, in the current implementation, it
+		 * yields the best bandwidth utilization of the kernel paging
+		 * engine.
+		 */
+#define XE_PAGEFAULT_QUEUE_COUNT	4
+		/** @usm.pf_queue: Page fault queues */
+		struct xe_pagefault_queue pf_queue[XE_PAGEFAULT_QUEUE_COUNT];
 	} usm;
 
 	/** @pinned: pinned BO state */
@@ -558,6 +605,8 @@ struct xe_device {
 		int mode;
 		/** @wedged.method: Recovery method to be sent in the drm device wedged uevent */
 		unsigned long method;
+		/** @wedged.inconsistent_reset: Inconsistent reset policy state between GTs */
+		bool inconsistent_reset;
 	} wedged;
 
 	/** @bo_device: Struct to control async free of BOs */
@@ -619,8 +668,6 @@ struct xe_device {
 	 * drm_i915_private during build. After cleanup these should go away,
 	 * migrating to the right sub-structs
 	 */
-	struct intel_display *display;
-
 	const struct dram_info *dram_info;
 
 	/*
@@ -629,26 +676,14 @@ struct xe_device {
 	 */
 	u32 edram_size_mb;
 
-	/* To shut up runtime pm macros.. */
-	struct xe_runtime_pm {} runtime_pm;
-
-	/* only to allow build, not used functionally */
-	u32 irq_mask;
-
 	struct intel_uncore {
 		spinlock_t lock;
 	} uncore;
-
-	/* only to allow build, not used functionally */
-	struct {
-		unsigned int hpll_freq;
-		unsigned int czclk_freq;
-	};
 #endif
 };
 
 /**
- * struct xe_file - file handle for XE driver
+ * struct xe_file - file handle for Xe driver
  */
 struct xe_file {
 	/** @xe: xe DEVICE **/

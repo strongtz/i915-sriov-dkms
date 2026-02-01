@@ -8,6 +8,12 @@
 #include <drm/drm_print.h>
 
 #include "i915_drv.h"
+// TODO: Disable display initialization on VF to align with Xe
+#ifndef _XE_I915_DRV_H_
+#include "i915_sriov.h"
+#else
+#include "xe_sriov.h"
+#endif
 #include "i9xx_wm.h"
 #include "intel_display_core.h"
 #include "intel_display_types.h"

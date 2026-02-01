@@ -18,6 +18,7 @@
 #include "xe_bo.h"
 #include "xe_gt.h"
 #include "xe_gt_ccs_mode.h"
+#include "xe_gt_mcr.h"
 #include "xe_gt_printk.h"
 #include "xe_guc.h"
 #include "xe_guc_buf.h"
@@ -30,7 +31,6 @@
 #include "xe_platform_types.h"
 #include "xe_uc_fw.h"
 #include "xe_wa.h"
-#include "xe_gt_mcr.h"
 
 /* Slack of a few additional entries per engine */
 #define ADS_REGSET_EXTRA_MAX	8
@@ -820,16 +820,20 @@ static void guc_mmio_reg_state_init(struct xe_guc_ads *ads)
 static void guc_um_init_params(struct xe_guc_ads *ads)
 {
 	u32 um_queue_offset = guc_ads_um_queues_offset(ads);
+	struct xe_guc *guc = ads_to_guc(ads);
 	u64 base_dpa;
 	u32 base_ggtt;
+	bool with_dpa;
 	int i;
+
+	with_dpa = !xe_guc_using_main_gamctrl_queues(guc);
 
 	base_ggtt = xe_bo_ggtt_addr(ads->bo) + um_queue_offset;
 	base_dpa = xe_bo_main_addr(ads->bo, PAGE_SIZE) + um_queue_offset;
 
 	for (i = 0; i < GUC_UM_HW_QUEUE_MAX; ++i) {
 		ads_blob_write(ads, um_init_params.queue_params[i].base_dpa,
-			       base_dpa + (i * GUC_UM_QUEUE_SIZE));
+			       with_dpa ? (base_dpa + (i * GUC_UM_QUEUE_SIZE)) : 0);
 		ads_blob_write(ads, um_init_params.queue_params[i].base_ggtt_address,
 			       base_ggtt + (i * GUC_UM_QUEUE_SIZE));
 		ads_blob_write(ads, um_init_params.queue_params[i].size_in_bytes,
@@ -979,16 +983,17 @@ static int guc_ads_action_update_policies(struct xe_guc_ads *ads, u32 policy_off
 /**
  * xe_guc_ads_scheduler_policy_toggle_reset - Toggle reset policy
  * @ads: Additional data structures object
+ * @enable_engine_reset: true to enable engine resets, false otherwise
  *
- * This function update the GuC's engine reset policy based on wedged.mode.
+ * This function update the GuC's engine reset policy.
  *
  * Return: 0 on success, and negative error code otherwise.
  */
-int xe_guc_ads_scheduler_policy_toggle_reset(struct xe_guc_ads *ads)
+int xe_guc_ads_scheduler_policy_toggle_reset(struct xe_guc_ads *ads,
+					     bool enable_engine_reset)
 {
 	struct guc_policies *policies;
 	struct xe_guc *guc = ads_to_guc(ads);
-	struct xe_device *xe = ads_to_xe(ads);
 	CLASS(xe_guc_buf, buf)(&guc->buf, sizeof(*policies));
 
 	if (!xe_guc_buf_is_valid(buf))
@@ -1000,10 +1005,11 @@ int xe_guc_ads_scheduler_policy_toggle_reset(struct xe_guc_ads *ads)
 	policies->dpc_promote_time = ads_blob_read(ads, policies.dpc_promote_time);
 	policies->max_num_work_items = ads_blob_read(ads, policies.max_num_work_items);
 	policies->is_valid = 1;
-	if (xe->wedged.mode == 2)
-		policies->global_flags |= GLOBAL_POLICY_DISABLE_ENGINE_RESET;
-	else
+
+	if (enable_engine_reset)
 		policies->global_flags &= ~GLOBAL_POLICY_DISABLE_ENGINE_RESET;
+	else
+		policies->global_flags |= GLOBAL_POLICY_DISABLE_ENGINE_RESET;
 
 	return guc_ads_action_update_policies(ads, xe_guc_buf_flush(buf));
 }
