@@ -16,6 +16,8 @@ intel_sriov_compat-y += v6.15/drm_dp_helper.o \
 
 intel_sriov_compat-y += v6.16/drm_dp_helper.o
 
+intel_sriov_compat-y += v6.17/drm_fourcc.o
+
 intel_sriov_compat-y += v6.18/drm_gpuvm.o \
 			v6.18/drm_ttm_bo.o
 

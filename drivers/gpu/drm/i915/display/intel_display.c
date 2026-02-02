@@ -577,9 +577,15 @@ u32 intel_dumb_fb_max_stride(struct drm_device *drm,
 	if (!HAS_DISPLAY(display))
 		return 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+	return intel_plane_fb_max_stride(display,
+					 backport__drm_get_format_info6p16(drm, pixel_format, modifier),
+					 modifier);
+#else
 	return intel_plane_fb_max_stride(display,
 					 drm_get_format_info(drm, pixel_format, modifier),
 					 modifier);
+#endif
 }
 
 void intel_set_plane_visible(struct intel_crtc_state *crtc_state,

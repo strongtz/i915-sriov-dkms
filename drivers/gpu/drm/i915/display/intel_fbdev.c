@@ -269,11 +269,19 @@ __intel_fbdev_fb_alloc(struct intel_display *display,
 		goto err;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+	fb = intel_framebuffer_create(obj,
+				      backport__drm_get_format_info6p16(display->drm,
+							  mode_cmd.pixel_format,
+							  mode_cmd.modifier[0]),
+				      &mode_cmd);
+#else
 	fb = intel_framebuffer_create(obj,
 				      drm_get_format_info(display->drm,
 							  mode_cmd.pixel_format,
 							  mode_cmd.modifier[0]),
 				      &mode_cmd);
+#endif
 	if (IS_ERR(fb)) {
 		intel_fbdev_fb_bo_destroy(obj);
 		goto err;

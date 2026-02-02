@@ -3169,7 +3169,11 @@ skl_get_initial_plane_config(struct intel_crtc *crtc,
 		goto error;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+	fb->format = backport__drm_get_format_info6p16(display->drm, fourcc, fb->modifier);
+#else
 	fb->format = drm_get_format_info(display->drm, fourcc, fb->modifier);
+#endif
 
 	if (!display->params.enable_dpt &&
 	    intel_fb_modifier_uses_dpt(display, fb->modifier)) {

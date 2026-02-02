@@ -15,13 +15,13 @@
  *     define_trace.h, not the file including it. Full path names for out of tree
  *     modules must be used.
  */
-
 #ifdef CREATE_TRACE_POINTS
 
 /* Prevent recursion */
 #undef CREATE_TRACE_POINTS
 
 #include <linux/stringify.h>
+/* Vendored from Linux 6.19.0 */
 
 #undef TRACE_EVENT
 #define TRACE_EVENT(name, proto, args, tstruct, assign, print)	\
