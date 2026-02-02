@@ -18,6 +18,10 @@ subdir-ccflags-y += -DI915
 # only some tracepoints.
 subdir-ccflags-$(CONFIG_PREEMPT_RT) += -DNOTRACE
 
+# Archlinux defaults to -Wframe-larger-than=2048, so match that here to avoid
+# warnings. (Ubuntu/Debian use -Wframe-larger-than=1024 by default).
+subdir-ccflags-y += -Wframe-larger-than=2048
+
 subdir-ccflags-y += -I$(src)
 
 # Please keep these build lists sorted!

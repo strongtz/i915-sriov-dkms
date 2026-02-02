@@ -2,6 +2,7 @@
 /*
  * Copyright © 2025 Intel Corporation
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #include "intel_color.h"
 #include "intel_colorop.h"
 #include "intel_color_pipeline.h"
@@ -105,3 +106,4 @@ int intel_color_pipeline_plane_init(struct drm_plane *plane, enum pipe pipe)
 out:
 	return ret;
 }
+#endif

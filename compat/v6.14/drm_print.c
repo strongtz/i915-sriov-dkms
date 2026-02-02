@@ -8,6 +8,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
+
 #include <drm/drm_print.h>
 #include <drm/drm_device.h>
 

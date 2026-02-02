@@ -19,6 +19,9 @@ intel_sriov_compat-y += v6.16/drm_dp_helper.o
 intel_sriov_compat-y += v6.18/drm_gpuvm.o \
 			v6.18/drm_ttm_bo.o
 
+intel_sriov_compat-y += v6.19/drm_dp_helper.o \
+			v6.19/pci_rebar.o
+
 intel_sriov_compat-y += drm_gpusvm.o \
 			drm_pagemap.o
 

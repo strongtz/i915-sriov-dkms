@@ -9,7 +9,9 @@
 #include <linux/nospec.h>
 
 #include <drm/drm_drv.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #include <drm/drm_dumb_buffers.h>
+#endif
 #include <drm/drm_gem_ttm_helper.h>
 #include <drm/drm_managed.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
@@ -1772,7 +1774,11 @@ static void xe_gem_object_free(struct drm_gem_object *obj)
 	 * refcount directly if needed.
 	 */
 	__xe_bo_vunmap(gem_to_xe_bo(obj));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	ttm_bo_put(container_of(obj, struct ttm_buffer_object, base));
+#else
 	ttm_bo_fini(container_of(obj, struct ttm_buffer_object, base));
+#endif
 }
 
 static void xe_gem_object_close(struct drm_gem_object *obj,
@@ -3656,13 +3662,22 @@ int xe_bo_dumb_create(struct drm_file *file_priv,
 	struct xe_device *xe = to_xe_device(dev);
 	struct xe_bo *bo;
 	uint32_t handle;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	int cpp = DIV_ROUND_UP(args->bpp, 8);
+#endif
 	int err;
 	u32 page_size = max_t(u32, PAGE_SIZE,
 		xe->info.vram_flags & XE_VRAM_FLAGS_NEED64K ? SZ_64K : SZ_4K);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	args->pitch = ALIGN(args->width * cpp, 64);
+	args->size = ALIGN(mul_u32_u32(args->pitch, args->height),
+			   page_size);
+#else
 	err = drm_mode_size_dumb(dev, args, SZ_64, page_size);
 	if (err)
 		return err;
+#endif
 
 	bo = xe_bo_create_user(xe, NULL, args->size,
 			       DRM_XE_GEM_CPU_CACHING_WC,

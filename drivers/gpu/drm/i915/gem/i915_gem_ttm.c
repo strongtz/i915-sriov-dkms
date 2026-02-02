@@ -1035,7 +1035,11 @@ static void i915_ttm_delayed_free(struct drm_i915_gem_object *obj)
 {
 	GEM_BUG_ON(!obj->ttm.created);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	ttm_bo_put(i915_gem_to_ttm(obj));
+#else
 	ttm_bo_fini(i915_gem_to_ttm(obj));
+#endif
 }
 
 static vm_fault_t vm_fault_ttm(struct vm_fault *vmf)

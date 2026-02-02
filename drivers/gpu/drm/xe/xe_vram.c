@@ -25,13 +25,45 @@
 #include "xe_vram.h"
 #include "xe_vram_types.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+/*
+ * Release all the BARs that could influence/block LMEMBAR resizing, i.e.
+ * assigned IORESOURCE_MEM_64 BARs
+ */
+static void release_bars(struct pci_dev *pdev)
+{
+	struct resource *res;
+	int i;
+
+	pci_dev_for_each_resource(pdev, res, i) {
+		/* Resource already un-assigned, do not reset it */
+		if (!res->parent)
+			continue;
+
+		/* No need to release unrelated BARs */
+		if (!(res->flags & IORESOURCE_MEM_64))
+			continue;
+
+		pci_release_resource(pdev, i);
+	}
+}
+#endif
+
 static void resize_bar(struct xe_device *xe, int resno, resource_size_t size)
 {
 	struct pci_dev *pdev = to_pci_dev(xe->drm.dev);
 	int bar_size = pci_rebar_bytes_to_size(size);
 	int ret;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	release_bars(pdev);
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	ret = pci_resize_resource(pdev, resno, bar_size);
+#else
 	ret = pci_resize_resource(pdev, resno, bar_size, 0);
+#endif
 	if (ret) {
 		drm_info(&xe->drm, "Failed to resize BAR%d to %dM (%pe). Consider enabling 'Resizable BAR' support in your BIOS\n",
 			 resno, 1 << bar_size, ERR_PTR(ret));
@@ -68,11 +100,19 @@ void xe_vram_resize_bar(struct xe_device *xe)
 						     (resource_size_t)SZ_1M);
 
 		if (!pci_rebar_size_supported(pdev, LMEM_BAR, rebar_size)) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+			drm_info(&xe->drm,
+				 "Requested size: %lluMiB is not supported by rebar sizes: 0x%x. Leaving default: %lluMiB\n",
+				 (u64)pci_rebar_size_to_bytes(rebar_size) >> 20,
+				 pci_rebar_get_possible_sizes(pdev, LMEM_BAR),
+				 (u64)current_size >> 20);
+#else
 			drm_info(&xe->drm,
 				 "Requested size: %lluMiB is not supported by rebar sizes: 0x%llx. Leaving default: %lluMiB\n",
 				 (u64)pci_rebar_size_to_bytes(rebar_size) >> 20,
 				 pci_rebar_get_possible_sizes(pdev, LMEM_BAR),
 				 (u64)current_size >> 20);
+#endif
 			return;
 		}
 

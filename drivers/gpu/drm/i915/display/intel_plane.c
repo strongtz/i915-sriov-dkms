@@ -346,6 +346,7 @@ intel_plane_copy_uapi_plane_damage(struct intel_plane_state *new_plane_state,
 		*damage = drm_plane_state_src(&new_uapi_plane_state->uapi);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 static bool
 intel_plane_colorop_replace_blob(struct intel_plane_state *plane_state,
 				 struct intel_colorop *intel_colorop,
@@ -397,6 +398,7 @@ intel_plane_color_copy_uapi_to_hw_state(struct intel_plane_state *plane_state,
 	if (new_crtc_state && changed)
 		new_crtc_state->plane_color_changed = true;
 }
+#endif
 
 void intel_plane_copy_uapi_to_hw_state(struct intel_plane_state *plane_state,
 				       const struct intel_plane_state *from_plane_state,
@@ -427,7 +429,9 @@ void intel_plane_copy_uapi_to_hw_state(struct intel_plane_state *plane_state,
 	plane_state->uapi.src = drm_plane_state_src(&from_plane_state->uapi);
 	plane_state->uapi.dst = drm_plane_state_dest(&from_plane_state->uapi);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	intel_plane_color_copy_uapi_to_hw_state(plane_state, from_plane_state, crtc);
+#endif
 }
 
 void intel_plane_copy_hw_state(struct intel_plane_state *plane_state,

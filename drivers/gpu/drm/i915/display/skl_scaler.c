@@ -278,6 +278,15 @@ int skl_update_scaler_crtc(struct intel_crtc_state *crtc_state)
 		width = pipe_mode->crtc_hdisplay;
 		height = pipe_mode->crtc_vdisplay;
 	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	return skl_update_scaler(crtc_state, !crtc_state->hw.active,
+				 SKL_CRTC_INDEX,
+				 &crtc_state->scaler_state.scaler_id,
+				 drm_rect_width(&crtc_state->pipe_src),
+				 drm_rect_height(&crtc_state->pipe_src),
+				 width, height, NULL, 0,
+				 crtc_state->pch_pfit.enabled);
+#else
 	return skl_update_scaler(crtc_state, !crtc_state->hw.active,
 				 SKL_CRTC_INDEX,
 				 &crtc_state->scaler_state.scaler_id,
@@ -286,6 +295,7 @@ int skl_update_scaler_crtc(struct intel_crtc_state *crtc_state)
 				 width, height, NULL, 0,
 				 crtc_state->pch_pfit.enabled ||
 				 intel_casf_needs_scaler(crtc_state));
+#endif
 }
 
 /**
@@ -334,9 +344,11 @@ static int intel_allocate_scaler(struct intel_crtc_scaler_state *scaler_state,
 		if (scaler_state->scalers[i].in_use)
 			continue;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 		/* CASF needs second scaler */
 		if (!plane_state && casf_scaler && i != 1)
 			continue;
+#endif
 
 		scaler_state->scalers[i].in_use = true;
 
@@ -529,14 +541,20 @@ static int setup_crtc_scaler(struct intel_atomic_state *state,
 	struct intel_crtc_scaler_state *scaler_state =
 		&crtc_state->scaler_state;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	if (intel_casf_needs_scaler(crtc_state) && crtc_state->pch_pfit.enabled)
 		return -EINVAL;
+#endif
 
 	return intel_atomic_setup_scaler(crtc_state,
 					 hweight32(scaler_state->scaler_users),
 					 crtc, "CRTC", crtc->base.base.id,
 					 NULL, &scaler_state->scaler_id,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+					 false);
+#else
 					 intel_casf_needs_scaler(crtc_state));
+#endif
 }
 
 static int setup_plane_scaler(struct intel_atomic_state *state,
@@ -752,6 +770,7 @@ static void skl_scaler_setup_filter(struct intel_display *display,
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #define CASF_SCALER_FILTER_SELECT \
 	(PS_FILTER_PROGRAMMED | \
 	PS_Y_VERT_FILTER_SELECT(0) | \
@@ -797,6 +816,7 @@ void skl_scaler_setup_casf(struct intel_crtc_state *crtc_state)
 	intel_de_write_fw(display, SKL_PS_WIN_SZ(pipe, id),
 			  PS_WIN_XSIZE(width) | PS_WIN_YSIZE(height));
 }
+#endif
 
 void skl_pfit_enable(const struct intel_crtc_state *crtc_state)
 {
@@ -982,22 +1002,34 @@ void skl_scaler_get_config(struct intel_crtc_state *crtc_state)
 
 		id = i;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+		crtc_state->pch_pfit.enabled = true;
+#else
 		/* Read CASF regs for second scaler */
 		if (HAS_CASF(display) && id == 1)
 			intel_casf_sharpness_get_config(crtc_state);
 
 		if (!crtc_state->hw.casf_params.casf_enable)
 			crtc_state->pch_pfit.enabled = true;
+#endif
 
 		pos = intel_de_read(display, SKL_PS_WIN_POS(crtc->pipe, i));
 		size = intel_de_read(display, SKL_PS_WIN_SZ(crtc->pipe, i));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+		drm_rect_init(&crtc_state->pch_pfit.dst,
+			      REG_FIELD_GET(PS_WIN_XPOS_MASK, pos),
+			      REG_FIELD_GET(PS_WIN_YPOS_MASK, pos),
+			      REG_FIELD_GET(PS_WIN_XSIZE_MASK, size),
+			      REG_FIELD_GET(PS_WIN_YSIZE_MASK, size));
+#else
 		if (!crtc_state->hw.casf_params.casf_enable)
 			drm_rect_init(&crtc_state->pch_pfit.dst,
 				      REG_FIELD_GET(PS_WIN_XPOS_MASK, pos),
 				      REG_FIELD_GET(PS_WIN_YPOS_MASK, pos),
 				      REG_FIELD_GET(PS_WIN_XSIZE_MASK, size),
 				      REG_FIELD_GET(PS_WIN_YSIZE_MASK, size));
+#endif
 
 		scaler_state->scalers[i].in_use = true;
 		break;

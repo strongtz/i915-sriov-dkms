@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2025 Intel Corporation */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #include <drm/drm_print.h>
 
 #include "i915_reg.h"
@@ -288,3 +289,4 @@ void intel_casf_disable(const struct intel_crtc_state *crtc_state)
 	intel_de_write(display, SHARPNESS_CTL(crtc->pipe), 0);
 	intel_de_write(display, SKL_PS_WIN_SZ(crtc->pipe, 1), 0);
 }
+#endif

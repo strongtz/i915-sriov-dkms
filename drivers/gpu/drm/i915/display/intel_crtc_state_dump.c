@@ -372,10 +372,12 @@ void intel_crtc_state_dump(const struct intel_crtc_state *pipe_config,
 
 	intel_vdsc_state_dump(&p, 0, pipe_config);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	drm_printf(&p, "sharpness strength: %d, sharpness tap size: %d, sharpness enable: %d\n",
 		   pipe_config->hw.casf_params.strength,
 		   pipe_config->hw.casf_params.win_size,
 		   pipe_config->hw.casf_params.casf_enable);
+#endif
 
 dump_planes:
 	if (!state)

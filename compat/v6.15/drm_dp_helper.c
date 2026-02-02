@@ -8,6 +8,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
+
 #include <drm/display/drm_dp_helper.h>
 #include <drm/drm_print.h>
 

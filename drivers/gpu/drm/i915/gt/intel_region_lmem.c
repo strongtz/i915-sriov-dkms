@@ -20,6 +20,18 @@
 #include "gt/intel_gt_regs.h"
 
 #ifdef CONFIG_64BIT
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+static void _release_bars(struct pci_dev *pdev)
+{
+	int resno;
+
+	for (resno = PCI_STD_RESOURCES; resno < PCI_STD_RESOURCE_END; resno++) {
+		if (pci_resource_len(pdev, resno))
+			pci_release_resource(pdev, resno);
+	}
+}
+#endif
+
 static void
 _resize_bar(struct drm_i915_private *i915, int resno, resource_size_t size)
 {
@@ -27,7 +39,15 @@ _resize_bar(struct drm_i915_private *i915, int resno, resource_size_t size)
 	int bar_size = pci_rebar_bytes_to_size(size);
 	int ret;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	_release_bars(pdev);
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	ret = pci_resize_resource(pdev, resno, bar_size);
+#else
 	ret = pci_resize_resource(pdev, resno, bar_size, 0);
+#endif
 	if (ret) {
 		drm_info(&i915->drm, "Failed to resize BAR%d to %dM (%pe)\n",
 			 resno, 1 << bar_size, ERR_PTR(ret));

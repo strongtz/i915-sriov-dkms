@@ -197,7 +197,11 @@ static void drm_pagemap_get_devmem_page(struct page *page,
 					struct drm_pagemap_zdd *zdd)
 {
 	page->zone_device_data = drm_pagemap_zdd_get(zdd);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	zone_device_page_init(page);
+#else
 	zone_device_page_init(page, 0);
+#endif
 }
 
 /**

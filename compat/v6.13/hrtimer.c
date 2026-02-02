@@ -8,6 +8,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
 #include <linux/hrtimer.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)

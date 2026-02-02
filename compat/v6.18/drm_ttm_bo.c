@@ -8,6 +8,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
+
 #include <drm/ttm/ttm_bo.h>
 #include <drm/ttm/ttm_tt.h>
 

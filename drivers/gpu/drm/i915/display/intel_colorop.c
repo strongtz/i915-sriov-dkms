@@ -2,6 +2,7 @@
 /*
  * Copyright © 2025 Intel Corporation
  */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #include "intel_colorop.h"
 
 struct intel_colorop *to_intel_colorop(struct drm_colorop *colorop)
@@ -33,3 +34,4 @@ struct intel_colorop *intel_colorop_create(enum intel_color_block id)
 
 	return colorop;
 }
+#endif

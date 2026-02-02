@@ -128,4 +128,17 @@ int drm_dp_link_symbol_cycles(int lane_count, int pixels, int dsc_slice_count,
 			      int bpp_x16, int symbol_size, bool is_mst);
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+#define drm_dp_dsc_sink_max_slice_throughput LINUX_BACKPORT(drm_dp_dsc_sink_max_slice_throughput)
+int drm_dp_dsc_sink_max_slice_throughput(const u8 dsc_dpcd[DP_DSC_RECEIVER_CAP_SIZE],
+					 int peak_pixel_rate, bool is_rgb_yuv444);
+#define drm_dp_dsc_branch_max_overall_throughput LINUX_BACKPORT(drm_dp_dsc_branch_max_overall_throughput)
+int drm_dp_dsc_branch_max_overall_throughput(const u8 dsc_branch_dpcd[DP_DSC_BRANCH_CAP_SIZE],
+					     bool is_rgb_yuv444);
+#define drm_dp_dsc_branch_max_line_width LINUX_BACKPORT(drm_dp_dsc_branch_max_line_width)
+int drm_dp_dsc_branch_max_line_width(const u8 dsc_branch_dpcd[DP_DSC_BRANCH_CAP_SIZE]);
+
+#define DP_DPCD_QUIRK_DSC_THROUGHPUT_BPP_LIMIT ((enum drm_dp_quirk)(DP_DPCD_QUIRK_HBLANK_EXPANSION_REQUIRES_DSC + 1))
+#endif
+
 #endif /* __BACKPORT_DRM_DP_HELPER_H__ */

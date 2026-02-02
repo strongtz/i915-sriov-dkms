@@ -991,6 +991,7 @@ static bool audio_disabling(const struct intel_crtc_state *old_crtc_state,
 		 memcmp(old_crtc_state->eld, new_crtc_state->eld, MAX_ELD_BYTES) != 0);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 static bool intel_casf_enabling(const struct intel_crtc_state *new_crtc_state,
 				const struct intel_crtc_state *old_crtc_state)
 {
@@ -1008,6 +1009,7 @@ static bool intel_casf_disabling(const struct intel_crtc_state *old_crtc_state,
 
 	return is_disabling(hw.casf_params.casf_enable, old_crtc_state, new_crtc_state);
 }
+#endif
 
 #undef is_disabling
 #undef is_enabling
@@ -1164,8 +1166,10 @@ static void intel_pre_plane_update(struct intel_atomic_state *state,
 	if (audio_disabling(old_crtc_state, new_crtc_state))
 		intel_encoders_audio_disable(state, crtc);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	if (intel_casf_disabling(old_crtc_state, new_crtc_state))
 		intel_casf_disable(new_crtc_state);
+#endif
 
 	intel_drrs_deactivate(old_crtc_state);
 
@@ -4262,11 +4266,21 @@ static int intel_crtc_atomic_check(struct intel_atomic_state *state,
 		return ret;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	ret = intel_casf_compute_config(crtc_state);
 	if (ret)
 		return ret;
+#endif
 
 	if (DISPLAY_VER(display) >= 9) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+		if (intel_crtc_needs_modeset(crtc_state) ||
+		    intel_crtc_needs_fastset(crtc_state)) {
+			ret = skl_update_scaler_crtc(crtc_state);
+			if (ret)
+				return ret;
+		}
+#else
 		if (intel_crtc_needs_modeset(crtc_state) ||
 		    intel_crtc_needs_fastset(crtc_state) ||
 		    intel_casf_needs_scaler(crtc_state)) {
@@ -4274,6 +4288,7 @@ static int intel_crtc_atomic_check(struct intel_atomic_state *state,
 			if (ret)
 				return ret;
 		}
+#endif
 
 		ret = intel_atomic_setup_scalers(state, crtc);
 		if (ret)
@@ -5361,9 +5376,11 @@ intel_pipe_config_compare(const struct intel_crtc_state *current_config,
 
 		PIPE_CONF_CHECK_I(scaler_state.scaler_id);
 		PIPE_CONF_CHECK_I(pixel_rate);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 		PIPE_CONF_CHECK_BOOL(hw.casf_params.casf_enable);
 		PIPE_CONF_CHECK_I(hw.casf_params.win_size);
 		PIPE_CONF_CHECK_I(hw.casf_params.strength);
+#endif
 
 		PIPE_CONF_CHECK_X(gamma_mode);
 		if (display->platform.cherryview)
@@ -6808,10 +6825,12 @@ static void intel_pre_update_crtc(struct intel_atomic_state *state,
 			intel_vrr_set_transcoder_timings(new_crtc_state);
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	if (intel_casf_enabling(new_crtc_state, old_crtc_state))
 		intel_casf_enable(new_crtc_state);
 	else if (new_crtc_state->hw.casf_params.strength != old_crtc_state->hw.casf_params.strength)
 		intel_casf_update_strength(new_crtc_state);
+#endif
 
 	intel_fbc_update(state, crtc);
 

@@ -90,6 +90,7 @@ struct intel_color_funcs {
 	 */
 	void (*get_config)(struct intel_crtc_state *crtc_state);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	/* Plane CSC*/
 	void (*load_plane_csc_matrix)(struct intel_dsb *dsb,
 				      const struct intel_plane_state *plane_state);
@@ -97,6 +98,7 @@ struct intel_color_funcs {
 	/* Plane Pre/Post CSC */
 	void (*load_plane_luts)(struct intel_dsb *dsb,
 				const struct intel_plane_state *plane_state);
+#endif
 };
 
 #define CTM_COEFF_SIGN	(1ULL << 63)
@@ -3848,6 +3850,7 @@ static void icl_read_luts(struct intel_crtc_state *crtc_state)
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 static void
 xelpd_load_plane_csc_matrix(struct intel_dsb *dsb,
 			    const struct intel_plane_state *plane_state)
@@ -4107,6 +4110,7 @@ static void glk_lut_3d_commit(struct intel_dsb *dsb, struct intel_crtc *crtc, bo
 
 	intel_de_write_dsb(display, dsb, LUT_3D_CTL(pipe), val);
 }
+#endif
 
 static const struct intel_color_funcs chv_color_funcs = {
 	.color_check = chv_color_check,
@@ -4155,8 +4159,10 @@ static const struct intel_color_funcs tgl_color_funcs = {
 	.lut_equal = icl_lut_equal,
 	.read_csc = icl_read_csc,
 	.get_config = skl_get_config,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	.load_plane_csc_matrix = xelpd_load_plane_csc_matrix,
 	.load_plane_luts = xelpd_plane_load_luts,
+#endif
 };
 
 static const struct intel_color_funcs icl_color_funcs = {
@@ -4237,6 +4243,7 @@ static const struct intel_color_funcs ilk_color_funcs = {
 	.get_config = ilk_get_config,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 void intel_color_plane_commit_arm(struct intel_dsb *dsb,
 				  const struct intel_plane_state *plane_state)
 {
@@ -4297,6 +4304,7 @@ void intel_color_plane_program_pipeline(struct intel_dsb *dsb,
 	if (plane_state->hw.lut_3d)
 		intel_color_load_3dlut(dsb, plane_state);
 }
+#endif
 
 void intel_color_crtc_init(struct intel_crtc *crtc)
 {

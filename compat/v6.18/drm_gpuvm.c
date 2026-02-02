@@ -8,6 +8,8 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
+
 #include <drm/drm_gpuvm.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)

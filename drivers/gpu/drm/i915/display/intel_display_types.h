@@ -1991,10 +1991,12 @@ struct intel_dp_mst_encoder {
 	struct intel_connector *connector;
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 struct intel_colorop {
 	struct drm_colorop base;
 	enum intel_color_block id;
 };
+#endif
 
 static inline struct intel_encoder *
 intel_attached_encoder(struct intel_connector *connector)

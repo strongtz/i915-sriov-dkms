@@ -8,6 +8,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
 #include <linux/iopoll.h>
 
 #include <drm/display/drm_dp_helper.h>
