@@ -200,7 +200,7 @@ static void drm_pagemap_get_devmem_page(struct page *page,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
 	zone_device_page_init(page);
 #else
-	zone_device_page_init(page, 0);
+	zone_device_page_init(page, page_pgmap(page), 0);
 #endif
 }
 
