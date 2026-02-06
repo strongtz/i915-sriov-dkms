@@ -302,7 +302,11 @@ int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
 	struct intel_display *display = to_intel_display(helper->dev);
 	struct intel_fbdev *ifbdev = to_intel_fbdev(helper);
 	struct intel_framebuffer *fb = ifbdev->fb;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	struct fb_info *info;
+#else
 	struct fb_info *info = helper->info;
+#endif
 	struct ref_tracker *wakeref;
 	struct i915_vma *vma;
 	unsigned long flags = 0;
@@ -363,6 +367,15 @@ int intel_fbdev_driver_fbdev_probe(struct drm_fb_helper *helper,
 		ret = PTR_ERR(vma);
 		goto out_unlock;
 	}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
+	info = drm_fb_helper_alloc_info(helper);
+	if (IS_ERR(info)) {
+		drm_err(display->drm, "Failed to allocate fb_info (%pe)\n", info);
+		ret = PTR_ERR(info);
+		goto out_unpin;
+	}
+#endif
 
 	helper->funcs = &intel_fb_helper_funcs;
 	helper->fb = &fb->base;
