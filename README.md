@@ -52,6 +52,26 @@ echo 7 > /sys/devices/pci0000:00/0000:00:02.0/sriov_numvfs
 
 You can create up to 7 VFs on Intel UHD Graphics
 
+## Generic Troubleshooting
+If you encounter any issues that prevent the system from booting properly (e.g., a hang or black screen), you can temporarily disable the module by modifying the kernel command line at boot.
+
+### GRUB2
+1. At the boot menu, select the desired kernel and press `e` to edit the boot parameters.
+
+1. Locate the line starting with linux and append `module_blacklist=i915,xe` to the end of it (preceded by a space).
+
+1. Press **F10** or **Ctrl+X** to boot.
+
+### systemd-boot
+
+1. Press `e` at the boot menu to edit the kernel parameters.
+
+1. Append `module_blacklist=i915,xe` to the end of the existing line (preceded by a space)
+
+1. Press **Enter** to boot.
+
+Once the system is up, you can inspect the kernel logs to troubleshoot. 
+If the module remains unstable, follow the [Uninstallation](#uninstallation) steps to remove the module.
 
 ## Arch Linux Host Installation Steps
 
