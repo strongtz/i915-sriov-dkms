@@ -1,6 +1,15 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
   * Sync with v6.19
+  * Fix kernel NULL pointer dereference in intel_fbdev_driver_fbdev_probe
+
+ -- bbaa <bbaa@bbaa.moe>  Mon, 09 Feb 2026 20:18:08 +0800
+
+i915-sriov-dkms (2026.02.04) UNRELEASED; urgency=medium
+
+  * Sync with v6.19
+  * Improve README
+  * Fix load priority issue 
 
  -- bbaa <bbaa@bbaa.moe>  Wed, 04 Feb 2026 10:56:08 +0800
 
