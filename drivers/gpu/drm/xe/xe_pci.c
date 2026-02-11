@@ -331,6 +331,7 @@ static const struct xe_device_desc mtl_desc = {
 	.dma_mask_size = 46,
 	.has_display = true,
 	.has_pxp = true,
+	.has_sriov = true,
 	.max_gt_per_tile = 2,
 	.va_bits = 48,
 	.vm_max_level = 3,

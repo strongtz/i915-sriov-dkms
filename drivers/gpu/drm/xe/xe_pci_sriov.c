@@ -13,6 +13,8 @@
 #include "xe_gt_sriov_pf_control.h"
 #include "xe_gt_sriov_printk.h"
 #include "xe_guc_engine_activity.h"
+#include "xe_gsc.h"
+#include "xe_pxp.h"
 #include "xe_pci_sriov.h"
 #include "xe_pm.h"
 #include "xe_sriov.h"
@@ -82,6 +84,36 @@ static void pf_engine_activity_stats(struct xe_device *xe, unsigned int num_vfs,
 	}
 }
 
+static int pf_disable_gsc_engine(struct xe_device *xe)
+{
+	struct xe_gt *gt;
+	unsigned int id;
+	int err;
+
+	xe_assert(xe, IS_SRIOV_PF(xe));
+
+	for_each_gt(gt, xe, id) {
+		xe_gsc_wait_for_worker_completion(&gt->uc.gsc);
+		xe_gsc_stop_prepare(&gt->uc.gsc);
+	}
+
+	err = xe_pxp_pm_suspend(xe->pxp);
+	return err;
+}
+
+static void pf_enable_gsc_engine(struct xe_device *xe)
+{
+	struct xe_gt *gt;
+	unsigned int id;
+
+	xe_assert(xe, IS_SRIOV_PF(xe));
+
+	xe_pxp_pm_resume(xe->pxp);
+
+	for_each_gt(gt, xe, id)
+		xe_gsc_load_start(&gt->uc.gsc);
+}
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)  // incompatible before 6.17
 static int resize_vf_vram_bar(struct xe_device *xe, int num_vfs)
 {
@@ -139,6 +171,13 @@ static int pf_enable_vfs(struct xe_device *xe, int num_vfs)
 	 * We will release this additional PM reference in pf_disable_vfs().
 	 */
 	xe_pm_runtime_get_noresume(xe);
+
+	if (xe->info.platform == XE_METEORLAKE) {
+		err = pf_disable_gsc_engine(xe);
+		if (err)
+			xe_sriov_notice(xe, "Failed to disable GSC engine (%pe)\n",
+					ERR_PTR(err));
+	}
 
 	err = xe_sriov_pf_provision_vfs(xe, num_vfs);
 	if (err < 0)
@@ -198,6 +237,9 @@ static int pf_disable_vfs(struct xe_device *xe)
 	pf_reset_vfs(xe, num_vfs);
 
 	xe_sriov_pf_unprovision_vfs(xe, num_vfs);
+
+	if (xe->info.platform == XE_METEORLAKE)
+		pf_enable_gsc_engine(xe);
 
 	/* not needed anymore - see pf_enable_vfs() */
 	xe_pm_runtime_put(xe);

@@ -1,0 +1,35 @@
+This repo packages an i915/xe kernel driver tree with SR-IOV support as a DKMS
+module. It includes both the classic i915 driver and the newer xe driver, plus
+build and distro packaging helpers.
+
+High-level layout
+- drivers/gpu/drm/i915: i915 driver with SR-IOV extensions.
+- drivers/gpu/drm/xe: xe driver (newer Intel GPU driver) with SR-IOV support.
+- include/: driver headers and uapi bits.
+- compat/, dkms.conf, PKGBUILD, debian/: DKMS and packaging glue.
+
+SR-IOV in i915
+- Core SR-IOV logic lives under drivers/gpu/drm/i915/gt/iov/ and the
+  i915_sriov*.c helpers. This handles PF/VF provisioning, GGTT updates,
+  relay/messaging, and migration state save/restore.
+- GVT (mediated vGPU) plumbing is also present under drivers/gpu/drm/i915/gvt/.
+  This includes a dma-buf export path for vGPU framebuffer planes in
+  drivers/gpu/drm/i915/gvt/dmabuf.c.
+
+SR-IOV in xe
+- SR-IOV support is spread across xe_sriov*.c, xe_gt_sriov_*.c, and
+  xe_tile_sriov_*.c files (PF/VF control, provisioning, migration, and debugfs).
+- The xe driver has its own dma-buf support (drivers/gpu/drm/xe/xe_dma_buf.c)
+  and BO/VM helpers that handle imported/exported dma-bufs in general.
+
+Looking Glass / KVMFR zero-copy note
+- There are no references to KVMFR or Looking Glass in this tree.
+- Any zero-copy behavior for Looking Glass is not implemented as a dedicated
+  driver feature here; it relies on generic dma-buf support and the KVMFR
+  module/userspace stack rather than SR-IOV-specific code in this repo.
+
+Key files touched for dma-buf and vGPU
+- i915: drivers/gpu/drm/i915/gem/i915_gem_dmabuf.c
+- i915 GVT: drivers/gpu/drm/i915/gvt/dmabuf.c
+- xe: drivers/gpu/drm/xe/xe_dma_buf.c
+
