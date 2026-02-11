@@ -272,8 +272,19 @@ static bool pf_expect_vf_state(struct xe_gt *gt, unsigned int vfid,
 {
 	bool result = pf_check_vf_state(gt, vfid, bit);
 
-	if (unlikely(!result))
+	if (unlikely(!result)) {
+		xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
+				vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
+				   vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
+				 vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
+				 vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
+				vfid, control_bit_to_string(bit), bit);
 		pf_dump_vf_state(gt, vfid);
+	}
 
 	return result;
 }
@@ -283,8 +294,19 @@ static bool pf_expect_vf_not_state(struct xe_gt *gt, unsigned int vfid,
 {
 	bool result = !pf_check_vf_state(gt, vfid, bit);
 
-	if (unlikely(!result))
+	if (unlikely(!result)) {
+		xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
+				vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
+				   vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
+				 vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
+				 vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
+				vfid, control_bit_to_string(bit), bit);
 		pf_dump_vf_state(gt, vfid);
+	}
 
 	return result;
 }
@@ -293,6 +315,16 @@ static void pf_track_vf_state(struct xe_gt *gt, unsigned int vfid,
 			      enum xe_gt_sriov_control_bits bit,
 			      const char *what)
 {
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
+			vfid, control_bit_to_string(bit), bit, what);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
+			   vfid, control_bit_to_string(bit), bit, what);
+	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
+			 vfid, control_bit_to_string(bit), bit, what);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
+			 vfid, control_bit_to_string(bit), bit, what);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
+			vfid, control_bit_to_string(bit), bit, what);
 	xe_gt_sriov_dbg_verbose(gt, "VF%u state %s(%d) %s\n",
 				vfid, control_bit_to_string(bit), bit, what);
 }
@@ -1875,6 +1907,11 @@ static void pf_handle_vf_flr(struct xe_gt *gt, u32 vfid)
 	struct xe_gt *gtit;
 	unsigned int gtid;
 
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
+	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
 	xe_gt_sriov_info(gt, "VF%u FLR\n", vfid);
 
 	if (needs_dispatch_flr(xe)) {
@@ -1887,6 +1924,11 @@ static void pf_handle_vf_flr(struct xe_gt *gt, u32 vfid)
 
 static void pf_handle_vf_flr_done(struct xe_gt *gt, u32 vfid)
 {
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
+	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
 	if (!pf_exit_vf_flr_wait_guc(gt, vfid)) {
 		xe_gt_sriov_dbg(gt, "Received out of order 'VF%u FLR done'\n", vfid);
 		pf_enter_vf_mismatch(gt, vfid);
@@ -1909,6 +1951,11 @@ static void pf_handle_vf_pause_done(struct xe_gt *gt, u32 vfid)
 
 static int pf_handle_vf_event(struct xe_gt *gt, u32 vfid, u32 eventid)
 {
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
+	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
 	xe_gt_sriov_dbg_verbose(gt, "received VF%u event %#x\n", vfid, eventid);
 
 	if (vfid > xe_gt_sriov_pf_get_totalvfs(gt))
