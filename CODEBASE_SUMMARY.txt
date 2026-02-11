@@ -33,3 +33,12 @@ Key files touched for dma-buf and vGPU
 - i915 GVT: drivers/gpu/drm/i915/gvt/dmabuf.c
 - xe: drivers/gpu/drm/xe/xe_dma_buf.c
 
+Recent SR-IOV / MMIO relay learnings
+- GuC forwards VF MMIO relay requests to PF as G2H action 0x5006; the PF must
+  decode opcodes and reply via PF2GUC success/failure messages.
+- The relay is used by Windows VF drivers for ABI handshake, runtime register
+  reads, and VF GGTT PTE updates; missing support causes Code 43 or boot issues.
+- xe now mirrors i915 behavior by handling handshake/get-runtime/update-GGTT
+  in drivers/gpu/drm/xe/xe_guc_ct.c and updating PTEs in the VF GGTT slice via
+  drivers/gpu/drm/xe/xe_ggtt.c with VFID tagging and GGTT invalidation.
+*** End Patch}));
