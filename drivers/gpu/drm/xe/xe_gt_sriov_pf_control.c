@@ -1940,7 +1940,7 @@ int xe_gt_sriov_pf_control_wait_flr(struct xe_gt *gt, unsigned int vfid)
 
 static bool needs_dispatch_flr(struct xe_device *xe)
 {
-	return xe->info.platform == XE_PVC;
+	return xe->info.gt_count > 1;
 }
 
 static void pf_handle_vf_flr(struct xe_gt *gt, u32 vfid)
