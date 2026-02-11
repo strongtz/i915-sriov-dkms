@@ -234,6 +234,8 @@ static void ggtt_fini(void *arg)
 	ggtt->scratch = NULL;
 }
 
+static void ggtt_invalidate_work_func(struct work_struct *work);
+
 #ifdef CONFIG_LOCKDEP
 void xe_ggtt_might_lock(struct xe_ggtt *ggtt)
 {
@@ -328,6 +330,8 @@ int xe_ggtt_init_early(struct xe_ggtt *ggtt)
 	ggtt->wq = alloc_workqueue("xe-ggtt-wq", WQ_MEM_RECLAIM, 0);
 	if (!ggtt->wq)
 		return -ENOMEM;
+	INIT_WORK(&ggtt->invalidate_work, ggtt_invalidate_work_func);
+	atomic_set(&ggtt->invalidate_pending, 0);
 
 	__xe_ggtt_init_early(ggtt, xe_wopcm_size(xe));
 
@@ -478,6 +482,23 @@ static void ggtt_invalidate_gt_tlb(struct xe_gt *gt)
 
 	err = xe_tlb_inval_ggtt(&gt->tlb_inval);
 	xe_gt_WARN(gt, err, "Failed to invalidate GGTT (%pe)", ERR_PTR(err));
+}
+
+static void ggtt_invalidate_work_func(struct work_struct *work)
+{
+	struct xe_ggtt *ggtt = container_of(work, struct xe_ggtt, invalidate_work);
+
+	atomic_set(&ggtt->invalidate_pending, 0);
+	xe_ggtt_invalidate(ggtt);
+
+	if (atomic_xchg(&ggtt->invalidate_pending, 0) == 1)
+		queue_work(ggtt->wq, &ggtt->invalidate_work);
+}
+
+static void xe_ggtt_invalidate_deferred(struct xe_ggtt *ggtt)
+{
+	if (atomic_xchg(&ggtt->invalidate_pending, 1) == 0)
+		queue_work(ggtt->wq, &ggtt->invalidate_work);
 }
 
 static void xe_ggtt_invalidate(struct xe_ggtt *ggtt)
@@ -1094,33 +1115,38 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 
 	n_ptes = num_copies ? num_copies + count : count;
 
-	guard(mutex)(&ggtt->lock);
+	{
+		guard(mutex)(&ggtt->lock);
 
-	copies = num_copies + 1;
-	remaining = count - 1;
-	duplicated = mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE ||
-		     mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST;
+		copies = num_copies + 1;
+		remaining = count - 1;
+		duplicated = mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE ||
+			     mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST;
 
-	switch (mode) {
-	case MMIO_UPDATE_GGTT_MODE_DUPLICATE:
-	case MMIO_UPDATE_GGTT_MODE_REPLICATE:
-		ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr, ptes[0], vfid, copies,
-						  duplicated);
-		for (i = 0; i < remaining; i++)
-			ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr, ptes[i + 1], vfid);
-		break;
-	case MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST:
-	case MMIO_UPDATE_GGTT_MODE_REPLICATE_LAST:
-		for (i = 0; i < remaining; i++)
-			ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr, ptes[i], vfid);
-		ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr, ptes[remaining], vfid,
-						  copies, duplicated);
-		break;
-	default:
-		return -EINVAL;
+		switch (mode) {
+		case MMIO_UPDATE_GGTT_MODE_DUPLICATE:
+		case MMIO_UPDATE_GGTT_MODE_REPLICATE:
+			ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr, ptes[0], vfid,
+							  copies, duplicated);
+			for (i = 0; i < remaining; i++)
+				ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr,
+							      ptes[i + 1], vfid);
+			break;
+		case MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST:
+		case MMIO_UPDATE_GGTT_MODE_REPLICATE_LAST:
+			for (i = 0; i < remaining; i++)
+				ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr, ptes[i],
+							      vfid);
+			ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr,
+							  ptes[remaining], vfid,
+							  copies, duplicated);
+			break;
+		default:
+			return -EINVAL;
+		}
 	}
 
-	xe_ggtt_invalidate(ggtt);
+	xe_ggtt_invalidate_deferred(ggtt);
 	return n_ptes;
 }
 
