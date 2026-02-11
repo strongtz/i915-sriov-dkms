@@ -487,9 +487,12 @@ static void ggtt_invalidate_gt_tlb(struct xe_gt *gt)
 static void ggtt_invalidate_work_func(struct work_struct *work)
 {
 	struct xe_ggtt *ggtt = container_of(work, struct xe_ggtt, invalidate_work);
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
 
 	atomic_set(&ggtt->invalidate_pending, 0);
+	xe_pm_runtime_get(xe);
 	xe_ggtt_invalidate(ggtt);
+	xe_pm_runtime_put(xe);
 
 	if (atomic_xchg(&ggtt->invalidate_pending, 0) == 1)
 		queue_work(ggtt->wq, &ggtt->invalidate_work);
