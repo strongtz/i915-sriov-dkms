@@ -41,4 +41,10 @@ Recent SR-IOV / MMIO relay learnings
 - xe now mirrors i915 behavior by handling handshake/get-runtime/update-GGTT
   in drivers/gpu/drm/xe/xe_guc_ct.c and updating PTEs in the VF GGTT slice via
   drivers/gpu/drm/xe/xe_ggtt.c with VFID tagging and GGTT invalidation.
+
+MTL SR-IOV platform notes
+- MTL appears to require SR-IOV enablement in xe plus PF-side GSC/PXP gating
+  around VF transitions; this aligns xe behavior with i915 SR-IOV expectations.
+- For multi-GT parts (like MTL), PF FLR dispatch must run on more than just PVC;
+  the xe PF FLR dispatch path should consider gt_count > 1.
 *** End Patch}));
