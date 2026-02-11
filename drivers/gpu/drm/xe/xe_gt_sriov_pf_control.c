@@ -211,6 +211,11 @@ static const char *control_bit_to_string(enum xe_gt_sriov_control_bits bit)
 	default: return "?";
 	}
 }
+#else
+static inline const char *control_bit_to_string(enum xe_gt_sriov_control_bits bit)
+{
+	return "?";
+}
 #endif
 
 static unsigned long pf_get_default_timeout(enum xe_gt_sriov_control_bits bit)
@@ -277,8 +282,8 @@ static bool pf_expect_vf_state(struct xe_gt *gt, unsigned int vfid,
 				vfid, control_bit_to_string(bit), bit);
 		xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
 				   vfid, control_bit_to_string(bit), bit);
-		xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
-				 vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
+				   vfid, control_bit_to_string(bit), bit);
 		xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
 				 vfid, control_bit_to_string(bit), bit);
 		xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u expected %s(%d) but missing\n",
@@ -299,8 +304,8 @@ static bool pf_expect_vf_not_state(struct xe_gt *gt, unsigned int vfid,
 				vfid, control_bit_to_string(bit), bit);
 		xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
 				   vfid, control_bit_to_string(bit), bit);
-		xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
-				 vfid, control_bit_to_string(bit), bit);
+		xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
+				   vfid, control_bit_to_string(bit), bit);
 		xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
 				 vfid, control_bit_to_string(bit), bit);
 		xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u expected not %s(%d) but set\n",
@@ -319,8 +324,8 @@ static void pf_track_vf_state(struct xe_gt *gt, unsigned int vfid,
 			vfid, control_bit_to_string(bit), bit, what);
 	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
 			   vfid, control_bit_to_string(bit), bit, what);
-	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
-			 vfid, control_bit_to_string(bit), bit, what);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
+			   vfid, control_bit_to_string(bit), bit, what);
 	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
 			 vfid, control_bit_to_string(bit), bit, what);
 	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u state %s(%d) %s\n",
@@ -1802,8 +1807,17 @@ static void pf_enter_vf_flr_guc_done(struct xe_gt *gt, unsigned int vfid)
  */
 int xe_gt_sriov_pf_control_trigger_flr(struct xe_gt *gt, unsigned int vfid)
 {
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u trigger_flr enter\n", vfid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u trigger_flr enter\n", vfid);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u trigger_flr enter\n", vfid);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u trigger_flr enter\n", vfid);
+
 	pf_enter_vf_flr_wip(gt, vfid);
 
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u trigger_flr exit ret=0\n", vfid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u trigger_flr exit ret=0\n", vfid);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u trigger_flr exit ret=0\n", vfid);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u trigger_flr exit ret=0\n", vfid);
 	return 0;
 }
 
@@ -1818,15 +1832,30 @@ int xe_gt_sriov_pf_control_trigger_flr(struct xe_gt *gt, unsigned int vfid)
  */
 int xe_gt_sriov_pf_control_sync_flr(struct xe_gt *gt, unsigned int vfid, bool sync)
 {
+	int ret;
+
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u sync_flr enter sync=%d\n", vfid, sync);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u sync_flr enter sync=%d\n", vfid, sync);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u sync_flr enter sync=%d\n", vfid, sync);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u sync_flr enter sync=%d\n", vfid, sync);
+
 	if (sync && pf_exit_vf_flr_sync(gt, vfid))
-		return 1;
-	if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_SYNC))
-		return 1;
-	if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_WIP))
-		return -EBUSY;
-	if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
-		return -EIO;
-	return 0;
+		ret = 1;
+	else if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_SYNC))
+		ret = 1;
+	else if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_WIP))
+		ret = -EBUSY;
+	else if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
+		ret = -EIO;
+	else
+		ret = 0;
+
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u sync_flr exit ret=%d\n", vfid, ret);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u sync_flr exit ret=%d\n", vfid, ret);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u sync_flr exit ret=%d\n", vfid, ret);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u sync_flr exit ret=%d\n", vfid, ret);
+
+	return ret;
 }
 
 /**
@@ -1843,23 +1872,36 @@ int xe_gt_sriov_pf_control_wait_flr(struct xe_gt *gt, unsigned int vfid)
 	unsigned long timeout = pf_get_default_timeout(XE_GT_SRIOV_STATE_FLR_WIP);
 	int err;
 
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u wait_flr enter timeout=%u ms\n",
+			vfid, jiffies_to_msecs(timeout));
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u wait_flr enter timeout=%u ms\n",
+			   vfid, jiffies_to_msecs(timeout));
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u wait_flr enter timeout=%u ms\n",
+			 vfid, jiffies_to_msecs(timeout));
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u wait_flr enter timeout=%u ms\n",
+			vfid, jiffies_to_msecs(timeout));
+
 	if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
-		return -EIO;
+		err = -EIO;
+	else if (!pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_WIP))
+		err = 0;
+	else
+		err = pf_wait_vf_wip_done(gt, vfid, timeout);
 
-	if (!pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_WIP))
-		return 0;
-
-	err = pf_wait_vf_wip_done(gt, vfid, timeout);
-	if (err) {
+	if (err && err != -EIO && err != 0) {
 		xe_gt_sriov_notice(gt, "VF%u FLR didn't finish in %u ms (%pe)\n",
 				   vfid, jiffies_to_msecs(timeout), ERR_PTR(err));
-		return err;
 	}
 
-	if (!pf_expect_vf_not_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
-		return -EIO;
+	if (!err && !pf_expect_vf_not_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
+		err = -EIO;
 
-	return 0;
+	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u wait_flr exit ret=%d\n", vfid, err);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u wait_flr exit ret=%d\n", vfid, err);
+	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u wait_flr exit ret=%d\n", vfid, err);
+	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u wait_flr exit ret=%d\n", vfid, err);
+
+	return err;
 }
 
 /**
@@ -1909,7 +1951,7 @@ static void pf_handle_vf_flr(struct xe_gt *gt, u32 vfid)
 
 	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
 	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
-	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
 	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
 	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u FLR notify (handle)\n", vfid);
 	xe_gt_sriov_info(gt, "VF%u FLR\n", vfid);
@@ -1926,7 +1968,7 @@ static void pf_handle_vf_flr_done(struct xe_gt *gt, u32 vfid)
 {
 	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
 	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
-	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
 	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
 	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u FLR done notify\n", vfid);
 	if (!pf_exit_vf_flr_wait_guc(gt, vfid)) {
@@ -1953,7 +1995,7 @@ static int pf_handle_vf_event(struct xe_gt *gt, u32 vfid, u32 eventid)
 {
 	xe_gt_sriov_err(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
 	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
-	xe_gt_sriov_warn(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
+	xe_gt_sriov_notice(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
 	xe_gt_sriov_info(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
 	xe_gt_sriov_dbg(gt, "[DEBUGMTLXE] VF%u event %#x\n", vfid, eventid);
 	xe_gt_sriov_dbg_verbose(gt, "received VF%u event %#x\n", vfid, eventid);
