@@ -12,8 +12,9 @@
 #include "xe_gt_sriov_pf_config.h"
 #include "xe_gt_sriov_pf_control.h"
 #include "xe_gt_sriov_printk.h"
-#include "xe_guc_engine_activity.h"
+#include "xe_force_wake.h"
 #include "xe_gsc.h"
+#include "xe_guc_engine_activity.h"
 #include "xe_pxp.h"
 #include "xe_pci_sriov.h"
 #include "xe_pm.h"
@@ -93,8 +94,12 @@ static int pf_disable_gsc_engine(struct xe_device *xe)
 	xe_assert(xe, IS_SRIOV_PF(xe));
 
 	for_each_gt(gt, xe, id) {
+		int fw_ref;
+
 		xe_gsc_wait_for_worker_completion(&gt->uc.gsc);
+		fw_ref = xe_force_wake_get(gt_to_fw(gt), XE_FW_GSC);
 		xe_gsc_stop_prepare(&gt->uc.gsc);
+		xe_force_wake_put(gt_to_fw(gt), fw_ref);
 	}
 
 	err = xe_pxp_pm_suspend(xe->pxp);
