@@ -5,6 +5,7 @@
 
 #include <linux/string_choices.h>
 #include <linux/wordpart.h>
+#include <linux/vmalloc.h>
 
 #include "abi/guc_actions_sriov_abi.h"
 #include "abi/guc_klvs_abi.h"
@@ -449,8 +450,39 @@ static void pf_release_ggtt(struct xe_tile *tile, struct xe_ggtt_node *node)
 	}
 }
 
+static void pf_free_vf_shadow_ggtt(struct xe_gt_sriov_config *config)
+{
+	kvfree(config->ggtt_shadow);
+	config->ggtt_shadow = NULL;
+	config->ggtt_shadow_num_ptes = 0;
+	config->ggtt_shadow_updates = 0;
+}
+
+static int pf_alloc_vf_shadow_ggtt(struct xe_gt *gt, struct xe_gt_sriov_config *config,
+				   struct xe_ggtt_node *node)
+{
+	u64 size = node->base.size;
+	u32 num_ptes = size / XE_PAGE_SIZE;
+	size_t bytes = (size_t)num_ptes * sizeof(*config->ggtt_shadow);
+	u64 *ptes;
+
+	xe_gt_assert(gt, xe_gt_is_main_type(gt));
+
+	pf_free_vf_shadow_ggtt(config);
+
+	ptes = kvzalloc(bytes, GFP_KERNEL);
+	if (!ptes)
+		return -ENOMEM;
+
+	config->ggtt_shadow = ptes;
+	config->ggtt_shadow_num_ptes = num_ptes;
+	config->ggtt_shadow_updates = 0;
+	return 0;
+}
+
 static void pf_release_vf_config_ggtt(struct xe_gt *gt, struct xe_gt_sriov_config *config)
 {
+	pf_free_vf_shadow_ggtt(config);
 	pf_release_ggtt(gt_to_tile(gt), config->ggtt_region);
 	config->ggtt_region = NULL;
 }
@@ -503,6 +535,10 @@ static int pf_provision_vf_ggtt(struct xe_gt *gt, unsigned int vfid, u64 size)
 		goto err;
 
 	config->ggtt_region = node;
+	err = pf_alloc_vf_shadow_ggtt(gt, config, node);
+	if (unlikely(err))
+		xe_gt_sriov_notice(gt, "Failed to allocate GGTT shadow for VF%u (%pe)\n",
+				   vfid, ERR_PTR(err));
 	return 0;
 err:
 	pf_release_ggtt(tile, node);
@@ -2784,6 +2820,10 @@ int xe_gt_sriov_pf_config_print_ggtt(struct xe_gt *gt, struct drm_printer *p)
 			   n, config->ggtt_region->base.start,
 			   config->ggtt_region->base.start + config->ggtt_region->base.size - 1,
 			   buf);
+		if (config->ggtt_shadow)
+			drm_printf(p, "\tshadow_ptes=%u shadow_updates=%llu\n",
+				   config->ggtt_shadow_num_ptes,
+				   config->ggtt_shadow_updates);
 	}
 
 	return 0;

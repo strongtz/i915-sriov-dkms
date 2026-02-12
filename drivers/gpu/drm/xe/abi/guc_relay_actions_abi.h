@@ -34,6 +34,7 @@
  *
  *  * `VF2PF_HANDSHAKE`_
  *  * `VF2PF_QUERY_RUNTIME`_
+ *  * `VF2PF_UPDATE_GGTT32`_
  */
 
 /**
@@ -173,6 +174,63 @@
 #define VF2PF_QUERY_RUNTIME_RESPONSE_MSG_1_REMAINING	GUC_HXG_RESPONSE_MSG_n_DATAn
 #define VF2PF_QUERY_RUNTIME_RESPONSE_DATAn_REG_OFFSETx	GUC_HXG_RESPONSE_MSG_n_DATAn
 #define VF2PF_QUERY_RUNTIME_RESPONSE_DATAn_REG_VALUEx	GUC_HXG_RESPONSE_MSG_n_DATAn
+
+/**
+ * DOC: VF2PF_UPDATE_GGTT32
+ *
+ * This `Relay Message`_ is used by the VF to ask the PF to update GGTT PTEs.
+ *
+ * This message definition is supported from ABI version 1.0.
+ *
+ *  +---+-------+--------------------------------------------------------------+
+ *  |   | Bits  | Description                                                  |
+ *  +===+=======+==============================================================+
+ *  | 0 |    31 | ORIGIN = GUC_HXG_ORIGIN_HOST_                                |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 30:28 | TYPE = GUC_HXG_TYPE_REQUEST_                                 |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 27:16 | DATA0 = MBZ                                                  |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   |  15:0 | ACTION = _`GUC_RELAY_ACTION_VF2PF_UPDATE_GGTT32` = 0x0102    |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 1 | 31:12 | **OFFSET** - PTE offset in the VF GGTT                        |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   | 11:10 | **MODE** - duplicate/replicate mode                           |
+ *  |   +-------+--------------------------------------------------------------+
+ *  |   |  9:0  | **NUM_COPIES** - number of duplicates                         |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 2 | 31:0  | **PTE_LO** - low dword of PTE[0]                               |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 3 | 31:0  | **PTE_HI** - high dword of PTE[0]                              |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 4 | 31:0  | **PTE_LO** - low dword of PTE[1] (optional)                    |
+ *  +---+-------+--------------------------------------------------------------+
+ *  | 5 | 31:0  | **PTE_HI** - high dword of PTE[1] (optional)                   |
+ *  +---+-------+--------------------------------------------------------------+
+ */
+#define GUC_RELAY_ACTION_VF2PF_UPDATE_GGTT32		0x0102u
+
+#define VF2PF_UPDATE_GGTT32_REQUEST_MSG_MIN_LEN		2u
+#define VF2PF_UPDATE_GGTT32_REQUEST_MSG_MAX_LEN		GUC_RELAY_MSG_MAX_LEN
+#define VF2PF_UPDATE_GGTT32_REQUEST_MSG_0_MBZ		GUC_HXG_REQUEST_MSG_0_DATA0
+#define VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET	(0xfffff << 12)
+#define VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE		(0x3 << 10)
+#define   VF2PF_UPDATE_GGTT32_MODE_DUPLICATE		0u
+#define   VF2PF_UPDATE_GGTT32_MODE_REPLICATE		1u
+#define   VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST	2u
+#define   VF2PF_UPDATE_GGTT32_MODE_REPLICATE_LAST	3u
+#define VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES	(0x3ff << 0)
+#define VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_LO	GUC_HXG_REQUEST_MSG_n_DATAn
+#define VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_HI	GUC_HXG_REQUEST_MSG_n_DATAn
+#define VF2PF_UPDATE_GGTT_MAX_PTES \
+	((GUC_RELAY_MSG_MAX_LEN - VF2PF_UPDATE_GGTT32_REQUEST_MSG_MIN_LEN) / 2)
+
+#define VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN		1u
+#define VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES	GUC_HXG_RESPONSE_MSG_0_DATA0
+
+#define VF2PF_UPDATE_GGTT32_IS_LAST_MODE(_mode) \
+	((_mode) == VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST || \
+	 (_mode) == VF2PF_UPDATE_GGTT32_MODE_REPLICATE_LAST)
 
 /**
  * DOC: GuC Relay Debug Actions

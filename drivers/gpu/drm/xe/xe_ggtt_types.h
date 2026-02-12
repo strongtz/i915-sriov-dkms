@@ -6,6 +6,9 @@
 #ifndef _XE_GGTT_TYPES_H_
 #define _XE_GGTT_TYPES_H_
 
+#include <linux/atomic.h>
+#include <linux/workqueue.h>
+
 #include <drm/drm_mm.h>
 
 #include "xe_pt_types.h"
@@ -49,6 +52,10 @@ struct xe_ggtt {
 	unsigned int access_count;
 	/** @wq: Dedicated unordered work queue to process node removals */
 	struct workqueue_struct *wq;
+	/** @invalidate_work: Deferred GGTT invalidate work */
+	struct work_struct invalidate_work;
+	/** @invalidate_pending: Pending invalidate request */
+	atomic_t invalidate_pending;
 };
 
 /**

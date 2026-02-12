@@ -9,6 +9,7 @@
 #include "abi/guc_relay_actions_abi.h"
 
 #include "regs/xe_gt_regs.h"
+#include "regs/xe_gtt_defs.h"
 #include "regs/xe_guc_regs.h"
 #include "regs/xe_regs.h"
 
@@ -17,6 +18,7 @@
 #include "xe_gt_sriov_pf_helpers.h"
 #include "xe_gt_sriov_pf_service.h"
 #include "xe_gt_sriov_pf_service_types.h"
+#include "xe_ggtt.h"
 #include "xe_guc_ct.h"
 #include "xe_guc_hxg_helpers.h"
 #include "xe_sriov_pf_service.h"
@@ -116,6 +118,85 @@ static const struct xe_reg ver_35_runtime_regs[] = {
 	SERVICE_COPY_ENABLE,		/* _MMIO(0x9170) */
 };
 
+static u64 get_pte_from_msg(const u32 *msg, u16 id)
+{
+	u32 pte_lo = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_LO, msg[id * 2 + 2]);
+	u32 pte_hi = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_HI, msg[id * 2 + 3]);
+
+	return ((u64)pte_hi << 32) | pte_lo;
+}
+
+static int pf_process_update_ggtt_msg(struct xe_gt *gt, u32 vfid,
+				      const u32 *msg, u32 msg_len,
+				      u32 *response, u32 resp_size)
+{
+	u32 pte_offset;
+	u16 num_copies;
+	u8 mode;
+	u16 count;
+	u64 ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
+	u64 *start_range;
+	u16 range_size;
+	u16 updated = 0;
+	int ret;
+	int i;
+	struct xe_ggtt_node *node;
+	u64 addr_mask = GENMASK_ULL(45, 12);
+
+	if (unlikely(!msg[0]) || unlikely(!msg[1]) || msg_len < 4 || msg_len % 2 != 0)
+		return -EPROTO;
+	if (unlikely(vfid > xe_gt_sriov_pf_get_totalvfs(gt)))
+		return -EINVAL;
+	if (resp_size < VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN)
+		return -ENOBUFS;
+
+	num_copies = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, msg[1]);
+	mode = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE, msg[1]);
+	pte_offset = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET, msg[1]);
+	count = (msg_len - 2) / 2;
+	if (count > VF2PF_UPDATE_GGTT_MAX_PTES)
+		return -EMSGSIZE;
+
+	node = gt->sriov.pf.vfs[vfid].config.ggtt_region;
+
+	ptes[0] = get_pte_from_msg(msg, 0);
+	start_range = &ptes[0];
+	range_size = 1;
+
+	for (i = 1; i < count; i++) {
+		ptes[i] = get_pte_from_msg(msg, i);
+		if ((ptes[i - 1] & ~addr_mask) != (ptes[i] & ~addr_mask)) {
+			u16 local_num_copies = VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode) ?
+					       0 : num_copies;
+
+			ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode,
+						     local_num_copies, start_range, range_size);
+			if (ret < 0)
+				return ret;
+			updated += ret;
+			start_range = &ptes[i];
+			pte_offset += range_size;
+			range_size = 0;
+			if (!VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode))
+				num_copies = 0;
+		}
+		range_size++;
+	}
+
+	ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode, num_copies,
+				     start_range, range_size);
+	if (ret < 0)
+		return ret;
+
+	updated += ret;
+
+	response[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		      FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_RESPONSE_SUCCESS) |
+		      FIELD_PREP(VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES, updated);
+
+	return VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN;
+}
+
 static const struct xe_reg *pick_runtime_regs(struct xe_device *xe, unsigned int *count)
 {
 	const struct xe_reg *regs;
@@ -179,6 +260,25 @@ static int pf_alloc_runtime_info(struct xe_gt *gt)
 	return 0;
 }
 
+static int pf_alloc_relay_trace(struct xe_gt *gt)
+{
+	struct xe_device *xe = gt_to_xe(gt);
+	unsigned int total_vfs;
+	struct xe_gt_sriov_pf_relay_trace_vf *trace;
+
+	xe_gt_assert(gt, IS_SRIOV_PF(xe));
+
+	total_vfs = xe_gt_sriov_pf_get_totalvfs(gt);
+	trace = drmm_kcalloc(&xe->drm, total_vfs + 1, sizeof(*trace), GFP_KERNEL);
+	if (!trace)
+		return -ENOMEM;
+
+	gt->sriov.pf.service.relay_trace = trace;
+	gt->sriov.pf.service.relay_trace_num_vfs = total_vfs;
+
+	return 0;
+}
+
 static void read_many(struct xe_gt *gt, unsigned int count,
 		      const struct xe_reg *regs, u32 *values)
 {
@@ -222,6 +322,10 @@ int xe_gt_sriov_pf_service_init(struct xe_gt *gt)
 	int err;
 
 	err = pf_alloc_runtime_info(gt);
+	if (unlikely(err))
+		goto failed;
+
+	err = pf_alloc_relay_trace(gt);
 	if (unlikely(err))
 		goto failed;
 
@@ -390,6 +494,9 @@ int xe_gt_sriov_pf_service_process_request(struct xe_gt *gt, u32 origin,
 	case GUC_RELAY_ACTION_VF2PF_QUERY_RUNTIME:
 		ret = pf_process_runtime_query_msg(gt, origin, msg, msg_len, response, resp_size);
 		break;
+	case GUC_RELAY_ACTION_VF2PF_UPDATE_GGTT32:
+		ret = pf_process_update_ggtt_msg(gt, origin, msg, msg_len, response, resp_size);
+		break;
 	default:
 		ret = -EOPNOTSUPP;
 		break;
@@ -420,6 +527,90 @@ int xe_gt_sriov_pf_service_print_runtime(struct xe_gt *gt, struct drm_printer *p
 	for (; size--; regs++, values++) {
 		drm_printf(p, "reg[%#x] = %#x\n",
 			   xe_mmio_adjusted_addr(&gt->mmio, regs->addr), *values);
+	}
+
+	return 0;
+}
+
+static void print_full_mask(struct drm_printer *p, const u64 full[4])
+{
+	drm_printf(p, "%016llx%016llx%016llx%016llx",
+		   (unsigned long long)full[3],
+		   (unsigned long long)full[2],
+		   (unsigned long long)full[1],
+		   (unsigned long long)full[0]);
+}
+
+int xe_gt_sriov_pf_service_print_relay_trace(struct xe_gt *gt, struct drm_printer *p)
+{
+	struct xe_gt_sriov_pf_relay_trace_vf *trace = gt->sriov.pf.service.relay_trace;
+	unsigned int total_vfs = gt->sriov.pf.service.relay_trace_num_vfs;
+	unsigned int vfid;
+
+	if (!trace || !total_vfs)
+		return 0;
+
+	drm_printf(p, "VF relay/action telemetry (bitmasks cover lower 32 actions/opcodes)\n");
+
+	for (vfid = 1; vfid <= total_vfs; vfid++) {
+		const struct xe_gt_sriov_pf_relay_trace_vf *vf = &trace[vfid];
+
+		drm_printf(p,
+			   "VF%u: relay_actions=0x%08x relay_actions_full=",
+			   vfid, vf->relay_actions);
+		print_full_mask(p, vf->relay_actions_full);
+		drm_printf(p, " last_action=0x%x last_data=0x%x last_action_ts_ns=%llu\n",
+			   vf->last_action, vf->last_data,
+			   (unsigned long long)vf->last_action_ts_ns);
+
+		drm_printf(p,
+			   "VF%u: mmio_opcodes=0x%08x mmio_opcodes_full=",
+			   vfid, vf->mmio_opcodes);
+		print_full_mask(p, vf->mmio_opcodes_full);
+		drm_printf(p,
+			   " last_mmio_opcode=0x%x last_magic=0x%x last_msg=0x%x 0x%x 0x%x 0x%x last_mmio_ts_ns=%llu mmio_handshake=%u mmio_runtime=%u ggtt_no_handshake=%u\n",
+			   vf->last_mmio_opcode, vf->last_magic,
+			   vf->last_msg[0], vf->last_msg[1],
+			   vf->last_msg[2], vf->last_msg[3],
+			   (unsigned long long)vf->last_mmio_ts_ns,
+			   vf->mmio_handshake, vf->mmio_runtime,
+			   vf->ggtt_no_handshake);
+	}
+
+	return 0;
+}
+
+int xe_gt_sriov_pf_service_print_relay_trace_detail(struct xe_gt *gt, struct drm_printer *p)
+{
+	struct xe_gt_sriov_pf_relay_trace_vf *trace = gt->sriov.pf.service.relay_trace;
+	unsigned int total_vfs = gt->sriov.pf.service.relay_trace_num_vfs;
+	unsigned int vfid;
+
+	if (!trace || !total_vfs)
+		return 0;
+
+	for (vfid = 1; vfid <= total_vfs; vfid++) {
+		const struct xe_gt_sriov_pf_relay_trace_vf *vf = &trace[vfid];
+		u32 count = vf->detail.count;
+		u32 head = vf->detail.head;
+		u32 i;
+
+		drm_printf(p, "VF%u mmio_relay_trace (newest last, count=%u head=%u)\n",
+			   vfid, count, head);
+
+		if (!count)
+			continue;
+
+		for (i = 0; i < count; i++) {
+			u32 idx = (head + XE_SRIOV_RELAY_TRACE_DETAIL_LEN - count + i) %
+				  XE_SRIOV_RELAY_TRACE_DETAIL_LEN;
+			const struct xe_gt_sriov_pf_relay_trace_entry *e = &vf->detail.entries[idx];
+
+			drm_printf(p,
+				   "  ts_ns=%llu opcode=0x%x magic=0x%x msg=0x%x 0x%x 0x%x 0x%x\n",
+				   (unsigned long long)e->ts_ns, e->opcode, e->magic,
+				   e->msg[0], e->msg[1], e->msg[2], e->msg[3]);
+		}
 	}
 
 	return 0;

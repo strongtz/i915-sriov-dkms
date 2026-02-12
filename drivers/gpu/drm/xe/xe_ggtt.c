@@ -33,6 +33,10 @@
 #include "xe_tlb_inval.h"
 #include "xe_wa.h"
 #include "xe_wopcm.h"
+#ifdef CONFIG_PCI_IOV
+#include "abi/iov_actions_mmio_abi.h"
+#include "xe_sriov_pf_helpers.h"
+#endif
 
 /**
  * DOC: Global Graphics Translation Table (GGTT)
@@ -231,6 +235,8 @@ static void ggtt_fini(void *arg)
 	ggtt->scratch = NULL;
 }
 
+static void ggtt_invalidate_work_func(struct work_struct *work);
+
 #ifdef CONFIG_LOCKDEP
 void xe_ggtt_might_lock(struct xe_ggtt *ggtt)
 {
@@ -325,6 +331,8 @@ int xe_ggtt_init_early(struct xe_ggtt *ggtt)
 	ggtt->wq = alloc_workqueue("xe-ggtt-wq", WQ_MEM_RECLAIM, 0);
 	if (!ggtt->wq)
 		return -ENOMEM;
+	INIT_WORK(&ggtt->invalidate_work, ggtt_invalidate_work_func);
+	atomic_set(&ggtt->invalidate_pending, 0);
 
 	__xe_ggtt_init_early(ggtt, xe_wopcm_size(xe));
 
@@ -475,6 +483,26 @@ static void ggtt_invalidate_gt_tlb(struct xe_gt *gt)
 
 	err = xe_tlb_inval_ggtt(&gt->tlb_inval);
 	xe_gt_WARN(gt, err, "Failed to invalidate GGTT (%pe)", ERR_PTR(err));
+}
+
+static void ggtt_invalidate_work_func(struct work_struct *work)
+{
+	struct xe_ggtt *ggtt = container_of(work, struct xe_ggtt, invalidate_work);
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
+
+	atomic_set(&ggtt->invalidate_pending, 0);
+	xe_pm_runtime_get(xe);
+	xe_ggtt_invalidate(ggtt);
+	xe_pm_runtime_put(xe);
+
+	if (atomic_xchg(&ggtt->invalidate_pending, 0) == 1)
+		queue_work(ggtt->wq, &ggtt->invalidate_work);
+}
+
+static void xe_ggtt_invalidate_deferred(struct xe_ggtt *ggtt)
+{
+	if (atomic_xchg(&ggtt->invalidate_pending, 1) == 0)
+		queue_work(ggtt->wq, &ggtt->invalidate_work);
 }
 
 static void xe_ggtt_invalidate(struct xe_ggtt *ggtt)
@@ -1032,6 +1060,185 @@ int xe_ggtt_node_load(struct xe_ggtt_node *node, const void *src, size_t size, u
 	xe_ggtt_invalidate(ggtt);
 
 	return 0;
+}
+
+static u64 xe_ggtt_prepare_vf_pte(u64 pte, u16 vfid)
+{
+	u64 vfid_pte = u64_replace_bits(pte, vfid, GGTT_PTE_VFID);
+
+	return vfid_pte | XE_PAGE_PRESENT;
+}
+
+static u64 xe_ggtt_write_one(struct xe_ggtt *ggtt, u64 addr, u64 pte, u16 vfid)
+{
+	ggtt->pt_ops->ggtt_set_pte(ggtt, addr, xe_ggtt_prepare_vf_pte(pte, vfid));
+	return addr + XE_PAGE_SIZE;
+}
+
+static u64 xe_ggtt_write_dup_rep(struct xe_ggtt *ggtt, u64 addr, u64 pte, u16 vfid,
+				 u16 num_entries, bool duplicated)
+{
+	u16 i;
+
+	for (i = 0; i < num_entries; i++) {
+		u64 entry = pte;
+
+		if (!duplicated)
+			entry += (u64)i * XE_PAGE_SIZE;
+
+		addr = xe_ggtt_write_one(ggtt, addr, entry, vfid);
+	}
+
+	return addr;
+}
+
+#ifdef CONFIG_PCI_IOV
+static u32 xe_ggtt_shadow_write_one(u64 *shadow, u32 idx, u64 pte, u16 vfid)
+{
+	shadow[idx] = xe_ggtt_prepare_vf_pte(pte, vfid);
+	return idx + 1;
+}
+
+static u32 xe_ggtt_shadow_write_dup_rep(u64 *shadow, u32 idx, u64 pte, u16 vfid,
+					u16 num_entries, bool duplicated)
+{
+	u16 i;
+
+	for (i = 0; i < num_entries; i++) {
+		u64 entry = pte;
+
+		if (!duplicated)
+			entry += (u64)i * XE_PAGE_SIZE;
+
+		idx = xe_ggtt_shadow_write_one(shadow, idx, entry, vfid);
+	}
+
+	return idx;
+}
+
+static void xe_ggtt_shadow_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
+					  u8 mode, u16 num_copies, const u64 *ptes, u16 count)
+{
+	struct xe_gt *gt = node->ggtt->tile->primary_gt;
+	struct xe_gt_sriov_config *config;
+	u16 remaining;
+	u16 copies;
+	u16 i;
+	u32 idx;
+	u16 n_ptes;
+	bool duplicated;
+
+	if (!gt || !IS_SRIOV_PF(gt_to_xe(gt)))
+		return;
+
+	if (vfid > xe_sriov_pf_get_totalvfs(gt_to_xe(gt)))
+		return;
+
+	config = &gt->sriov.pf.vfs[vfid].config;
+	if (config->ggtt_region != node)
+		return;
+	if (!config->ggtt_shadow || !config->ggtt_shadow_num_ptes)
+		return;
+
+	n_ptes = num_copies ? num_copies + count : count;
+	if (pte_offset + n_ptes > config->ggtt_shadow_num_ptes)
+		return;
+
+	copies = num_copies + 1;
+	remaining = count - 1;
+	duplicated = mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE ||
+		     mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST;
+	idx = pte_offset;
+
+	switch (mode) {
+	case MMIO_UPDATE_GGTT_MODE_DUPLICATE:
+	case MMIO_UPDATE_GGTT_MODE_REPLICATE:
+		idx = xe_ggtt_shadow_write_dup_rep(config->ggtt_shadow, idx, ptes[0], vfid,
+						   copies, duplicated);
+		for (i = 0; i < remaining; i++)
+			idx = xe_ggtt_shadow_write_one(config->ggtt_shadow, idx, ptes[i + 1],
+						       vfid);
+		break;
+	case MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST:
+	case MMIO_UPDATE_GGTT_MODE_REPLICATE_LAST:
+		for (i = 0; i < remaining; i++)
+			idx = xe_ggtt_shadow_write_one(config->ggtt_shadow, idx, ptes[i], vfid);
+		idx = xe_ggtt_shadow_write_dup_rep(config->ggtt_shadow, idx, ptes[remaining],
+						   vfid, copies, duplicated);
+		break;
+	default:
+		return;
+	}
+
+	config->ggtt_shadow_updates++;
+}
+#endif
+
+int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
+			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
+{
+	struct xe_ggtt *ggtt;
+	u64 ggtt_addr, ggtt_addr_end, vf_ggtt_end;
+	u16 n_ptes;
+	u16 remaining;
+	u16 copies;
+	u16 i;
+	bool duplicated;
+
+	if (!node)
+		return -ENOENT;
+	if (!count)
+		return -EINVAL;
+	if (!xe_ggtt_node_allocated(node))
+		return -ENOENT;
+
+	ggtt = node->ggtt;
+	ggtt_addr = node->base.start + (u64)pte_offset * XE_PAGE_SIZE;
+	ggtt_addr_end = ggtt_addr + (u64)count * XE_PAGE_SIZE - 1;
+	vf_ggtt_end = node->base.start + node->base.size - 1;
+	if (ggtt_addr_end > vf_ggtt_end)
+		return -ERANGE;
+
+	n_ptes = num_copies ? num_copies + count : count;
+
+	{
+		guard(mutex)(&ggtt->lock);
+
+		copies = num_copies + 1;
+		remaining = count - 1;
+		duplicated = mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE ||
+			     mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST;
+
+		switch (mode) {
+		case MMIO_UPDATE_GGTT_MODE_DUPLICATE:
+		case MMIO_UPDATE_GGTT_MODE_REPLICATE:
+			ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr, ptes[0], vfid,
+							  copies, duplicated);
+			for (i = 0; i < remaining; i++)
+				ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr,
+							      ptes[i + 1], vfid);
+			break;
+		case MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST:
+		case MMIO_UPDATE_GGTT_MODE_REPLICATE_LAST:
+			for (i = 0; i < remaining; i++)
+				ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr, ptes[i],
+							      vfid);
+			ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr,
+							  ptes[remaining], vfid,
+							  copies, duplicated);
+			break;
+		default:
+			return -EINVAL;
+		}
+
+#ifdef CONFIG_PCI_IOV
+		xe_ggtt_shadow_update_vf_ptes(node, vfid, pte_offset, mode, num_copies,
+					      ptes, count);
+#endif
+	}
+
+	xe_ggtt_invalidate_deferred(ggtt);
+	return n_ptes;
 }
 
 #endif

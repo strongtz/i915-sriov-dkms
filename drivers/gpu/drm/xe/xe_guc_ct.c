@@ -9,21 +9,28 @@
 #include <linux/circ_buf.h>
 #include <linux/delay.h>
 #include <linux/fault-inject.h>
+#include <linux/ktime.h>
 
 #include <kunit/static_stub.h>
 
 #include <drm/drm_managed.h>
 
 #include "abi/guc_actions_abi.h"
+#include "abi/guc_actions_pf_mmio_abi.h"
 #include "abi/guc_actions_sriov_abi.h"
 #include "abi/guc_klvs_abi.h"
+#include "abi/iov_actions_mmio_abi.h"
+#include "abi/iov_version_abi.h"
 #include "xe_bo.h"
 #include "xe_devcoredump.h"
 #include "xe_device.h"
 #include "xe_gt.h"
 #include "xe_gt_printk.h"
 #include "xe_gt_sriov_pf_control.h"
+#include "xe_gt_sriov_pf_helpers.h"
 #include "xe_gt_sriov_pf_monitor.h"
+#include "xe_gt_sriov_pf_service_types.h"
+#include "xe_ggtt.h"
 #include "xe_guc.h"
 #include "xe_guc_log.h"
 #include "xe_guc_pagefault.h"
@@ -31,6 +38,7 @@
 #include "xe_guc_submit.h"
 #include "xe_guc_tlb_inval.h"
 #include "xe_map.h"
+#include "xe_mmio.h"
 #include "xe_pm.h"
 #include "xe_sriov_vf.h"
 #include "xe_trace_guc.h"
@@ -1507,6 +1515,249 @@ static int parse_g2h_msg(struct xe_guc_ct *ct, u32 *msg, u32 len)
 	return ret;
 }
 
+static int mmio_relay_send_error(struct xe_guc *guc, u32 vfid, u32 magic, int fault)
+{
+	u32 request[PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_LEN] = {
+		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_ACTION_PF2GUC_MMIO_RELAY_FAILURE),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_1_VFID, vfid),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_2_MAGIC, magic) |
+		FIELD_PREP(PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_2_FAULT, fault),
+	};
+
+	return xe_guc_ct_send_g2h_handler(&guc->ct, request, ARRAY_SIZE(request));
+}
+
+static int mmio_relay_send_reply(struct xe_guc *guc, u32 vfid, u32 magic, u32 data[4])
+{
+	u32 request[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_LEN] = {
+		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_ACTION_PF2GUC_MMIO_RELAY_SUCCESS),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_1_VFID, vfid),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_2_MAGIC, magic) |
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_2_DATA0, data[0]),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_n_DATAx, data[1]),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_n_DATAx, data[2]),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_n_DATAx, data[3]),
+	};
+
+	return xe_guc_ct_send_g2h_handler(&guc->ct, request, ARRAY_SIZE(request));
+}
+
+static void relay_trace_set_bit(u64 full[4], u32 bit)
+{
+	u32 idx = bit / 64;
+	u32 off = bit % 64;
+
+	if (idx >= 4)
+		return;
+
+	full[idx] |= BIT_ULL(off);
+}
+
+static void mmio_relay_trace_update(struct xe_gt *gt, u32 vfid, u32 opcode,
+				    u32 magic, const u32 *msg)
+{
+	struct xe_gt_sriov_pf_relay_trace_vf *trace;
+	struct xe_gt_sriov_pf_relay_trace_entry *entry;
+	u32 bit = opcode & 0x7f;
+	u32 head;
+
+	trace = gt->sriov.pf.service.relay_trace;
+	if (!trace || vfid > gt->sriov.pf.service.relay_trace_num_vfs)
+		return;
+
+	trace = &trace[vfid];
+	trace->last_mmio_opcode = opcode;
+	trace->last_magic = magic;
+	trace->last_msg[0] = msg[0];
+	trace->last_msg[1] = msg[1];
+	trace->last_msg[2] = msg[2];
+	trace->last_msg[3] = msg[3];
+	trace->last_mmio_ts_ns = ktime_get_ns();
+
+	if (bit < 32)
+		trace->mmio_opcodes |= BIT(bit);
+	relay_trace_set_bit(trace->mmio_opcodes_full, bit);
+
+	if (opcode == IOV_OPCODE_VF2PF_MMIO_HANDSHAKE)
+		trace->mmio_handshake = 1;
+	else if (opcode == IOV_OPCODE_VF2PF_MMIO_GET_RUNTIME)
+		trace->mmio_runtime = 1;
+	else if (opcode == IOV_OPCODE_VF2PF_MMIO_UPDATE_GGTT && !trace->mmio_handshake)
+		trace->ggtt_no_handshake = 1;
+
+	head = trace->detail.head;
+	entry = &trace->detail.entries[head];
+	entry->ts_ns = trace->last_mmio_ts_ns;
+	entry->opcode = opcode;
+	entry->magic = magic;
+	entry->msg[0] = msg[0];
+	entry->msg[1] = msg[1];
+	entry->msg[2] = msg[2];
+	entry->msg[3] = msg[3];
+
+	trace->detail.head = (head + 1) % XE_SRIOV_RELAY_TRACE_DETAIL_LEN;
+	if (trace->detail.count < XE_SRIOV_RELAY_TRACE_DETAIL_LEN)
+		trace->detail.count++;
+}
+
+static bool mmio_relay_runtime_match(struct xe_gt *gt, u32 offset, u32 addr)
+{
+	u32 adjusted = xe_mmio_adjusted_addr(&gt->mmio, addr);
+
+	return offset == addr || offset == adjusted;
+}
+
+static int mmio_relay_reply_get_runtime(struct xe_guc *guc, struct xe_gt *gt,
+					u32 vfid, u32 magic, const u32 *msg)
+{
+	u32 data[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_NUM_DATA + 1] = { };
+	struct xe_gt_sriov_pf_service_runtime_regs *runtime;
+	unsigned int i, j;
+
+	if (unlikely(!msg[0]))
+		return -EPROTO;
+	if (unlikely(!msg[1]))
+		return -EINVAL;
+
+	runtime = &gt->sriov.pf.service.runtime;
+
+	for (i = 0; i < VF2PF_MMIO_GET_RUNTIME_REQUEST_MSG_NUM_OFFSET; i++) {
+		u32 offset = msg[i + 1];
+		bool found = false;
+
+		if (unlikely(!offset))
+			continue;
+
+		for (j = 0; j < runtime->size; j++) {
+			if (mmio_relay_runtime_match(gt, offset, runtime->regs[j].addr)) {
+				data[i + 1] = runtime->values[j];
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			return -EACCES;
+	}
+
+	return mmio_relay_send_reply(guc, vfid, magic, data);
+}
+
+static int mmio_relay_reply_update_ggtt(struct xe_guc *guc, struct xe_gt *gt,
+					u32 vfid, u32 magic, const u32 *msg)
+{
+	u32 data[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_NUM_DATA + 1] = { };
+	u16 num_copies;
+	u8 mode;
+	u32 pte_lo, pte_hi;
+	u32 pte_offset;
+	u64 pte;
+	struct xe_ggtt_node *node;
+	int ret;
+
+	if (unlikely(!msg[0]))
+		return -EPROTO;
+	if (unlikely(vfid > xe_gt_sriov_pf_get_totalvfs(gt)))
+		return -EINVAL;
+
+	num_copies = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES, msg[1]);
+	mode = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_MODE, msg[1]);
+	pte_offset = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_OFFSET, msg[1]);
+	pte_lo = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_2_PTE_LO, msg[2]);
+	pte_hi = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_3_PTE_HI, msg[3]);
+
+	pte = ((u64)pte_hi << 32) | pte_lo;
+	node = gt->sriov.pf.vfs[vfid].config.ggtt_region;
+
+	ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode, num_copies, &pte, 1);
+	if (ret < 0)
+		return ret;
+
+	data[0] = FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_RESPONSE_MSG_1_NUM_PTES, (u16)ret);
+
+	return mmio_relay_send_reply(guc, vfid, magic, data);
+}
+
+static int mmio_relay_reply_handshake(struct xe_guc *guc, u32 vfid, u32 magic,
+				      const u32 *msg)
+{
+	u32 data[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_NUM_DATA + 1] = { };
+	u32 wanted_major = FIELD_GET(VF2PF_MMIO_HANDSHAKE_REQUEST_MSG_1_MAJOR, msg[1]);
+	u32 wanted_minor = FIELD_GET(VF2PF_MMIO_HANDSHAKE_REQUEST_MSG_1_MINOR, msg[1]);
+	u32 major = 0, minor = 0;
+	int fault = 0;
+
+	if (!wanted_major && !wanted_minor) {
+		major = IOV_VERSION_LATEST_MAJOR;
+		minor = IOV_VERSION_LATEST_MINOR;
+	} else if (wanted_major > IOV_VERSION_LATEST_MAJOR) {
+		major = IOV_VERSION_LATEST_MAJOR;
+		minor = IOV_VERSION_LATEST_MINOR;
+	} else if (wanted_major < IOV_VERSION_LATEST_MAJOR) {
+		fault = ENOPKG;
+	} else {
+		if (unlikely(!msg[0] || msg[2] || msg[3])) {
+			fault = EPROTO;
+		} else {
+			major = wanted_major;
+			minor = min_t(u32, IOV_VERSION_LATEST_MINOR, wanted_minor);
+		}
+	}
+
+	if (fault)
+		return mmio_relay_send_error(guc, vfid, magic, fault);
+
+	data[1] = FIELD_PREP(VF2PF_MMIO_HANDSHAKE_RESPONSE_MSG_1_MAJOR, major) |
+		  FIELD_PREP(VF2PF_MMIO_HANDSHAKE_RESPONSE_MSG_1_MINOR, minor);
+
+	return mmio_relay_send_reply(guc, vfid, magic, data);
+}
+
+static int mmio_relay_process(struct xe_guc *guc, struct xe_gt *gt,
+			      const u32 *msg, u32 len)
+{
+	u32 vfid, magic, opcode;
+	int err = -EPROTO;
+
+	if (unlikely(!IS_SRIOV_PF(gt_to_xe(gt))))
+		return -EPERM;
+	if (unlikely(len != GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_LEN))
+		return -EPROTO;
+
+	vfid = FIELD_GET(GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_1_VFID, msg[1]);
+	magic = FIELD_GET(GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_2_MAGIC, msg[2]);
+	opcode = FIELD_GET(GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_2_OPCODE, msg[2]);
+
+	if (unlikely(!vfid))
+		return -EPROTO;
+
+	mmio_relay_trace_update(gt, vfid, opcode, magic, msg + 2);
+
+	switch (opcode) {
+	case IOV_OPCODE_VF2PF_MMIO_HANDSHAKE:
+		err = mmio_relay_reply_handshake(guc, vfid, magic, msg + 2);
+		break;
+	case IOV_OPCODE_VF2PF_MMIO_GET_RUNTIME:
+		err = mmio_relay_reply_get_runtime(guc, gt, vfid, magic, msg + 2);
+		break;
+	case IOV_OPCODE_VF2PF_MMIO_UPDATE_GGTT:
+		err = mmio_relay_reply_update_ggtt(guc, gt, vfid, magic, msg + 2);
+		break;
+	default:
+		err = -EOPNOTSUPP;
+		break;
+	}
+
+	if (unlikely(err < 0))
+		mmio_relay_send_error(guc, vfid, magic, -err);
+
+	return err;
+}
+
 static int process_g2h_msg(struct xe_guc_ct *ct, u32 *msg, u32 len)
 {
 	struct xe_guc *guc = ct_to_guc(ct);
@@ -1562,6 +1813,9 @@ static int process_g2h_msg(struct xe_guc_ct *ct, u32 *msg, u32 len)
 		break;
 	case XE_GUC_ACTION_GUC2VF_RELAY_FROM_PF:
 		ret = xe_guc_relay_process_guc2vf(&guc->relay, hxg, hxg_len);
+		break;
+	case GUC_ACTION_GUC2PF_MMIO_RELAY_SERVICE:
+		ret = mmio_relay_process(guc, gt, hxg, hxg_len);
 		break;
 	case GUC_ACTION_GUC2PF_VF_STATE_NOTIFY:
 		ret = xe_gt_sriov_pf_control_process_guc2pf(gt, hxg, hxg_len);
