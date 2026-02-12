@@ -16,6 +16,8 @@ int xe_gt_sriov_pf_service_init(struct xe_gt *gt);
 void xe_gt_sriov_pf_service_update(struct xe_gt *gt);
 
 int xe_gt_sriov_pf_service_print_runtime(struct xe_gt *gt, struct drm_printer *p);
+int xe_gt_sriov_pf_service_print_relay_trace(struct xe_gt *gt, struct drm_printer *p);
+int xe_gt_sriov_pf_service_print_relay_trace_detail(struct xe_gt *gt, struct drm_printer *p);
 
 #ifdef CONFIG_PCI_IOV
 int xe_gt_sriov_pf_service_process_request(struct xe_gt *gt, u32 origin,

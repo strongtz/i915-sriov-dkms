@@ -260,6 +260,25 @@ static int pf_alloc_runtime_info(struct xe_gt *gt)
 	return 0;
 }
 
+static int pf_alloc_relay_trace(struct xe_gt *gt)
+{
+	struct xe_device *xe = gt_to_xe(gt);
+	unsigned int total_vfs;
+	struct xe_gt_sriov_pf_relay_trace_vf *trace;
+
+	xe_gt_assert(gt, IS_SRIOV_PF(xe));
+
+	total_vfs = xe_gt_sriov_pf_get_totalvfs(gt);
+	trace = drmm_kcalloc(&xe->drm, total_vfs + 1, sizeof(*trace), GFP_KERNEL);
+	if (!trace)
+		return -ENOMEM;
+
+	gt->sriov.pf.service.relay_trace = trace;
+	gt->sriov.pf.service.relay_trace_num_vfs = total_vfs;
+
+	return 0;
+}
+
 static void read_many(struct xe_gt *gt, unsigned int count,
 		      const struct xe_reg *regs, u32 *values)
 {
@@ -303,6 +322,10 @@ int xe_gt_sriov_pf_service_init(struct xe_gt *gt)
 	int err;
 
 	err = pf_alloc_runtime_info(gt);
+	if (unlikely(err))
+		goto failed;
+
+	err = pf_alloc_relay_trace(gt);
 	if (unlikely(err))
 		goto failed;
 
@@ -504,6 +527,90 @@ int xe_gt_sriov_pf_service_print_runtime(struct xe_gt *gt, struct drm_printer *p
 	for (; size--; regs++, values++) {
 		drm_printf(p, "reg[%#x] = %#x\n",
 			   xe_mmio_adjusted_addr(&gt->mmio, regs->addr), *values);
+	}
+
+	return 0;
+}
+
+static void print_full_mask(struct drm_printer *p, const u64 full[4])
+{
+	drm_printf(p, "%016llx%016llx%016llx%016llx",
+		   (unsigned long long)full[3],
+		   (unsigned long long)full[2],
+		   (unsigned long long)full[1],
+		   (unsigned long long)full[0]);
+}
+
+int xe_gt_sriov_pf_service_print_relay_trace(struct xe_gt *gt, struct drm_printer *p)
+{
+	struct xe_gt_sriov_pf_relay_trace_vf *trace = gt->sriov.pf.service.relay_trace;
+	unsigned int total_vfs = gt->sriov.pf.service.relay_trace_num_vfs;
+	unsigned int vfid;
+
+	if (!trace || !total_vfs)
+		return 0;
+
+	drm_printf(p, "VF relay/action telemetry (bitmasks cover lower 32 actions/opcodes)\n");
+
+	for (vfid = 1; vfid <= total_vfs; vfid++) {
+		const struct xe_gt_sriov_pf_relay_trace_vf *vf = &trace[vfid];
+
+		drm_printf(p,
+			   "VF%u: relay_actions=0x%08x relay_actions_full=",
+			   vfid, vf->relay_actions);
+		print_full_mask(p, vf->relay_actions_full);
+		drm_printf(p, " last_action=0x%x last_data=0x%x last_action_ts_ns=%llu\n",
+			   vf->last_action, vf->last_data,
+			   (unsigned long long)vf->last_action_ts_ns);
+
+		drm_printf(p,
+			   "VF%u: mmio_opcodes=0x%08x mmio_opcodes_full=",
+			   vfid, vf->mmio_opcodes);
+		print_full_mask(p, vf->mmio_opcodes_full);
+		drm_printf(p,
+			   " last_mmio_opcode=0x%x last_magic=0x%x last_msg=0x%x 0x%x 0x%x 0x%x last_mmio_ts_ns=%llu mmio_handshake=%u mmio_runtime=%u ggtt_no_handshake=%u\n",
+			   vf->last_mmio_opcode, vf->last_magic,
+			   vf->last_msg[0], vf->last_msg[1],
+			   vf->last_msg[2], vf->last_msg[3],
+			   (unsigned long long)vf->last_mmio_ts_ns,
+			   vf->mmio_handshake, vf->mmio_runtime,
+			   vf->ggtt_no_handshake);
+	}
+
+	return 0;
+}
+
+int xe_gt_sriov_pf_service_print_relay_trace_detail(struct xe_gt *gt, struct drm_printer *p)
+{
+	struct xe_gt_sriov_pf_relay_trace_vf *trace = gt->sriov.pf.service.relay_trace;
+	unsigned int total_vfs = gt->sriov.pf.service.relay_trace_num_vfs;
+	unsigned int vfid;
+
+	if (!trace || !total_vfs)
+		return 0;
+
+	for (vfid = 1; vfid <= total_vfs; vfid++) {
+		const struct xe_gt_sriov_pf_relay_trace_vf *vf = &trace[vfid];
+		u32 count = vf->detail.count;
+		u32 head = vf->detail.head;
+		u32 i;
+
+		drm_printf(p, "VF%u mmio_relay_trace (newest last, count=%u head=%u)\n",
+			   vfid, count, head);
+
+		if (!count)
+			continue;
+
+		for (i = 0; i < count; i++) {
+			u32 idx = (head + XE_SRIOV_RELAY_TRACE_DETAIL_LEN - count + i) %
+				  XE_SRIOV_RELAY_TRACE_DETAIL_LEN;
+			const struct xe_gt_sriov_pf_relay_trace_entry *e = &vf->detail.entries[idx];
+
+			drm_printf(p,
+				   "  ts_ns=%llu opcode=0x%x magic=0x%x msg=0x%x 0x%x 0x%x 0x%x\n",
+				   (unsigned long long)e->ts_ns, e->opcode, e->magic,
+				   e->msg[0], e->msg[1], e->msg[2], e->msg[3]);
+		}
 	}
 
 	return 0;

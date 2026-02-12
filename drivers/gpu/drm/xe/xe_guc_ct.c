@@ -9,6 +9,7 @@
 #include <linux/circ_buf.h>
 #include <linux/delay.h>
 #include <linux/fault-inject.h>
+#include <linux/ktime.h>
 
 #include <kunit/static_stub.h>
 
@@ -1545,6 +1546,64 @@ static int mmio_relay_send_reply(struct xe_guc *guc, u32 vfid, u32 magic, u32 da
 	return xe_guc_ct_send_g2h_handler(&guc->ct, request, ARRAY_SIZE(request));
 }
 
+static void relay_trace_set_bit(u64 full[4], u32 bit)
+{
+	u32 idx = bit / 64;
+	u32 off = bit % 64;
+
+	if (idx >= 4)
+		return;
+
+	full[idx] |= BIT_ULL(off);
+}
+
+static void mmio_relay_trace_update(struct xe_gt *gt, u32 vfid, u32 opcode,
+				    u32 magic, const u32 *msg)
+{
+	struct xe_gt_sriov_pf_relay_trace_vf *trace;
+	struct xe_gt_sriov_pf_relay_trace_entry *entry;
+	u32 bit = opcode & 0x7f;
+	u32 head;
+
+	trace = gt->sriov.pf.service.relay_trace;
+	if (!trace || vfid > gt->sriov.pf.service.relay_trace_num_vfs)
+		return;
+
+	trace = &trace[vfid];
+	trace->last_mmio_opcode = opcode;
+	trace->last_magic = magic;
+	trace->last_msg[0] = msg[0];
+	trace->last_msg[1] = msg[1];
+	trace->last_msg[2] = msg[2];
+	trace->last_msg[3] = msg[3];
+	trace->last_mmio_ts_ns = ktime_get_ns();
+
+	if (bit < 32)
+		trace->mmio_opcodes |= BIT(bit);
+	relay_trace_set_bit(trace->mmio_opcodes_full, bit);
+
+	if (opcode == IOV_OPCODE_VF2PF_MMIO_HANDSHAKE)
+		trace->mmio_handshake = 1;
+	else if (opcode == IOV_OPCODE_VF2PF_MMIO_GET_RUNTIME)
+		trace->mmio_runtime = 1;
+	else if (opcode == IOV_OPCODE_VF2PF_MMIO_UPDATE_GGTT && !trace->mmio_handshake)
+		trace->ggtt_no_handshake = 1;
+
+	head = trace->detail.head;
+	entry = &trace->detail.entries[head];
+	entry->ts_ns = trace->last_mmio_ts_ns;
+	entry->opcode = opcode;
+	entry->magic = magic;
+	entry->msg[0] = msg[0];
+	entry->msg[1] = msg[1];
+	entry->msg[2] = msg[2];
+	entry->msg[3] = msg[3];
+
+	trace->detail.head = (head + 1) % XE_SRIOV_RELAY_TRACE_DETAIL_LEN;
+	if (trace->detail.count < XE_SRIOV_RELAY_TRACE_DETAIL_LEN)
+		trace->detail.count++;
+}
+
 static bool mmio_relay_runtime_match(struct xe_gt *gt, u32 offset, u32 addr)
 {
 	u32 adjusted = xe_mmio_adjusted_addr(&gt->mmio, addr);
@@ -1675,6 +1734,8 @@ static int mmio_relay_process(struct xe_guc *guc, struct xe_gt *gt,
 
 	if (unlikely(!vfid))
 		return -EPROTO;
+
+	mmio_relay_trace_update(gt, vfid, opcode, magic, msg + 2);
 
 	switch (opcode) {
 	case IOV_OPCODE_VF2PF_MMIO_HANDSHAKE:
