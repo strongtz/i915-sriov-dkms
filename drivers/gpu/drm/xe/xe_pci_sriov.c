@@ -26,6 +26,20 @@
 #include "xe_sriov_pf_sysfs.h"
 #include "xe_sriov_printk.h"
 
+static void debug_mtl_sriov_log_all(struct xe_device *xe, const char *tag, int val)
+{
+	struct device *dev = xe->drm.dev;
+
+	dev_emerg(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_alert(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_crit(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_err(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_warn(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_notice(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_info(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+	dev_dbg(dev, "[DEBUGMTLXE] %s val=%d\n", tag, val);
+}
+
 static void pf_reset_vfs(struct xe_device *xe, unsigned int num_vfs)
 {
 	unsigned int n;
@@ -92,6 +106,7 @@ static int pf_disable_gsc_engine(struct xe_device *xe)
 	int err;
 
 	xe_assert(xe, IS_SRIOV_PF(xe));
+	debug_mtl_sriov_log_all(xe, "pf_disable_gsc_engine_enter", 0);
 
 	for_each_gt(gt, xe, id) {
 		int fw_ref;
@@ -103,6 +118,7 @@ static int pf_disable_gsc_engine(struct xe_device *xe)
 	}
 
 	err = xe_pxp_pm_suspend(xe->pxp);
+	debug_mtl_sriov_log_all(xe, "pf_disable_gsc_engine_exit", err);
 	return err;
 }
 
@@ -112,11 +128,14 @@ static void pf_enable_gsc_engine(struct xe_device *xe)
 	unsigned int id;
 
 	xe_assert(xe, IS_SRIOV_PF(xe));
+	debug_mtl_sriov_log_all(xe, "pf_enable_gsc_engine_enter", 0);
 
 	xe_pxp_pm_resume(xe->pxp);
 
 	for_each_gt(gt, xe, id)
 		xe_gsc_load_start(&gt->uc.gsc);
+
+	debug_mtl_sriov_log_all(xe, "pf_enable_gsc_engine_exit", 0);
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)  // incompatible before 6.17
@@ -157,6 +176,7 @@ static int pf_enable_vfs(struct xe_device *xe, int num_vfs)
 	xe_assert(xe, num_vfs > 0);
 	xe_assert(xe, num_vfs <= total_vfs);
 	xe_sriov_dbg(xe, "enabling %u VF%s\n", num_vfs, str_plural(num_vfs));
+	debug_mtl_sriov_log_all(xe, "pf_enable_vfs_enter", num_vfs);
 
 	err = xe_sriov_pf_wait_ready(xe);
 	if (err)
@@ -178,6 +198,7 @@ static int pf_enable_vfs(struct xe_device *xe, int num_vfs)
 	xe_pm_runtime_get_noresume(xe);
 
 	if (xe->info.platform == XE_METEORLAKE) {
+		debug_mtl_sriov_log_all(xe, "mtl_disable_gsc_before_provision", 0);
 		err = pf_disable_gsc_engine(xe);
 		if (err)
 			xe_sriov_notice(xe, "Failed to disable GSC engine (%pe)\n",
@@ -204,20 +225,24 @@ static int pf_enable_vfs(struct xe_device *xe, int num_vfs)
 
 	xe_sriov_info(xe, "Enabled %u of %u VF%s\n",
 		      num_vfs, total_vfs, str_plural(total_vfs));
+	debug_mtl_sriov_log_all(xe, "pf_enable_vfs_enabled", num_vfs);
 
 	xe_sriov_pf_sysfs_link_vfs(xe, num_vfs);
 
 	pf_engine_activity_stats(xe, num_vfs, true);
 
+	debug_mtl_sriov_log_all(xe, "pf_enable_vfs_exit", num_vfs);
 	return num_vfs;
 
 failed:
+	debug_mtl_sriov_log_all(xe, "pf_enable_vfs_failed", err);
 	xe_sriov_pf_unprovision_vfs(xe, num_vfs);
 	xe_pm_runtime_put(xe);
 	pf_finish_vfs_enabling(xe);
 out:
 	xe_sriov_notice(xe, "Failed to enable %u VF%s (%pe)\n",
 			num_vfs, str_plural(num_vfs), ERR_PTR(err));
+	debug_mtl_sriov_log_all(xe, "pf_enable_vfs_out", err);
 	return err;
 }
 
@@ -229,6 +254,7 @@ static int pf_disable_vfs(struct xe_device *xe)
 
 	xe_assert(xe, IS_SRIOV_PF(xe));
 	xe_sriov_dbg(xe, "disabling %u VF%s\n", num_vfs, str_plural(num_vfs));
+	debug_mtl_sriov_log_all(xe, "pf_disable_vfs_enter", num_vfs);
 
 	if (!num_vfs)
 		return 0;
@@ -252,6 +278,7 @@ static int pf_disable_vfs(struct xe_device *xe)
 	pf_finish_vfs_enabling(xe);
 
 	xe_sriov_info(xe, "Disabled %u VF%s\n", num_vfs, str_plural(num_vfs));
+	debug_mtl_sriov_log_all(xe, "pf_disable_vfs_exit", num_vfs);
 	return 0;
 }
 
