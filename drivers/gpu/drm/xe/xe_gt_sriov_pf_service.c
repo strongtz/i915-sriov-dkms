@@ -18,6 +18,7 @@
 #include "xe_gt_sriov_pf_helpers.h"
 #include "xe_gt_sriov_pf_service.h"
 #include "xe_gt_sriov_pf_service_types.h"
+#include "xe_ggtt.h"
 #include "xe_guc_ct.h"
 #include "xe_guc_hxg_helpers.h"
 #include "xe_sriov_pf_service.h"

@@ -164,7 +164,8 @@ static int pf_send_vf_flr_finish(struct xe_gt *gt, unsigned int vfid)
  * * `The VF FLR state machine`_
  */
 
-static const char *control_bit_to_string_any(enum xe_gt_sriov_control_bits bit)
+static const char * __maybe_unused
+control_bit_to_string_any(enum xe_gt_sriov_control_bits bit)
 {
 	switch (bit) {
 #define CASE2STR(_X) case XE_GT_SRIOV_STATE_##_X: return #_X
