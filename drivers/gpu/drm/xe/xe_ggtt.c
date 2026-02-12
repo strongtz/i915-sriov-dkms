@@ -1091,6 +1091,88 @@ static u64 xe_ggtt_write_dup_rep(struct xe_ggtt *ggtt, u64 addr, u64 pte, u16 vf
 	return addr;
 }
 
+#ifdef CONFIG_PCI_IOV
+static u32 xe_ggtt_shadow_write_one(u64 *shadow, u32 idx, u64 pte, u16 vfid)
+{
+	shadow[idx] = xe_ggtt_prepare_vf_pte(pte, vfid);
+	return idx + 1;
+}
+
+static u32 xe_ggtt_shadow_write_dup_rep(u64 *shadow, u32 idx, u64 pte, u16 vfid,
+					u16 num_entries, bool duplicated)
+{
+	u16 i;
+
+	for (i = 0; i < num_entries; i++) {
+		u64 entry = pte;
+
+		if (!duplicated)
+			entry += (u64)i * XE_PAGE_SIZE;
+
+		idx = xe_ggtt_shadow_write_one(shadow, idx, entry, vfid);
+	}
+
+	return idx;
+}
+
+static void xe_ggtt_shadow_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
+					  u8 mode, u16 num_copies, const u64 *ptes, u16 count)
+{
+	struct xe_gt *gt = node->ggtt->tile->primary_gt;
+	struct xe_gt_sriov_config *config;
+	u16 remaining;
+	u16 copies;
+	u16 i;
+	u32 idx;
+	u16 n_ptes;
+	bool duplicated;
+
+	if (!gt || !IS_SRIOV_PF(gt_to_xe(gt)))
+		return;
+
+	if (vfid > xe_sriov_pf_get_totalvfs(gt_to_xe(gt)))
+		return;
+
+	config = &gt->sriov.pf.vfs[vfid].config;
+	if (config->ggtt_region != node)
+		return;
+	if (!config->ggtt_shadow || !config->ggtt_shadow_num_ptes)
+		return;
+
+	n_ptes = num_copies ? num_copies + count : count;
+	if (pte_offset + n_ptes > config->ggtt_shadow_num_ptes)
+		return;
+
+	copies = num_copies + 1;
+	remaining = count - 1;
+	duplicated = mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE ||
+		     mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST;
+	idx = pte_offset;
+
+	switch (mode) {
+	case MMIO_UPDATE_GGTT_MODE_DUPLICATE:
+	case MMIO_UPDATE_GGTT_MODE_REPLICATE:
+		idx = xe_ggtt_shadow_write_dup_rep(config->ggtt_shadow, idx, ptes[0], vfid,
+						   copies, duplicated);
+		for (i = 0; i < remaining; i++)
+			idx = xe_ggtt_shadow_write_one(config->ggtt_shadow, idx, ptes[i + 1],
+						       vfid);
+		break;
+	case MMIO_UPDATE_GGTT_MODE_DUPLICATE_LAST:
+	case MMIO_UPDATE_GGTT_MODE_REPLICATE_LAST:
+		for (i = 0; i < remaining; i++)
+			idx = xe_ggtt_shadow_write_one(config->ggtt_shadow, idx, ptes[i], vfid);
+		idx = xe_ggtt_shadow_write_dup_rep(config->ggtt_shadow, idx, ptes[remaining],
+						   vfid, copies, duplicated);
+		break;
+	default:
+		return;
+	}
+
+	config->ggtt_shadow_updates++;
+}
+#endif
+
 int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
 {
@@ -1147,6 +1229,11 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 		default:
 			return -EINVAL;
 		}
+
+#ifdef CONFIG_PCI_IOV
+		xe_ggtt_shadow_update_vf_ptes(node, vfid, pte_offset, mode, num_copies,
+					      ptes, count);
+#endif
 	}
 
 	xe_ggtt_invalidate_deferred(ggtt);
