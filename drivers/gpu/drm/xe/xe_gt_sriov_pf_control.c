@@ -1818,11 +1818,6 @@ int xe_gt_sriov_pf_control_wait_flr(struct xe_gt *gt, unsigned int vfid)
 	unsigned long timeout = pf_get_default_timeout(XE_GT_SRIOV_STATE_FLR_WIP);
 	int err;
 
-			vfid, jiffies_to_msecs(timeout));
-			   vfid, jiffies_to_msecs(timeout));
-			 vfid, jiffies_to_msecs(timeout));
-			vfid, jiffies_to_msecs(timeout));
-
 	if (pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
 		err = -EIO;
 	else if (!pf_check_vf_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_WIP))
@@ -1837,7 +1832,6 @@ int xe_gt_sriov_pf_control_wait_flr(struct xe_gt *gt, unsigned int vfid)
 
 	if (!err && !pf_expect_vf_not_state(gt, vfid, XE_GT_SRIOV_STATE_FLR_FAILED))
 		err = -EIO;
-
 
 	return err;
 }
@@ -1988,11 +1982,6 @@ int xe_gt_sriov_pf_control_process_guc2pf(struct xe_gt *gt, const u32 *msg, u32 
 
 	if (unlikely(len != GUC2PF_VF_STATE_NOTIFY_EVENT_MSG_LEN))
 		return -EPROTO;
-
-			len, msg[0], msg[1], msg[2]);
-			   len, msg[0], msg[1], msg[2]);
-			 len, msg[0], msg[1], msg[2]);
-			len, msg[0], msg[1], msg[2]);
 
 	vfid = FIELD_GET(GUC2PF_VF_STATE_NOTIFY_EVENT_MSG_1_VFID, msg[1]);
 	eventid = FIELD_GET(GUC2PF_VF_STATE_NOTIFY_EVENT_MSG_2_EVENT, msg[2]);

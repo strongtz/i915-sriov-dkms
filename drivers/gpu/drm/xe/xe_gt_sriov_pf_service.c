@@ -9,6 +9,7 @@
 #include "abi/guc_relay_actions_abi.h"
 
 #include "regs/xe_gt_regs.h"
+#include "regs/xe_gtt_defs.h"
 #include "regs/xe_guc_regs.h"
 #include "regs/xe_regs.h"
 
@@ -115,6 +116,85 @@ static const struct xe_reg ver_35_runtime_regs[] = {
 	XE2_GT_GEOMETRY_DSS_2,		/* _MMIO(0x9154) */
 	SERVICE_COPY_ENABLE,		/* _MMIO(0x9170) */
 };
+
+static u64 get_pte_from_msg(const u32 *msg, u16 id)
+{
+	u32 pte_lo = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_LO, msg[id * 2 + 2]);
+	u32 pte_hi = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_DATAn_PTE_HI, msg[id * 2 + 3]);
+
+	return ((u64)pte_hi << 32) | pte_lo;
+}
+
+static int pf_process_update_ggtt_msg(struct xe_gt *gt, u32 vfid,
+				      const u32 *msg, u32 msg_len,
+				      u32 *response, u32 resp_size)
+{
+	u32 pte_offset;
+	u16 num_copies;
+	u8 mode;
+	u16 count;
+	u64 ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
+	u64 *start_range;
+	u16 range_size;
+	u16 updated = 0;
+	int ret;
+	int i;
+	struct xe_ggtt_node *node;
+	u64 addr_mask = GENMASK_ULL(45, 12);
+
+	if (unlikely(!msg[0]) || unlikely(!msg[1]) || msg_len < 4 || msg_len % 2 != 0)
+		return -EPROTO;
+	if (unlikely(vfid > xe_gt_sriov_pf_get_totalvfs(gt)))
+		return -EINVAL;
+	if (resp_size < VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN)
+		return -ENOBUFS;
+
+	num_copies = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, msg[1]);
+	mode = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE, msg[1]);
+	pte_offset = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET, msg[1]);
+	count = (msg_len - 2) / 2;
+	if (count > VF2PF_UPDATE_GGTT_MAX_PTES)
+		return -EMSGSIZE;
+
+	node = gt->sriov.pf.vfs[vfid].config.ggtt_region;
+
+	ptes[0] = get_pte_from_msg(msg, 0);
+	start_range = &ptes[0];
+	range_size = 1;
+
+	for (i = 1; i < count; i++) {
+		ptes[i] = get_pte_from_msg(msg, i);
+		if ((ptes[i - 1] & ~addr_mask) != (ptes[i] & ~addr_mask)) {
+			u16 local_num_copies = VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode) ?
+					       0 : num_copies;
+
+			ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode,
+						     local_num_copies, start_range, range_size);
+			if (ret < 0)
+				return ret;
+			updated += ret;
+			start_range = &ptes[i];
+			pte_offset += range_size;
+			range_size = 0;
+			if (!VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode))
+				num_copies = 0;
+		}
+		range_size++;
+	}
+
+	ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode, num_copies,
+				     start_range, range_size);
+	if (ret < 0)
+		return ret;
+
+	updated += ret;
+
+	response[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		      FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_RESPONSE_SUCCESS) |
+		      FIELD_PREP(VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES, updated);
+
+	return VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN;
+}
 
 static const struct xe_reg *pick_runtime_regs(struct xe_device *xe, unsigned int *count)
 {
@@ -389,6 +469,9 @@ int xe_gt_sriov_pf_service_process_request(struct xe_gt *gt, u32 origin,
 		break;
 	case GUC_RELAY_ACTION_VF2PF_QUERY_RUNTIME:
 		ret = pf_process_runtime_query_msg(gt, origin, msg, msg_len, response, resp_size);
+		break;
+	case GUC_RELAY_ACTION_VF2PF_UPDATE_GGTT32:
+		ret = pf_process_update_ggtt_msg(gt, origin, msg, msg_len, response, resp_size);
 		break;
 	default:
 		ret = -EOPNOTSUPP;
