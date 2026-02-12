@@ -35,6 +35,7 @@
 #include "xe_wopcm.h"
 #ifdef CONFIG_PCI_IOV
 #include "abi/iov_actions_mmio_abi.h"
+#include "xe_sriov_pf_helpers.h"
 #endif
 
 /**
