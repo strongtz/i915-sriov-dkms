@@ -47,4 +47,19 @@ MTL SR-IOV platform notes
   around VF transitions; this aligns xe behavior with i915 SR-IOV expectations.
 - For multi-GT parts (like MTL), PF FLR dispatch must run on more than just PVC;
   the xe PF FLR dispatch path should consider gt_count > 1.
+
+Recent debugging / fixes
+- The VF GGTT MMIO relay path could deadlock: G2H worker held ggtt->lock and
+  called xe_tlb_inval_ggtt (GuC CT send), causing lock inversion with other
+  GGTT/TTM users and hung-task reports.
+- Fix: defer GGTT invalidation to a work item on the GGTT workqueue after
+  releasing ggtt->lock; coalesce invalidations with a pending flag and run
+  under PM runtime to ensure the device is powered during invalidate.
+- Added VF2PF_UPDATE_GGTT32 relay support in xe PF: parse relay requests,
+  update VF GGTT PTEs via xe_ggtt_update_vf_ptes(), and return the updated count.
+  This removes relay -EOPNOTSUPP errors seen from Windows VF drivers and
+  improves guest UI rendering stability.
+- Removed the temporary SR-IOV debug noise in xe PF control and PCI SR-IOV
+  paths after it served its purpose, and repaired minor syntax leftovers
+  from stripping the logs.
 *** End Patch}));
