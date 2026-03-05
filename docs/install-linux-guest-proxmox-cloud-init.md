@@ -17,8 +17,8 @@ sudo apt install -y build-essential dkms linux-headers-$(uname -r) linux-modules
 ### 2. Download and install the DKMS module
 Proceed with the same commands as in the standard Readme:
 ```bash
-wget -O /tmp/i915-sriov-dkms_2026.02.09_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.02.09/i915-sriov-dkms_2026.02.09_amd64.deb"
-sudo dpkg -i /tmp/i915-sriov-dkms_2026.02.09_amd64.deb
+wget -O /tmp/i915-sriov-dkms_2026.03.05_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.03.05/i915-sriov-dkms_2026.03.05_amd64.deb"
+sudo dpkg -i /tmp/i915-sriov-dkms_2026.03.05_amd64.deb
 ```
 
 ### 3. Update kernel parameters in cloud-init GRUB configs
@@ -55,4 +55,4 @@ i915: You are using the i915-sriov-dkms module, a ported version of the i915/xe 
 Remove the package with `sudo dpkg -P i915-sriov-dkms`.
 
 If you installed the module manually, or if the package manager fails to remove it from the kernel tree, you can remove it forcibly with:
-`sudo dkms remove i915-sriov-dkms/2026.02.09`
+`sudo dkms remove i915-sriov-dkms/2026.03.05`
