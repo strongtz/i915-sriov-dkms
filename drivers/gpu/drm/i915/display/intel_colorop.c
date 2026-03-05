@@ -4,6 +4,7 @@
  */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #include "intel_colorop.h"
+#include "intel_display_types.h"
 
 struct intel_colorop *to_intel_colorop(struct drm_colorop *colorop)
 {

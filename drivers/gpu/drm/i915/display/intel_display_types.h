@@ -34,6 +34,9 @@
 #include <drm/display/drm_dp_tunnel.h>
 #include <drm/display/drm_dsc.h>
 #include <drm/drm_atomic.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
+#include <drm/drm_colorop.h>
+#endif
 #include <drm/drm_crtc.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_framebuffer.h>
