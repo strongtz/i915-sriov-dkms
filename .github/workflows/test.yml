@@ -112,7 +112,7 @@ jobs:
         id: check_kernel
         working-directory: i915-sriov-dkms
         run: |
-          KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+          KERNEL_SOURCE_DIR=$(pacman -Qql linux-lts-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
           echo "Detected kernel: $KERNELRELEASE"
 
