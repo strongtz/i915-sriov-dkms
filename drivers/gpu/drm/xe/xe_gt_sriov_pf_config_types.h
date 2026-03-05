@@ -19,6 +19,12 @@ struct xe_bo;
 struct xe_gt_sriov_config {
 	/** @ggtt_region: GGTT region assigned to the VF. */
 	struct xe_ggtt_node *ggtt_region;
+	/** @ggtt_shadow: Shadow GGTT PTEs for this VF (PF only). */
+	u64 *ggtt_shadow;
+	/** @ggtt_shadow_num_ptes: Number of PTEs in @ggtt_shadow. */
+	u32 ggtt_shadow_num_ptes;
+	/** @ggtt_shadow_updates: Count of shadow updates for this VF. */
+	u64 ggtt_shadow_updates;
 	/** @lmem_obj: LMEM allocation for use by the VF. */
 	struct xe_bo *lmem_obj;
 	/** @num_ctxs: number of GuC contexts IDs.  */
