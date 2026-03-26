@@ -1614,6 +1614,10 @@ static int mmio_relay_reply_update_ggtt(struct xe_guc *guc, struct xe_gt *gt,
 	pte = ((u64)pte_hi << 32) | pte_lo;
 	node = gt->sriov.pf.vfs[vfid].config.ggtt_region;
 
+	if (xe_device_needs_mtl_ggtt_binder(gt_to_xe(gt)))
+		drm_info_once(&gt_to_xe(gt)->drm,
+			      "xe: MTL SR-IOV GGTT path: PF MMIO bootstrap GGTT updates active\n");
+
 	ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode, num_copies, &pte, 1);
 	if (ret < 0)
 		return ret;

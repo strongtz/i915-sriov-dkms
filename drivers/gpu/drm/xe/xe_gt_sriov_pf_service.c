@@ -150,6 +150,10 @@ static int pf_process_update_ggtt_msg(struct xe_gt *gt, u32 vfid,
 	if (resp_size < VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN)
 		return -ENOBUFS;
 
+	if (xe_device_needs_mtl_ggtt_binder(gt_to_xe(gt)))
+		drm_info_once(&gt_to_xe(gt)->drm,
+			      "xe: MTL SR-IOV GGTT path: PF VF2PF relay GGTT updates active\n");
+
 	num_copies = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, msg[1]);
 	mode = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE, msg[1]);
 	pte_offset = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET, msg[1]);

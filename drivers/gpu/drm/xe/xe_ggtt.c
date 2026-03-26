@@ -177,14 +177,21 @@ static bool xe_ggtt_vf_relay_enabled(struct xe_ggtt *ggtt)
 	struct xe_device *xe = tile_to_xe(ggtt->tile);
 	struct xe_gt *gt;
 
-	if (!IS_SRIOV_VF(xe) || !ggtt->vf_relay_ready || !xe->sriov.vf.pf_version.major)
+	if (!xe_device_needs_mtl_ggtt_binder(xe) || !IS_SRIOV_VF(xe) ||
+	    !ggtt->vf_relay_ready || !xe->sriov.vf.pf_version.major)
 		return false;
 
 	gt = xe_ggtt_vf_relay_gt(ggtt);
 	if (!gt)
 		return false;
 
-	return xe_guc_ct_enabled(&gt->uc.guc.ct) && gt->uc.guc.submission_state.enabled;
+	if (!xe_guc_ct_enabled(&gt->uc.guc.ct) || !gt->uc.guc.submission_state.enabled)
+		return false;
+
+	drm_info_once(&xe->drm,
+		      "xe: MTL SR-IOV GGTT path: VF steady-state relay enabled after GuC CT submission\n");
+
+	return true;
 }
 
 static int xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
@@ -1265,6 +1272,7 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
 {
 	struct xe_ggtt *ggtt;
+	struct xe_device *xe;
 	u64 ggtt_addr, ggtt_addr_end, vf_ggtt_end;
 	u16 n_ptes;
 	u16 remaining;
@@ -1280,6 +1288,7 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 		return -ENOENT;
 
 	ggtt = node->ggtt;
+	xe = tile_to_xe(ggtt->tile);
 	ggtt_addr = node->base.start + (u64)pte_offset * XE_PAGE_SIZE;
 	ggtt_addr_end = ggtt_addr + (u64)count * XE_PAGE_SIZE - 1;
 	vf_ggtt_end = node->base.start + node->base.size - 1;
@@ -1287,6 +1296,10 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 		return -ERANGE;
 
 	n_ptes = num_copies ? num_copies + count : count;
+
+	if (xe_device_needs_mtl_ggtt_binder(xe) && IS_SRIOV_PF(xe))
+		drm_info_once(&xe->drm,
+			      "xe: MTL SR-IOV GGTT path: PF still applies VF GGTT updates via raw CPU writes with deferred invalidate\n");
 
 	{
 		guard(mutex)(&ggtt->lock);
