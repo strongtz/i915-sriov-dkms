@@ -11,6 +11,7 @@
 
 #include <drm/drm_mm.h>
 
+#include "abi/guc_relay_actions_abi.h"
 #include "xe_pt_types.h"
 
 struct xe_bo;
@@ -59,6 +60,26 @@ struct xe_ggtt {
 #ifdef CONFIG_PCI_IOV
 	/** @vf_relay_ready: use explicit VF->PF relay for steady-state GGTT updates */
 	bool vf_relay_ready;
+	/**
+	 * @vf_ptes: VF-side buffered GGTT update state.
+	 *
+	 * Matches the i915 VF sender model: accumulate sequential PTE updates
+	 * and only flush a message when the run shape can no longer be extended.
+	 */
+	struct {
+		/** @vf_ptes.lock: Protects buffered GGTT update state. */
+		struct mutex lock;
+		/** @vf_ptes.offset: Buffered GGTT PTE offset relative to VF base. */
+		u32 offset;
+		/** @vf_ptes.count: Number of literal PTEs currently buffered. */
+		u16 count;
+		/** @vf_ptes.num_copies: Number of duplicate/replicate copies. */
+		u16 num_copies;
+		/** @vf_ptes.mode: Encoded duplicate/replicate mode for the buffer. */
+		u8 mode;
+		/** @vf_ptes.ptes: Buffered literal PTE payload. */
+		u64 ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
+	} vf_ptes;
 #endif
 };
 
