@@ -83,6 +83,18 @@ struct xe_ggtt_node {
 	u64 *vf_shadow_ptes;
 	/** @vf_shadow_len: Number of PTEs tracked in @vf_shadow_ptes */
 	u32 vf_shadow_len;
+	/** @vfid: VF identifier assigned to this GGTT region */
+	u16 vfid;
+	/** @vf_apply_work: MTL-only staged PF GGTT apply worker */
+	struct work_struct vf_apply_work;
+	/** @vf_apply_dirty: Whether staged PF GGTT updates are pending */
+	bool vf_apply_dirty;
+	/** @vf_apply_queued: Whether @vf_apply_work is queued or running */
+	bool vf_apply_queued;
+	/** @vf_apply_start: Dirty PTE start offset, inclusive */
+	u32 vf_apply_start;
+	/** @vf_apply_end: Dirty PTE end offset, exclusive */
+	u32 vf_apply_end;
 #endif
 };
 

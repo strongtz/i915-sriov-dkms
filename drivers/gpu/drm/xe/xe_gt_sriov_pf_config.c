@@ -438,6 +438,7 @@ static int pf_distribute_config_ggtt(struct xe_tile *tile, unsigned int vfid, u6
 
 static void pf_release_ggtt(struct xe_tile *tile, struct xe_ggtt_node *node)
 {
+	xe_ggtt_node_quiesce_vf_apply(node);
 	kvfree(node->vf_shadow_ptes);
 	node->vf_shadow_ptes = NULL;
 	node->vf_shadow_len = 0;
