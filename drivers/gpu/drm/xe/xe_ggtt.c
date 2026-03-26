@@ -1372,7 +1372,7 @@ static void xe_ggtt_assign_locked(struct xe_ggtt *ggtt, struct xe_ggtt_node *nod
 
 	lockdep_assert_held(&ggtt->lock);
 
-	if (!drm_mm_node_allocated(node))
+	if (!drm_mm_node_allocated(&node->base))
 		return;
 
 	while (start < end) {
