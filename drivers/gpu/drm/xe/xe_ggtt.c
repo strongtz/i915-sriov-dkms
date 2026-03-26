@@ -1555,8 +1555,7 @@ static void ggtt_vf_apply_work_func(struct work_struct *work)
 }
 
 int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
-			   u8 mode, u16 num_copies, const u64 *ptes, u16 count,
-			   bool sync_apply)
+			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
 {
 	static DEFINE_RATELIMIT_STATE(mtl_shadow_rs, 5 * HZ, 10);
 	static DEFINE_RATELIMIT_STATE(mtl_stage_rs, 5 * HZ, 10);
@@ -1712,12 +1711,8 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 			      "xe: MTL SR-IOV GGTT path: PF shadow observed redundant VF GGTT updates before staged apply\n");
 
 	if (mtl_path && node->vf_shadow_ptes) {
-		if (apply_now) {
-			if (sync_apply)
-				xe_ggtt_sync_vf_shadow(node);
-			else
-				queue_work(ggtt->wq, &node->vf_apply_work);
-		}
+		if (apply_now)
+			xe_ggtt_sync_vf_shadow(node);
 		return n_ptes;
 	}
 
