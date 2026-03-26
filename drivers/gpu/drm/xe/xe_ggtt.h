@@ -12,11 +12,6 @@ struct drm_printer;
 struct xe_tile;
 struct drm_exec;
 
-enum xe_ggtt_vf_update_source {
-	XE_GGTT_VF_UPDATE_SOURCE_RELAY_SERVICE,
-	XE_GGTT_VF_UPDATE_SOURCE_MMIO_RELAY,
-};
-
 struct xe_ggtt *xe_ggtt_alloc(struct xe_tile *tile);
 int xe_ggtt_init_early(struct xe_ggtt *ggtt);
 int xe_ggtt_init_kunit(struct xe_ggtt *ggtt, u32 reserved, u32 size);
@@ -53,8 +48,7 @@ void xe_ggtt_node_quiesce_vf_apply(struct xe_ggtt_node *node);
 int xe_ggtt_node_save(struct xe_ggtt_node *node, void *dst, size_t size, u16 vfid);
 int xe_ggtt_node_load(struct xe_ggtt_node *node, const void *src, size_t size, u16 vfid);
 int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
-			   u8 mode, u16 num_copies, const u64 *ptes, u16 count,
-			   enum xe_ggtt_vf_update_source source);
+			   u8 mode, u16 num_copies, const u64 *ptes, u16 count);
 #endif
 
 #ifndef CONFIG_LOCKDEP

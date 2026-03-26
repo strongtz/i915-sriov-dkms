@@ -1619,7 +1619,7 @@ static int mmio_relay_reply_update_ggtt(struct xe_guc *guc, struct xe_gt *gt,
 			      "xe: MTL SR-IOV GGTT path: PF MMIO bootstrap GGTT updates active\n");
 
 	ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode, num_copies,
-				     &pte, 1, XE_GGTT_VF_UPDATE_SOURCE_MMIO_RELAY);
+				     &pte, 1);
 	if (ret < 0)
 		return ret;
 
