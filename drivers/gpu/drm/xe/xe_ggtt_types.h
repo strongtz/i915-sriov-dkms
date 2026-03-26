@@ -78,6 +78,12 @@ struct xe_ggtt_node {
 	struct work_struct delayed_removal_work;
 	/** @invalidate_on_remove: If it needs invalidation upon removal */
 	bool invalidate_on_remove;
+#ifdef CONFIG_PCI_IOV
+	/** @vf_shadow_ptes: MTL-only PF shadow of VF GGTT contents, without VFID bits */
+	u64 *vf_shadow_ptes;
+	/** @vf_shadow_len: Number of PTEs tracked in @vf_shadow_ptes */
+	u32 vf_shadow_len;
+#endif
 };
 
 /**
