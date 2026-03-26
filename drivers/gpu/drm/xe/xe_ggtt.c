@@ -4,6 +4,7 @@
  */
 
 #include "abi/guc_relay_actions_abi.h"
+#include "abi/iov_actions_mmio_abi.h"
 
 #include "xe_ggtt.h"
 
@@ -25,6 +26,7 @@
 #include "xe_device.h"
 #include "xe_gt.h"
 #include "xe_gt_printk.h"
+#include "xe_guc_ct.h"
 #include "xe_map.h"
 #include "xe_mmio.h"
 #include "xe_pm.h"
@@ -162,6 +164,8 @@ static u64 xe_ggtt_get_pte(struct xe_ggtt *ggtt, u64 addr)
 	return readq(&ggtt->gsm[addr >> XE_PTE_SHIFT]);
 }
 
+static void ggtt_invalidate_work_func(struct work_struct *work);
+
 #ifdef CONFIG_PCI_IOV
 static struct xe_gt *xe_ggtt_vf_relay_gt(struct xe_ggtt *ggtt)
 {
@@ -171,13 +175,21 @@ static struct xe_gt *xe_ggtt_vf_relay_gt(struct xe_ggtt *ggtt)
 static bool xe_ggtt_vf_relay_enabled(struct xe_ggtt *ggtt)
 {
 	struct xe_device *xe = tile_to_xe(ggtt->tile);
+	struct xe_gt *gt;
 
-	return IS_SRIOV_VF(xe) && ggtt->vf_relay_ready && xe->sriov.vf.pf_version.major;
+	if (!IS_SRIOV_VF(xe) || !ggtt->vf_relay_ready || !xe->sriov.vf.pf_version.major)
+		return false;
+
+	gt = xe_ggtt_vf_relay_gt(ggtt);
+	if (!gt)
+		return false;
+
+	return xe_guc_ct_enabled(&gt->uc.guc.ct) && gt->uc.guc.submission_state.enabled;
 }
 
-static bool xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
-				       u8 mode, u16 num_copies,
-				       const u64 *ptes, u16 count)
+static int xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
+				      u8 mode, u16 num_copies,
+				      const u64 *ptes, u16 count)
 {
 	struct xe_gt *gt = xe_ggtt_vf_relay_gt(ggtt);
 	u64 vf_base = xe_tile_sriov_vf_ggtt_base(ggtt->tile);
@@ -188,10 +200,12 @@ static bool xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
 	int i;
 	int ret;
 
-	if (XE_WARN_ON(!gt) || XE_WARN_ON(ggtt_addr < vf_base))
-		return false;
+	if (XE_WARN_ON(!gt))
+		return -ENODEV;
+	if (XE_WARN_ON(ggtt_addr < vf_base))
+		return -ERANGE;
 	if (XE_WARN_ON(!count) || XE_WARN_ON(count > VF2PF_UPDATE_GGTT_MAX_PTES))
-		return false;
+		return -EINVAL;
 
 	msg[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
 		 FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
@@ -209,39 +223,42 @@ static bool xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
 	ret = xe_guc_relay_send_to_pf(&gt->uc.guc.relay, msg, 2 + count * 2,
 				      response, ARRAY_SIZE(response));
 	if (ret != VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN)
-		return false;
+		return ret < 0 ? ret : -EPROTO;
 
 	updated = FIELD_GET(VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES, response[0]);
-	return updated == expected;
+	return updated == expected ? 0 : -EPROTO;
 }
 
-static bool xe_ggtt_vf_relay_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64 scratch_pte)
+static int xe_ggtt_vf_relay_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64 scratch_pte)
 {
 	u64 addr = start;
 	u64 remaining = size / XE_PAGE_SIZE;
 	u64 max_entries = FIELD_MAX(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES) + 1;
+	int ret;
 
 	while (remaining) {
 		u64 entries = min(remaining, max_entries);
 
-		if (!xe_ggtt_vf_relay_send_ptes(ggtt, addr,
-						VF2PF_UPDATE_GGTT32_MODE_DUPLICATE,
-						entries - 1, &scratch_pte, 1))
-			return false;
+		ret = xe_ggtt_vf_relay_send_ptes(ggtt, addr,
+						 VF2PF_UPDATE_GGTT32_MODE_DUPLICATE,
+						 entries - 1, &scratch_pte, 1);
+		if (ret)
+			return ret;
 
 		addr += entries * XE_PAGE_SIZE;
 		remaining -= entries;
 	}
 
-	return true;
+	return 0;
 }
 
-static bool xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo *bo, u64 pte)
+static int xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo *bo, u64 pte)
 {
 	u64 ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
 	u64 addr = start;
 	struct xe_res_cursor cur;
 	u16 count = 0;
+	int ret;
 
 	if (!xe_bo_is_vram(bo) && !xe_bo_is_stolen(bo)) {
 		xe_assert(xe_bo_device(bo), bo->ttm.ttm);
@@ -252,10 +269,11 @@ static bool xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_b
 			if (count == VF2PF_UPDATE_GGTT_MAX_PTES) {
 				u64 chunk_start = addr + XE_PAGE_SIZE - (u64)count * XE_PAGE_SIZE;
 
-				if (!xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
-								VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
-								0, ptes, count))
-					return false;
+				ret = xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
+								 VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+								 0, ptes, count);
+				if (ret)
+					return ret;
 				count = 0;
 			}
 		}
@@ -268,18 +286,22 @@ static bool xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_b
 			if (count == VF2PF_UPDATE_GGTT_MAX_PTES) {
 				u64 chunk_start = addr + XE_PAGE_SIZE - (u64)count * XE_PAGE_SIZE;
 
-				if (!xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
-								VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
-								0, ptes, count))
-					return false;
+				ret = xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
+								 VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+								 0, ptes, count);
+				if (ret)
+					return ret;
 				count = 0;
 			}
 		}
 	}
 
-	return !count || xe_ggtt_vf_relay_send_ptes(ggtt, addr - (u64)count * XE_PAGE_SIZE,
-						    VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
-						    0, ptes, count);
+	if (!count)
+		return 0;
+
+	return xe_ggtt_vf_relay_send_ptes(ggtt, addr - (u64)count * XE_PAGE_SIZE,
+					  VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+					  0, ptes, count);
 }
 #endif
 
@@ -300,11 +322,14 @@ static void xe_ggtt_clear(struct xe_ggtt *ggtt, u64 start, u64 size)
 
 #ifdef CONFIG_PCI_IOV
 	if (xe_ggtt_vf_relay_enabled(ggtt)) {
-		if (xe_ggtt_vf_relay_clear(ggtt, start, size, scratch_pte))
+		int ret = xe_ggtt_vf_relay_clear(ggtt, start, size, scratch_pte);
+
+		if (!ret)
 			return;
 
 		xe_tile_warn(ggtt->tile,
-			     "VF GGTT relay clear failed, falling back to raw writes\n");
+			     "VF GGTT relay clear failed (%pe), falling back to raw writes\n",
+			     ERR_PTR(ret));
 	}
 #endif
 
@@ -459,6 +484,8 @@ int xe_ggtt_init_early(struct xe_ggtt *ggtt)
 	ggtt->wq = alloc_workqueue("xe-ggtt-wq", WQ_MEM_RECLAIM, 0);
 	if (!ggtt->wq)
 		return -ENOMEM;
+	INIT_WORK(&ggtt->invalidate_work, ggtt_invalidate_work_func);
+	atomic_set(&ggtt->invalidate_pending, 0);
 
 	__xe_ggtt_init_early(ggtt, xe_wopcm_size(xe));
 
@@ -613,6 +640,26 @@ static void ggtt_invalidate_gt_tlb(struct xe_gt *gt)
 
 	err = xe_tlb_inval_ggtt(&gt->tlb_inval);
 	xe_gt_WARN(gt, err, "Failed to invalidate GGTT (%pe)", ERR_PTR(err));
+}
+
+static void ggtt_invalidate_work_func(struct work_struct *work)
+{
+	struct xe_ggtt *ggtt = container_of(work, struct xe_ggtt, invalidate_work);
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
+
+	atomic_set(&ggtt->invalidate_pending, 0);
+	xe_pm_runtime_get(xe);
+	xe_ggtt_invalidate(ggtt);
+	xe_pm_runtime_put(xe);
+
+	if (atomic_xchg(&ggtt->invalidate_pending, 0) == 1)
+		queue_work(ggtt->wq, &ggtt->invalidate_work);
+}
+
+static void xe_ggtt_invalidate_deferred(struct xe_ggtt *ggtt)
+{
+	if (atomic_xchg(&ggtt->invalidate_pending, 1) == 0)
+		queue_work(ggtt->wq, &ggtt->invalidate_work);
 }
 
 static void xe_ggtt_invalidate(struct xe_ggtt *ggtt)
@@ -883,11 +930,14 @@ void xe_ggtt_map_bo(struct xe_ggtt *ggtt, struct xe_ggtt_node *node,
 	pte = ggtt->pt_ops->pte_encode_flags(bo, pat_index);
 #ifdef CONFIG_PCI_IOV
 	if (xe_ggtt_vf_relay_enabled(ggtt)) {
-		if (xe_ggtt_vf_relay_map_bo(ggtt, start, bo, pte))
+		int ret = xe_ggtt_vf_relay_map_bo(ggtt, start, bo, pte);
+
+		if (!ret)
 			return;
 
-			xe_tile_warn(ggtt->tile,
-				     "VF GGTT relay map failed, falling back to raw writes\n");
+		xe_tile_warn(ggtt->tile,
+			     "VF GGTT relay map failed (%pe), falling back to raw writes\n",
+			     ERR_PTR(ret));
 	}
 #endif
 	if (!xe_bo_is_vram(bo) && !xe_bo_is_stolen(bo)) {
@@ -1267,7 +1317,7 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 		}
 	}
 
-	xe_ggtt_invalidate(ggtt);
+	xe_ggtt_invalidate_deferred(ggtt);
 	return n_ptes;
 }
 
