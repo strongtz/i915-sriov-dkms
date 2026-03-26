@@ -20,6 +20,7 @@
 #include <generated/xe_wa_oob.h>
 
 #include "regs/xe_gt_regs.h"
+#include "regs/xe_guc_regs.h"
 #include "regs/xe_gtt_defs.h"
 #include "regs/xe_regs.h"
 #include "xe_assert.h"
@@ -29,6 +30,7 @@
 #include "xe_gt_printk.h"
 #include "xe_guc.h"
 #include "xe_guc_ct.h"
+#include "xe_force_wake.h"
 #include "xe_map.h"
 #include "xe_mmio.h"
 #include "xe_pm.h"
@@ -181,6 +183,30 @@ static void ggtt_vf_apply_work_func(struct work_struct *work);
 #define VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_0_DATA0		(0xffffffu << 0)
 
 #define XE_GGTT_PTE_ADDR_MASK					GENMASK_ULL(51, 12)
+
+static const char *xe_ggtt_vf_update_source_name(enum xe_ggtt_vf_update_source source)
+{
+	switch (source) {
+	case XE_GGTT_VF_UPDATE_SOURCE_RELAY_SERVICE:
+		return "relay";
+	case XE_GGTT_VF_UPDATE_SOURCE_MMIO_RELAY:
+		return "mmio";
+	default:
+		return "unknown";
+	}
+}
+
+static bool xe_ggtt_is_mtl_pf_experiment(struct xe_ggtt *ggtt)
+{
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
+
+	return xe_device_needs_mtl_ggtt_binder(xe) && IS_SRIOV_PF(xe);
+}
+
+static u64 xe_ggtt_vf_pat_mask(void)
+{
+	return XELPG_GGTT_PTE_PAT0 | XELPG_GGTT_PTE_PAT1;
+}
 
 static struct xe_gt *xe_ggtt_vf_relay_gt(struct xe_ggtt *ggtt)
 {
@@ -852,6 +878,18 @@ static void ggtt_invalidate_gt_tlb(struct xe_gt *gt)
 	xe_gt_WARN(gt, err, "Failed to invalidate GGTT (%pe)", ERR_PTR(err));
 }
 
+static void ggtt_invalidate_gt_tlb_mmio(struct xe_gt *gt)
+{
+	unsigned int fw_ref;
+
+	if (!gt)
+		return;
+
+	fw_ref = xe_force_wake_get(gt_to_fw(gt), XE_FW_GT);
+	xe_mmio_write32(&gt->mmio, GUC_TLB_INV_CR, GUC_TLB_INV_CR_INVALIDATE);
+	xe_force_wake_put(gt_to_fw(gt), fw_ref);
+}
+
 static void ggtt_invalidate_work_func(struct work_struct *work)
 {
 	struct xe_ggtt *ggtt = container_of(work, struct xe_ggtt, invalidate_work);
@@ -874,6 +912,7 @@ static void xe_ggtt_invalidate_deferred(struct xe_ggtt *ggtt)
 
 static void xe_ggtt_invalidate(struct xe_ggtt *ggtt)
 {
+	static DEFINE_RATELIMIT_STATE(mtl_inval_rs, 5 * HZ, 10);
 	struct xe_device *xe = tile_to_xe(ggtt->tile);
 
 	/*
@@ -883,6 +922,17 @@ static void xe_ggtt_invalidate(struct xe_ggtt *ggtt)
 	 * do a mmio read here which results in GuC reading correct GGTT page.
 	 */
 	xe_mmio_read32(xe_root_tile_mmio(xe), VF_CAP_REG);
+
+	if (xe_ggtt_is_mtl_pf_experiment(ggtt)) {
+		drm_info_once(&xe->drm,
+			      "xe: MTL SR-IOV GGTT path: PF uses i915-like direct MMIO GGTT invalidate primitive\n");
+		if (__ratelimit(&mtl_inval_rs))
+			xe_tile_notice(ggtt->tile,
+				       "MTL SR-IOV GGTT invalidate via=i915-mmio-direct\n");
+		ggtt_invalidate_gt_tlb_mmio(ggtt->tile->primary_gt);
+		ggtt_invalidate_gt_tlb_mmio(ggtt->tile->media_gt);
+		return;
+	}
 
 	/* Each GT in a tile has its own TLB to cache GGTT lookups */
 	ggtt_invalidate_gt_tlb(ggtt->tile->primary_gt);
@@ -1333,16 +1383,18 @@ static u64 xe_encode_vfid_pte(u16 vfid)
 	return FIELD_PREP(GGTT_PTE_VFID, vfid) | XE_PAGE_PRESENT;
 }
 
-static u64 xe_ggtt_prepare_vf_pte(u64 pte, u16 vfid)
+static u64 xe_ggtt_prepare_vf_pte(struct xe_ggtt *ggtt, u64 pte, u16 vfid)
 {
-	u64 vfid_pte = u64_replace_bits(pte, vfid, GGTT_PTE_VFID);
+	if (xe_ggtt_is_mtl_pf_experiment(ggtt))
+		return (pte & (XE_GGTT_PTE_ADDR_MASK | xe_ggtt_vf_pat_mask())) |
+		       xe_encode_vfid_pte(vfid);
 
-	return vfid_pte | XE_PAGE_PRESENT;
+	return u64_replace_bits(pte, vfid, GGTT_PTE_VFID) | XE_PAGE_PRESENT;
 }
 
 static u64 xe_ggtt_write_one(struct xe_ggtt *ggtt, u64 addr, u64 pte, u16 vfid)
 {
-	ggtt->pt_ops->ggtt_set_pte(ggtt, addr, xe_ggtt_prepare_vf_pte(pte, vfid));
+	ggtt->pt_ops->ggtt_set_pte(ggtt, addr, xe_ggtt_prepare_vf_pte(ggtt, pte, vfid));
 	return addr + XE_PAGE_SIZE;
 }
 
@@ -1535,7 +1587,8 @@ static void ggtt_vf_apply_work_func(struct work_struct *work)
 		ggtt_addr = node->base.start + (u64)start * XE_PAGE_SIZE;
 		for (i = start; i < end; i++, ggtt_addr += XE_PAGE_SIZE)
 			ggtt->pt_ops->ggtt_set_pte(ggtt, ggtt_addr,
-						   xe_ggtt_prepare_vf_pte(node->vf_shadow_ptes[i],
+						   xe_ggtt_prepare_vf_pte(ggtt,
+									 node->vf_shadow_ptes[i],
 									 node->vfid));
 		mutex_unlock(&ggtt->lock);
 
@@ -1549,15 +1602,18 @@ static void ggtt_vf_apply_work_func(struct work_struct *work)
 }
 
 int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
-			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
+			   u8 mode, u16 num_copies, const u64 *ptes, u16 count,
+			   enum xe_ggtt_vf_update_source source)
 {
 	static DEFINE_RATELIMIT_STATE(mtl_shadow_rs, 5 * HZ, 10);
 	static DEFINE_RATELIMIT_STATE(mtl_stage_rs, 5 * HZ, 10);
+	static DEFINE_RATELIMIT_STATE(mtl_pte_rs, 5 * HZ, 10);
 	struct xe_ggtt *ggtt;
 	struct xe_device *xe;
 	struct xe_gt *gt;
 	u64 ggtt_addr, ggtt_addr_end, vf_ggtt_end;
 	u64 entry;
+	u64 raw_pattern, kept_pattern, dropped_pattern, final_pattern;
 	u16 n_ptes;
 	u16 remaining;
 	u16 copies;
@@ -1589,6 +1645,14 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 
 	mtl_path = xe_device_needs_mtl_ggtt_binder(xe) && IS_SRIOV_PF(xe);
 	gt = ggtt->tile->primary_gt ?: ggtt->tile->media_gt;
+	raw_pattern = ptes[0];
+	kept_pattern = raw_pattern;
+	dropped_pattern = 0;
+	if (xe_ggtt_is_mtl_pf_experiment(ggtt)) {
+		kept_pattern = raw_pattern & (XE_GGTT_PTE_ADDR_MASK | xe_ggtt_vf_pat_mask());
+		dropped_pattern = raw_pattern & ~(XE_GGTT_PTE_ADDR_MASK | xe_ggtt_vf_pat_mask());
+	}
+	final_pattern = xe_ggtt_prepare_vf_pte(ggtt, raw_pattern, vfid);
 
 	if (mtl_path)
 		drm_info_once(&xe->drm,
@@ -1597,6 +1661,10 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 	if (mtl_path && node->vf_shadow_ptes)
 		drm_info_once(&xe->drm,
 			      "xe: MTL SR-IOV GGTT path: PF shadow tracking active for VF GGTT apply\n");
+
+	if (xe_ggtt_is_mtl_pf_experiment(ggtt))
+		drm_info_once(&xe->drm,
+			      "xe: MTL SR-IOV GGTT path: PF uses i915-like PAT-only VF PTE sanitize before GGTT writes\n");
 
 	{
 		guard(mutex)(&ggtt->lock);
@@ -1699,6 +1767,12 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 		xe_gt_notice(gt,
 			     "MTL SR-IOV GGTT stage off=0x%x n=%u changed=%u unchanged=%u mode=%u copies=%u\n",
 			     pte_offset, n_ptes, changed, unchanged, mode, num_copies);
+
+	if (mtl_path && __ratelimit(&mtl_pte_rs))
+		xe_gt_notice(gt,
+			     "MTL SR-IOV GGTT pte src=%s raw=%#llx kept=%#llx dropped=%#llx final=%#llx\n",
+			     xe_ggtt_vf_update_source_name(source), raw_pattern,
+			     kept_pattern, dropped_pattern, final_pattern);
 
 	if (mtl_path && unchanged)
 		drm_info_once(&xe->drm,
