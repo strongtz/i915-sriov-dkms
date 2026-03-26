@@ -1501,9 +1501,10 @@ int xe_ggtt_node_load(struct xe_ggtt_node *node, const void *src, size_t size, u
 	return 0;
 }
 
-static void xe_ggtt_sync_vf_shadow(struct xe_ggtt_node *node)
+static void ggtt_vf_apply_work_func(struct work_struct *work)
 {
 	static DEFINE_RATELIMIT_STATE(mtl_flush_rs, 5 * HZ, 10);
+	struct xe_ggtt_node *node = container_of(work, typeof(*node), vf_apply_work);
 	struct xe_ggtt *ggtt = node->ggtt;
 	struct xe_device *xe = tile_to_xe(ggtt->tile);
 	struct xe_gt *gt = ggtt->tile->primary_gt ?: ggtt->tile->media_gt;
@@ -1511,7 +1512,7 @@ static void xe_ggtt_sync_vf_shadow(struct xe_ggtt_node *node)
 	guard(xe_pm_runtime)(xe);
 
 	drm_info_once(&xe->drm,
-		      "xe: MTL SR-IOV GGTT path: PF synchronous shadow flush active for VF GGTT apply\n");
+		      "xe: MTL SR-IOV GGTT path: PF staged shadow flush active for VF GGTT apply\n");
 
 	for (;;) {
 		u32 start, end, i;
@@ -1540,18 +1541,11 @@ static void xe_ggtt_sync_vf_shadow(struct xe_ggtt_node *node)
 
 		if (__ratelimit(&mtl_flush_rs))
 			xe_gt_notice(gt,
-				     "MTL SR-IOV GGTT flush off=0x%x n=%u via=synchronous-shadow\n",
+				     "MTL SR-IOV GGTT flush off=0x%x n=%u via=staged-shadow\n",
 				     start, end - start);
 
-		xe_ggtt_invalidate(ggtt);
+		xe_ggtt_invalidate_deferred(ggtt);
 	}
-}
-
-static void ggtt_vf_apply_work_func(struct work_struct *work)
-{
-	struct xe_ggtt_node *node = container_of(work, typeof(*node), vf_apply_work);
-
-	xe_ggtt_sync_vf_shadow(node);
 }
 
 int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
@@ -1572,7 +1566,7 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 	u16 unchanged = 0;
 	bool duplicated;
 	bool mtl_path;
-	bool apply_now = false;
+	bool queue_apply = false;
 
 	if (!node)
 		return -ENOENT;
@@ -1691,7 +1685,7 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 
 			if (!node->vf_apply_queued) {
 				node->vf_apply_queued = true;
-				apply_now = true;
+				queue_apply = true;
 			}
 		}
 	}
@@ -1711,8 +1705,8 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 			      "xe: MTL SR-IOV GGTT path: PF shadow observed redundant VF GGTT updates before staged apply\n");
 
 	if (mtl_path && node->vf_shadow_ptes) {
-		if (apply_now)
-			xe_ggtt_sync_vf_shadow(node);
+		if (queue_apply)
+			queue_work(ggtt->wq, &node->vf_apply_work);
 		return n_ptes;
 	}
 
