@@ -26,6 +26,7 @@
 #include "xe_device.h"
 #include "xe_gt.h"
 #include "xe_gt_printk.h"
+#include "xe_guc.h"
 #include "xe_guc_ct.h"
 #include "xe_map.h"
 #include "xe_mmio.h"
@@ -167,9 +168,28 @@ static u64 xe_ggtt_get_pte(struct xe_ggtt *ggtt, u64 addr)
 static void ggtt_invalidate_work_func(struct work_struct *work);
 
 #ifdef CONFIG_PCI_IOV
+#define GUC_ACTION_VF2GUC_MMIO_RELAY_SERVICE			0x5005u
+#define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_MIN_LEN		(GUC_HXG_REQUEST_MSG_MIN_LEN)
+#define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_MAX_LEN		(GUC_HXG_REQUEST_MSG_MIN_LEN + 3u)
+#define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_MAGIC		(0xfu << 24)
+#define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_OPCODE		(0xffu << 16)
+
+#define XE_GGTT_PTE_ADDR_MASK					GENMASK_ULL(51, 12)
+
 static struct xe_gt *xe_ggtt_vf_relay_gt(struct xe_ggtt *ggtt)
 {
 	return ggtt->tile->primary_gt ?: ggtt->tile->media_gt;
+}
+
+static bool xe_ggtt_vf_explicit_enabled(struct xe_ggtt *ggtt)
+{
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
+
+	if (!xe_device_needs_mtl_ggtt_binder(xe) || !IS_SRIOV_VF(xe) ||
+	    !ggtt->vf_relay_ready || !xe->sriov.vf.pf_version.major)
+		return false;
+
+	return xe_ggtt_vf_relay_gt(ggtt) != NULL;
 }
 
 static bool xe_ggtt_vf_relay_enabled(struct xe_ggtt *ggtt)
@@ -177,13 +197,10 @@ static bool xe_ggtt_vf_relay_enabled(struct xe_ggtt *ggtt)
 	struct xe_device *xe = tile_to_xe(ggtt->tile);
 	struct xe_gt *gt;
 
-	if (!xe_device_needs_mtl_ggtt_binder(xe) || !IS_SRIOV_VF(xe) ||
-	    !ggtt->vf_relay_ready || !xe->sriov.vf.pf_version.major)
+	if (!xe_ggtt_vf_explicit_enabled(ggtt))
 		return false;
 
 	gt = xe_ggtt_vf_relay_gt(ggtt);
-	if (!gt)
-		return false;
 
 	if (!xe_guc_ct_enabled(&gt->uc.guc.ct) || !gt->uc.guc.submission_state.enabled)
 		return false;
@@ -192,6 +209,151 @@ static bool xe_ggtt_vf_relay_enabled(struct xe_ggtt *ggtt)
 		      "xe: MTL SR-IOV GGTT path: VF steady-state relay enabled after GuC CT submission\n");
 
 	return true;
+}
+
+static bool xe_ggtt_vf_mmio_enabled(struct xe_ggtt *ggtt)
+{
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
+
+	if (!xe_ggtt_vf_explicit_enabled(ggtt) || xe_ggtt_vf_relay_enabled(ggtt))
+		return false;
+
+	drm_info_once(&xe->drm,
+		      "xe: MTL SR-IOV GGTT path: VF MMIO bootstrap GGTT sender active before GuC CT submission\n");
+
+	return true;
+}
+
+static int xe_ggtt_vf_mmio_send_pte(struct xe_ggtt *ggtt, u64 ggtt_addr,
+				    u8 mode, u16 num_copies, u64 pte)
+{
+	struct xe_gt *gt = xe_ggtt_vf_relay_gt(ggtt);
+	u64 vf_base = xe_tile_sriov_vf_ggtt_base(ggtt->tile);
+	u32 request[VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_MAX_LEN] = {
+		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_ACTION_VF2GUC_MMIO_RELAY_SERVICE) |
+		FIELD_PREP(VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_MAGIC, 0xfu) |
+		FIELD_PREP(VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_OPCODE,
+			   IOV_OPCODE_VF2PF_MMIO_UPDATE_GGTT),
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_MODE, mode) |
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES, num_copies) |
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_OFFSET,
+			   (ggtt_addr - vf_base) >> XE_PTE_SHIFT),
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_2_PTE_LO, lower_32_bits(pte)),
+		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_3_PTE_HI, upper_32_bits(pte)),
+	};
+	int ret;
+
+	if (XE_WARN_ON(!gt))
+		return -ENODEV;
+	if (XE_WARN_ON(ggtt_addr < vf_base))
+		return -ERANGE;
+	if (XE_WARN_ON(FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_MODE) < mode))
+		return -EINVAL;
+	if (XE_WARN_ON(FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES) < num_copies))
+		return -EINVAL;
+
+	ret = xe_guc_mmio_send_recv(&gt->uc.guc, request, ARRAY_SIZE(request), NULL);
+	return ret >= 0 && ret == num_copies + 1 ? 0 : ret < 0 ? ret : -EPROTO;
+}
+
+static bool xe_ggtt_pte_duplicatable(u64 prev_pte, u64 pte)
+{
+	return prev_pte == pte;
+}
+
+static bool xe_ggtt_pte_replicable(u64 prev_pte, u64 pte)
+{
+	u64 prev_addr = prev_pte & XE_GGTT_PTE_ADDR_MASK;
+	u64 addr = pte & XE_GGTT_PTE_ADDR_MASK;
+	u64 prev_flags = prev_pte & ~XE_GGTT_PTE_ADDR_MASK;
+	u64 flags = pte & ~XE_GGTT_PTE_ADDR_MASK;
+
+	return flags == prev_flags && addr == prev_addr + XE_PAGE_SIZE;
+}
+
+static int xe_ggtt_vf_mmio_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64 scratch_pte)
+{
+	u64 addr = start;
+	u64 remaining = size / XE_PAGE_SIZE;
+	u64 max_entries = FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES) + 1;
+	int ret;
+
+	while (remaining) {
+		u64 entries = min(remaining, max_entries);
+
+		ret = xe_ggtt_vf_mmio_send_pte(ggtt, addr, MMIO_UPDATE_GGTT_MODE_DUPLICATE,
+					       entries - 1, scratch_pte);
+		if (ret)
+			return ret;
+
+		addr += entries * XE_PAGE_SIZE;
+		remaining -= entries;
+	}
+
+	return 0;
+}
+
+static int xe_ggtt_vf_mmio_send_ptes(struct xe_ggtt *ggtt, u64 start,
+				     const u64 *ptes, u16 count)
+{
+	u64 run_addr = start;
+	u64 run_pte;
+	u16 run_len = 1;
+	u16 max_entries = FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES) + 1;
+	u8 run_mode = MMIO_UPDATE_GGTT_MODE_DUPLICATE;
+	int ret;
+	u16 i;
+
+	if (XE_WARN_ON(!count))
+		return -EINVAL;
+
+	run_pte = ptes[0];
+
+	for (i = 1; i < count; i++) {
+		bool duplicatable = xe_ggtt_pte_duplicatable(run_pte + (run_mode == MMIO_UPDATE_GGTT_MODE_REPLICATE ?
+								       (u64)(run_len - 1) * XE_PAGE_SIZE : 0),
+							       ptes[i]);
+		bool replicable = xe_ggtt_pte_replicable(run_pte + (run_mode == MMIO_UPDATE_GGTT_MODE_REPLICATE ?
+								      (u64)(run_len - 1) * XE_PAGE_SIZE : 0),
+							      ptes[i]);
+
+		if (run_len < max_entries) {
+			if (run_len == 1 && duplicatable) {
+				run_mode = MMIO_UPDATE_GGTT_MODE_DUPLICATE;
+				run_len++;
+				continue;
+			}
+
+			if (run_len == 1 && replicable) {
+				run_mode = MMIO_UPDATE_GGTT_MODE_REPLICATE;
+				run_len++;
+				continue;
+			}
+
+			if (run_mode == MMIO_UPDATE_GGTT_MODE_DUPLICATE && duplicatable) {
+				run_len++;
+				continue;
+			}
+
+			if (run_mode == MMIO_UPDATE_GGTT_MODE_REPLICATE && replicable) {
+				run_len++;
+				continue;
+			}
+		}
+
+		ret = xe_ggtt_vf_mmio_send_pte(ggtt, run_addr, run_mode, run_len - 1, run_pte);
+		if (ret)
+			return ret;
+
+		run_addr = start + (u64)i * XE_PAGE_SIZE;
+		run_pte = ptes[i];
+		run_len = 1;
+		run_mode = MMIO_UPDATE_GGTT_MODE_DUPLICATE;
+	}
+
+	return xe_ggtt_vf_mmio_send_pte(ggtt, run_addr, run_mode, run_len - 1, run_pte);
 }
 
 static int xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
@@ -236,6 +398,20 @@ static int xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
 	return updated == expected ? 0 : -EPROTO;
 }
 
+static int xe_ggtt_vf_explicit_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
+					 const u64 *ptes, u16 count)
+{
+	if (xe_ggtt_vf_relay_enabled(ggtt))
+		return xe_ggtt_vf_relay_send_ptes(ggtt, ggtt_addr,
+						  VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+						  0, ptes, count);
+
+	if (xe_ggtt_vf_mmio_enabled(ggtt))
+		return xe_ggtt_vf_mmio_send_ptes(ggtt, ggtt_addr, ptes, count);
+
+	return -EOPNOTSUPP;
+}
+
 static int xe_ggtt_vf_relay_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64 scratch_pte)
 {
 	u64 addr = start;
@@ -259,7 +435,18 @@ static int xe_ggtt_vf_relay_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64
 	return 0;
 }
 
-static int xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo *bo, u64 pte)
+static int xe_ggtt_vf_explicit_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64 scratch_pte)
+{
+	if (xe_ggtt_vf_relay_enabled(ggtt))
+		return xe_ggtt_vf_relay_clear(ggtt, start, size, scratch_pte);
+
+	if (xe_ggtt_vf_mmio_enabled(ggtt))
+		return xe_ggtt_vf_mmio_clear(ggtt, start, size, scratch_pte);
+
+	return -EOPNOTSUPP;
+}
+
+static int xe_ggtt_vf_explicit_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo *bo, u64 pte)
 {
 	u64 ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
 	u64 addr = start;
@@ -276,9 +463,7 @@ static int xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo
 			if (count == VF2PF_UPDATE_GGTT_MAX_PTES) {
 				u64 chunk_start = addr + XE_PAGE_SIZE - (u64)count * XE_PAGE_SIZE;
 
-				ret = xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
-								 VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
-								 0, ptes, count);
+				ret = xe_ggtt_vf_explicit_send_ptes(ggtt, chunk_start, ptes, count);
 				if (ret)
 					return ret;
 				count = 0;
@@ -293,9 +478,7 @@ static int xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo
 			if (count == VF2PF_UPDATE_GGTT_MAX_PTES) {
 				u64 chunk_start = addr + XE_PAGE_SIZE - (u64)count * XE_PAGE_SIZE;
 
-				ret = xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
-								 VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
-								 0, ptes, count);
+				ret = xe_ggtt_vf_explicit_send_ptes(ggtt, chunk_start, ptes, count);
 				if (ret)
 					return ret;
 				count = 0;
@@ -306,9 +489,8 @@ static int xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo
 	if (!count)
 		return 0;
 
-	return xe_ggtt_vf_relay_send_ptes(ggtt, addr - (u64)count * XE_PAGE_SIZE,
-					  VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
-					  0, ptes, count);
+	return xe_ggtt_vf_explicit_send_ptes(ggtt, addr - (u64)count * XE_PAGE_SIZE,
+					     ptes, count);
 }
 #endif
 
@@ -328,14 +510,14 @@ static void xe_ggtt_clear(struct xe_ggtt *ggtt, u64 start, u64 size)
 		scratch_pte = 0;
 
 #ifdef CONFIG_PCI_IOV
-	if (xe_ggtt_vf_relay_enabled(ggtt)) {
-		int ret = xe_ggtt_vf_relay_clear(ggtt, start, size, scratch_pte);
+	if (xe_ggtt_vf_explicit_enabled(ggtt)) {
+		int ret = xe_ggtt_vf_explicit_clear(ggtt, start, size, scratch_pte);
 
 		if (!ret)
 			return;
 
 		xe_tile_warn(ggtt->tile,
-			     "VF GGTT relay clear failed (%pe), falling back to raw writes\n",
+			     "xe: MTL SR-IOV GGTT path: VF explicit clear failed (%pe), falling back to raw writes\n",
 			     ERR_PTR(ret));
 	}
 #endif
@@ -936,14 +1118,14 @@ void xe_ggtt_map_bo(struct xe_ggtt *ggtt, struct xe_ggtt_node *node,
 
 	pte = ggtt->pt_ops->pte_encode_flags(bo, pat_index);
 #ifdef CONFIG_PCI_IOV
-	if (xe_ggtt_vf_relay_enabled(ggtt)) {
-		int ret = xe_ggtt_vf_relay_map_bo(ggtt, start, bo, pte);
+	if (xe_ggtt_vf_explicit_enabled(ggtt)) {
+		int ret = xe_ggtt_vf_explicit_map_bo(ggtt, start, bo, pte);
 
 		if (!ret)
 			return;
 
 		xe_tile_warn(ggtt->tile,
-			     "VF GGTT relay map failed (%pe), falling back to raw writes\n",
+			     "xe: MTL SR-IOV GGTT path: VF explicit map failed (%pe), falling back to raw writes\n",
 			     ERR_PTR(ret));
 	}
 #endif
