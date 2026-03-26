@@ -49,6 +49,10 @@ struct xe_ggtt {
 	unsigned int access_count;
 	/** @wq: Dedicated unordered work queue to process node removals */
 	struct workqueue_struct *wq;
+#ifdef CONFIG_PCI_IOV
+	/** @vf_relay_ready: use explicit VF->PF relay for steady-state GGTT updates */
+	bool vf_relay_ready;
+#endif
 };
 
 /**

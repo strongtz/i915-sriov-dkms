@@ -3,6 +3,8 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include "abi/guc_relay_actions_abi.h"
+
 #include "xe_ggtt.h"
 
 #include <kunit/visibility.h>
@@ -28,6 +30,7 @@
 #include "xe_pm.h"
 #include "xe_res_cursor.h"
 #include "xe_sriov.h"
+#include "xe_guc_relay.h"
 #include "xe_tile_printk.h"
 #include "xe_tile_sriov_vf.h"
 #include "xe_tlb_inval.h"
@@ -159,6 +162,127 @@ static u64 xe_ggtt_get_pte(struct xe_ggtt *ggtt, u64 addr)
 	return readq(&ggtt->gsm[addr >> XE_PTE_SHIFT]);
 }
 
+#ifdef CONFIG_PCI_IOV
+static struct xe_gt *xe_ggtt_vf_relay_gt(struct xe_ggtt *ggtt)
+{
+	return ggtt->tile->primary_gt ?: ggtt->tile->media_gt;
+}
+
+static bool xe_ggtt_vf_relay_enabled(struct xe_ggtt *ggtt)
+{
+	struct xe_device *xe = tile_to_xe(ggtt->tile);
+
+	return IS_SRIOV_VF(xe) && ggtt->vf_relay_ready && xe->sriov.vf.pf_version.major;
+}
+
+static bool xe_ggtt_vf_relay_send_ptes(struct xe_ggtt *ggtt, u64 ggtt_addr,
+				       u8 mode, u16 num_copies,
+				       const u64 *ptes, u16 count)
+{
+	struct xe_gt *gt = xe_ggtt_vf_relay_gt(ggtt);
+	u64 vf_base = xe_tile_sriov_vf_ggtt_base(ggtt->tile);
+	u32 response[VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN];
+	u32 msg[VF2PF_UPDATE_GGTT32_REQUEST_MSG_MIN_LEN + VF2PF_UPDATE_GGTT_MAX_PTES * 2];
+	u16 expected = num_copies ? num_copies + count : count;
+	u16 updated;
+	int i;
+	int ret;
+
+	if (XE_WARN_ON(!gt) || XE_WARN_ON(ggtt_addr < vf_base))
+		return false;
+	if (XE_WARN_ON(!count) || XE_WARN_ON(count > VF2PF_UPDATE_GGTT_MAX_PTES))
+		return false;
+
+	msg[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		 FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		 FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_RELAY_ACTION_VF2PF_UPDATE_GGTT32);
+	msg[1] = FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_OFFSET,
+			    (ggtt_addr - vf_base) >> XE_PTE_SHIFT) |
+		 FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_MODE, mode) |
+		 FIELD_PREP(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, num_copies);
+
+	for (i = 0; i < count; i++) {
+		msg[2 + i * 2] = lower_32_bits(ptes[i]);
+		msg[3 + i * 2] = upper_32_bits(ptes[i]);
+	}
+
+	ret = xe_guc_relay_send_to_pf(&gt->uc.guc.relay, msg, 2 + count * 2,
+				      response, ARRAY_SIZE(response));
+	if (ret != VF2PF_UPDATE_GGTT32_RESPONSE_MSG_LEN)
+		return false;
+
+	updated = FIELD_GET(VF2PF_UPDATE_GGTT32_RESPONSE_MSG_0_NUM_PTES, response[0]);
+	return updated == expected;
+}
+
+static bool xe_ggtt_vf_relay_clear(struct xe_ggtt *ggtt, u64 start, u64 size, u64 scratch_pte)
+{
+	u64 addr = start;
+	u64 remaining = size / XE_PAGE_SIZE;
+	u64 max_entries = FIELD_MAX(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES) + 1;
+
+	while (remaining) {
+		u64 entries = min(remaining, max_entries);
+
+		if (!xe_ggtt_vf_relay_send_ptes(ggtt, addr,
+						VF2PF_UPDATE_GGTT32_MODE_DUPLICATE,
+						entries - 1, &scratch_pte, 1))
+			return false;
+
+		addr += entries * XE_PAGE_SIZE;
+		remaining -= entries;
+	}
+
+	return true;
+}
+
+static bool xe_ggtt_vf_relay_map_bo(struct xe_ggtt *ggtt, u64 start, struct xe_bo *bo, u64 pte)
+{
+	u64 ptes[VF2PF_UPDATE_GGTT_MAX_PTES];
+	u64 addr = start;
+	struct xe_res_cursor cur;
+	u16 count = 0;
+
+	if (!xe_bo_is_vram(bo) && !xe_bo_is_stolen(bo)) {
+		xe_assert(xe_bo_device(bo), bo->ttm.ttm);
+
+		for (xe_res_first_sg(xe_bo_sg(bo), 0, xe_bo_size(bo), &cur);
+		     cur.remaining; xe_res_next(&cur, XE_PAGE_SIZE), addr += XE_PAGE_SIZE) {
+			ptes[count++] = pte | xe_res_dma(&cur);
+			if (count == VF2PF_UPDATE_GGTT_MAX_PTES) {
+				u64 chunk_start = addr + XE_PAGE_SIZE - (u64)count * XE_PAGE_SIZE;
+
+				if (!xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
+								VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+								0, ptes, count))
+					return false;
+				count = 0;
+			}
+		}
+	} else {
+		pte |= vram_region_gpu_offset(bo->ttm.resource);
+
+		for (xe_res_first(bo->ttm.resource, 0, xe_bo_size(bo), &cur);
+		     cur.remaining; xe_res_next(&cur, XE_PAGE_SIZE), addr += XE_PAGE_SIZE) {
+			ptes[count++] = pte + cur.start;
+			if (count == VF2PF_UPDATE_GGTT_MAX_PTES) {
+				u64 chunk_start = addr + XE_PAGE_SIZE - (u64)count * XE_PAGE_SIZE;
+
+				if (!xe_ggtt_vf_relay_send_ptes(ggtt, chunk_start,
+								VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+								0, ptes, count))
+					return false;
+				count = 0;
+			}
+		}
+	}
+
+	return !count || xe_ggtt_vf_relay_send_ptes(ggtt, addr - (u64)count * XE_PAGE_SIZE,
+						    VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST,
+						    0, ptes, count);
+}
+#endif
+
 static void xe_ggtt_clear(struct xe_ggtt *ggtt, u64 start, u64 size)
 {
 	u16 pat_index = tile_to_xe(ggtt->tile)->pat.idx[XE_CACHE_WB];
@@ -173,6 +297,16 @@ static void xe_ggtt_clear(struct xe_ggtt *ggtt, u64 start, u64 size)
 							     pat_index);
 	else
 		scratch_pte = 0;
+
+#ifdef CONFIG_PCI_IOV
+	if (xe_ggtt_vf_relay_enabled(ggtt)) {
+		if (xe_ggtt_vf_relay_clear(ggtt, start, size, scratch_pte))
+			return;
+
+		xe_tile_warn(ggtt->tile,
+			     "VF GGTT relay clear failed, falling back to raw writes\n");
+	}
+#endif
 
 	while (start < end) {
 		ggtt->pt_ops->ggtt_set_pte(ggtt, start, scratch_pte);
@@ -459,6 +593,11 @@ int xe_ggtt_init(struct xe_ggtt *ggtt)
 
 	xe_ggtt_initial_clear(ggtt);
 
+#ifdef CONFIG_PCI_IOV
+	if (IS_SRIOV_VF(xe) && xe->sriov.vf.pf_version.major)
+		ggtt->vf_relay_ready = true;
+#endif
+
 	return devm_add_action_or_reset(xe->drm.dev, ggtt_fini, ggtt);
 err:
 	ggtt->scratch = NULL;
@@ -742,6 +881,15 @@ void xe_ggtt_map_bo(struct xe_ggtt *ggtt, struct xe_ggtt_node *node,
 	end = start + xe_bo_size(bo);
 
 	pte = ggtt->pt_ops->pte_encode_flags(bo, pat_index);
+#ifdef CONFIG_PCI_IOV
+	if (xe_ggtt_vf_relay_enabled(ggtt)) {
+		if (xe_ggtt_vf_relay_map_bo(ggtt, start, bo, pte))
+			return;
+
+			xe_tile_warn(ggtt->tile,
+				     "VF GGTT relay map failed, falling back to raw writes\n");
+	}
+#endif
 	if (!xe_bo_is_vram(bo) && !xe_bo_is_stolen(bo)) {
 		xe_assert(xe_bo_device(bo), bo->ttm.ttm);
 
@@ -919,6 +1067,36 @@ static u64 xe_encode_vfid_pte(u16 vfid)
 	return FIELD_PREP(GGTT_PTE_VFID, vfid) | XE_PAGE_PRESENT;
 }
 
+static u64 xe_ggtt_prepare_vf_pte(u64 pte, u16 vfid)
+{
+	u64 vfid_pte = u64_replace_bits(pte, vfid, GGTT_PTE_VFID);
+
+	return vfid_pte | XE_PAGE_PRESENT;
+}
+
+static u64 xe_ggtt_write_one(struct xe_ggtt *ggtt, u64 addr, u64 pte, u16 vfid)
+{
+	ggtt->pt_ops->ggtt_set_pte(ggtt, addr, xe_ggtt_prepare_vf_pte(pte, vfid));
+	return addr + XE_PAGE_SIZE;
+}
+
+static u64 xe_ggtt_write_dup_rep(struct xe_ggtt *ggtt, u64 addr, u64 pte, u16 vfid,
+				 u16 num_entries, bool duplicated)
+{
+	u16 i;
+
+	for (i = 0; i < num_entries; i++) {
+		u64 entry = pte;
+
+		if (!duplicated)
+			entry += (u64)i * XE_PAGE_SIZE;
+
+		addr = xe_ggtt_write_one(ggtt, addr, entry, vfid);
+	}
+
+	return addr;
+}
+
 static void xe_ggtt_assign_locked(struct xe_ggtt *ggtt, const struct drm_mm_node *node, u16 vfid)
 {
 	u64 start = node->start;
@@ -1031,6 +1209,66 @@ int xe_ggtt_node_load(struct xe_ggtt_node *node, const void *src, size_t size, u
 	xe_ggtt_invalidate(ggtt);
 
 	return 0;
+}
+
+int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
+			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
+{
+	struct xe_ggtt *ggtt;
+	u64 ggtt_addr, ggtt_addr_end, vf_ggtt_end;
+	u16 n_ptes;
+	u16 remaining;
+	u16 copies;
+	u16 i;
+	bool duplicated;
+
+	if (!node)
+		return -ENOENT;
+	if (!count)
+		return -EINVAL;
+	if (!xe_ggtt_node_allocated(node))
+		return -ENOENT;
+
+	ggtt = node->ggtt;
+	ggtt_addr = node->base.start + (u64)pte_offset * XE_PAGE_SIZE;
+	ggtt_addr_end = ggtt_addr + (u64)count * XE_PAGE_SIZE - 1;
+	vf_ggtt_end = node->base.start + node->base.size - 1;
+	if (ggtt_addr_end > vf_ggtt_end)
+		return -ERANGE;
+
+	n_ptes = num_copies ? num_copies + count : count;
+
+	{
+		guard(mutex)(&ggtt->lock);
+
+		copies = num_copies + 1;
+		remaining = count - 1;
+		duplicated = mode == VF2PF_UPDATE_GGTT32_MODE_DUPLICATE ||
+			     mode == VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST;
+
+		switch (mode) {
+		case VF2PF_UPDATE_GGTT32_MODE_DUPLICATE:
+		case VF2PF_UPDATE_GGTT32_MODE_REPLICATE:
+			ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr, ptes[0], vfid,
+							  copies, duplicated);
+			for (i = 0; i < remaining; i++)
+				ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr,
+							      ptes[i + 1], vfid);
+			break;
+		case VF2PF_UPDATE_GGTT32_MODE_DUPLICATE_LAST:
+		case VF2PF_UPDATE_GGTT32_MODE_REPLICATE_LAST:
+			for (i = 0; i < remaining; i++)
+				ggtt_addr = xe_ggtt_write_one(ggtt, ggtt_addr, ptes[i], vfid);
+			ggtt_addr = xe_ggtt_write_dup_rep(ggtt, ggtt_addr, ptes[remaining],
+							  vfid, copies, duplicated);
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	xe_ggtt_invalidate(ggtt);
+	return n_ptes;
 }
 
 #endif
