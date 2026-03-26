@@ -1582,6 +1582,7 @@ static void ggtt_vf_apply_work_func(struct work_struct *work)
 int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 			   u8 mode, u16 num_copies, const u64 *ptes, u16 count)
 {
+	static DEFINE_RATELIMIT_STATE(mtl_req_rs, 5 * HZ, 40);
 	static DEFINE_RATELIMIT_STATE(mtl_shadow_rs, 5 * HZ, 10);
 	static DEFINE_RATELIMIT_STATE(mtl_stage_rs, 5 * HZ, 10);
 	struct xe_ggtt *ggtt;
@@ -1628,6 +1629,12 @@ int xe_ggtt_update_vf_ptes(struct xe_ggtt_node *node, u16 vfid, u32 pte_offset,
 	if (mtl_path && node->vf_shadow_ptes)
 		drm_info_once(&xe->drm,
 			      "xe: MTL SR-IOV GGTT path: PF shadow tracking active for VF GGTT apply\n");
+
+	if (mtl_path && __ratelimit(&mtl_req_rs))
+		xe_gt_notice(gt,
+			     "MTL SR-IOV GGTT req vfid=%u off=0x%x mode=%u copies=%u count=%u n=%u addr=%#llx first=%#llx last=%#llx\n",
+			     vfid, pte_offset, mode, num_copies, count, n_ptes, ggtt_addr,
+			     ptes[0], ptes[count - 1]);
 
 	{
 		guard(mutex)(&ggtt->lock);

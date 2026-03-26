@@ -1591,6 +1591,7 @@ static int mmio_relay_reply_get_runtime(struct xe_guc *guc, struct xe_gt *gt,
 static int mmio_relay_reply_update_ggtt(struct xe_guc *guc, struct xe_gt *gt,
 					u32 vfid, u32 magic, const u32 *msg)
 {
+	static DEFINE_RATELIMIT_STATE(mtl_trace_rs, 5 * HZ, 40);
 	u32 data[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_NUM_DATA + 1] = { };
 	u16 num_copies;
 	u8 mode;
@@ -1617,6 +1618,11 @@ static int mmio_relay_reply_update_ggtt(struct xe_guc *guc, struct xe_gt *gt,
 	if (xe_device_needs_mtl_ggtt_binder(gt_to_xe(gt)))
 		drm_info_once(&gt_to_xe(gt)->drm,
 			      "xe: MTL SR-IOV GGTT path: PF MMIO bootstrap GGTT updates active\n");
+
+	if (__ratelimit(&mtl_trace_rs))
+		xe_gt_notice(gt,
+			     "MTL SR-IOV GGTT mmio msg vfid=%u off=0x%x mode=%u copies=%u pte=%#llx\n",
+			     vfid, pte_offset, mode, num_copies, pte);
 
 	ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode, num_copies,
 				     &pte, 1);
