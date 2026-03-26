@@ -173,6 +173,10 @@ static void ggtt_invalidate_work_func(struct work_struct *work);
 #define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_MAX_LEN		(GUC_HXG_REQUEST_MSG_MIN_LEN + 3u)
 #define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_MAGIC		(0xfu << 24)
 #define VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_OPCODE		(0xffu << 16)
+#define VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_MIN_LEN		(GUC_HXG_RESPONSE_MSG_MIN_LEN)
+#define VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_MAX_LEN		(GUC_HXG_RESPONSE_MSG_MIN_LEN + 3u)
+#define VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_0_MAGIC		(0xfu << 24)
+#define VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_0_DATA0		(0xffffffu << 0)
 
 #define XE_GGTT_PTE_ADDR_MASK					GENMASK_ULL(51, 12)
 
@@ -229,6 +233,7 @@ static int xe_ggtt_vf_mmio_send_pte(struct xe_ggtt *ggtt, u64 ggtt_addr,
 {
 	struct xe_gt *gt = xe_ggtt_vf_relay_gt(ggtt);
 	u64 vf_base = xe_tile_sriov_vf_ggtt_base(ggtt->tile);
+	u32 response[VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_MAX_LEN];
 	u32 request[VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_MAX_LEN] = {
 		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
 		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
@@ -243,6 +248,9 @@ static int xe_ggtt_vf_mmio_send_pte(struct xe_ggtt *ggtt, u64 ggtt_addr,
 		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_2_PTE_LO, lower_32_bits(pte)),
 		FIELD_PREP(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_3_PTE_HI, upper_32_bits(pte)),
 	};
+	u32 magic1, magic2;
+	u16 expected = num_copies + 1;
+	u16 updated;
 	int ret;
 
 	if (XE_WARN_ON(!gt))
@@ -254,8 +262,19 @@ static int xe_ggtt_vf_mmio_send_pte(struct xe_ggtt *ggtt, u64 ggtt_addr,
 	if (XE_WARN_ON(FIELD_MAX(VF2PF_MMIO_UPDATE_GGTT_REQUEST_MSG_1_NUM_COPIES) < num_copies))
 		return -EINVAL;
 
-	ret = xe_guc_mmio_send_recv(&gt->uc.guc, request, ARRAY_SIZE(request), NULL);
-	return ret >= 0 && ret == num_copies + 1 ? 0 : ret < 0 ? ret : -EPROTO;
+	magic1 = FIELD_GET(VF2GUC_MMIO_RELAY_SERVICE_REQUEST_MSG_0_MAGIC, request[0]);
+
+	ret = xe_guc_mmio_send_recv(&gt->uc.guc, request, ARRAY_SIZE(request), response);
+	if (ret < 0)
+		return ret;
+
+	magic2 = FIELD_GET(VF2GUC_MMIO_RELAY_SERVICE_RESPONSE_MSG_0_MAGIC, response[0]);
+	if (magic1 != magic2)
+		return -EPROTO;
+
+	updated = FIELD_GET(VF2PF_MMIO_UPDATE_GGTT_RESPONSE_MSG_1_NUM_PTES, response[0]);
+
+	return updated == expected ? 0 : -EPROTO;
 }
 
 static bool xe_ggtt_pte_duplicatable(u64 prev_pte, u64 pte)
