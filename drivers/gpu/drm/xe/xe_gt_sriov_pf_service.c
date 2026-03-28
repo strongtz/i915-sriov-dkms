@@ -130,7 +130,6 @@ static int pf_process_update_ggtt_msg(struct xe_gt *gt, u32 vfid,
 				      const u32 *msg, u32 msg_len,
 				      u32 *response, u32 resp_size)
 {
-	static DEFINE_RATELIMIT_STATE(mtl_trace_rs, 5 * HZ, 40);
 	u32 pte_offset;
 	u16 num_copies;
 	u8 mode;
@@ -167,22 +166,11 @@ static int pf_process_update_ggtt_msg(struct xe_gt *gt, u32 vfid,
 	start_range = &ptes[0];
 	range_size = 1;
 
-	if (__ratelimit(&mtl_trace_rs))
-		xe_gt_notice(gt,
-			     "MTL SR-IOV GGTT relay msg vfid=%u off=0x%x mode=%u copies=%u count=%u first=%#llx\n",
-			     vfid, pte_offset, mode, num_copies, count, ptes[0]);
-
 	for (i = 1; i < count; i++) {
 		ptes[i] = get_pte_from_msg(msg, i);
 		if ((ptes[i - 1] & ~addr_mask) != (ptes[i] & ~addr_mask)) {
 			u16 local_num_copies = VF2PF_UPDATE_GGTT32_IS_LAST_MODE(mode) ?
 					       0 : num_copies;
-
-			if (__ratelimit(&mtl_trace_rs))
-				xe_gt_notice(gt,
-					     "MTL SR-IOV GGTT relay split vfid=%u off=0x%x range=%u local_copies=%u prev=%#llx next=%#llx\n",
-					     vfid, pte_offset, range_size, local_num_copies,
-					     ptes[i - 1], ptes[i]);
 
 			ret = xe_ggtt_update_vf_ptes(node, vfid, pte_offset, mode,
 						     local_num_copies, start_range, range_size);
@@ -204,11 +192,6 @@ static int pf_process_update_ggtt_msg(struct xe_gt *gt, u32 vfid,
 		return ret;
 
 	updated += ret;
-
-	if (__ratelimit(&mtl_trace_rs))
-		xe_gt_notice(gt,
-			     "MTL SR-IOV GGTT relay done vfid=%u updated=%u final_off=0x%x final_range=%u\n",
-			     vfid, updated, pte_offset, range_size);
 
 	response[0] = FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
 		      FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_RESPONSE_SUCCESS) |
