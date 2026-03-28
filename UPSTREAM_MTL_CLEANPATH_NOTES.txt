@@ -71,25 +71,23 @@ Why it exists:
   - steady-state via VF2PF relay path
 
 
-3. GGTT sender coalescing modeled after i915
+3. GGTT sender path without i915-style VF coalescing
 
 Files:
-- drivers/gpu/drm/xe/abi/iov_actions_mmio_abi.h
 - drivers/gpu/drm/xe/xe_ggtt.c
-- drivers/gpu/drm/xe/xe_ggtt_types.h
 
 Changes:
-- Adds VF-side buffered GGTT update state in `struct xe_ggtt`.
-- Buffers sequential VF GGTT updates and emits compact duplicate/replicate runs.
-- Uses i915-like coalescing rules for GGTT PTE updates.
-- Keeps the explicit MMIO sender limited to one literal PTE per MMIO request,
-  while the relay path can carry multiple literal PTEs per message.
+- Keeps the explicit VF sender split into:
+  - MMIO bootstrap before relay is available
+  - relay transport after GuC CT submission is ready
+- Does not carry the later i915-like buffered VF GGTT coalescing model.
 
 Why it exists:
-- This reduces GGTT message volume and makes VF update semantics match the i915
-  model more closely.
-- This is one of the functional parts we still want to keep while dropping the
-  later diagnostic scaffolding around it.
+- The clean branch is meant to keep the narrow MTL bring-up base, not every
+  later transport experiment.
+- Keeping the coalescing commit by itself also leaves an MMIO-bootstrap mismatch
+  during early VF boot on this branch, because the MMIO sender here only
+  supports a single literal PTE message shape.
 
 
 4. PF-side staged shadow apply path for MTL VF GGTT updates
@@ -208,7 +206,7 @@ This branch is meant to be the narrow functional base that says:
 - yes, keep the MTL SR-IOV enablement
 - yes, keep the GSC/PXP power handling
 - yes, keep the MTL GGTT bootstrap + relay transport
-- yes, keep the i915-like VF GGTT coalescing
+- no, do not keep the i915-like VF GGTT coalescing
 - yes, keep the staged shadow PF GGTT apply model
 - yes, keep direct GSM GGTT access on MTL PF
 - no, do not keep the later verification scaffolding and trace spam
