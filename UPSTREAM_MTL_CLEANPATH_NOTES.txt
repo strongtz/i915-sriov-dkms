@@ -1,0 +1,218 @@
+Branch: upstream-mtl-cleanpath
+Branch tip: 1d297d75e4ad03894fb0bf25398bf1fdb3418dd6
+Compared to upstream/master: 0481357c40951b6edab10d058010c3a2f5df0aa3
+
+Purpose
+-------
+This branch is the cleaned working base for Meteor Lake SR-IOV bring-up and
+debugging. It keeps the functional changes that are still believed to matter
+for MTL PF/VF operation, but removes the extra validation paths and high-volume
+debug noise that were added later during investigation.
+
+In practical terms, this branch keeps three groups of changes:
+
+1. Power / platform enablement
+2. GGTT transport and apply path work
+3. MTL PF direct GSM access instead of BAR-window GGTT access
+
+It intentionally does not keep the later "validation" experiments such as:
+
+- PF direct synchronous post-ABI GGTT apply
+- PF GGTT readback verification on every update
+- excessive per-update relay / MMIO / apply / flush tracing
+- other one-off diagnostics that were only useful while narrowing the bug
+
+
+High-level summary of what this branch adds
+-------------------------------------------
+
+1. Meteor Lake SR-IOV enablement in xe
+
+Files:
+- drivers/gpu/drm/xe/xe_pci.c
+- drivers/gpu/drm/xe/xe_pci_sriov.c
+
+Changes:
+- Marks MTL as `has_sriov = true` in xe device description.
+- Adds MTL PF-specific VF enable/disable handling around GSC/PXP.
+- Disables the GSC engine before enabling VFs on MTL PF.
+- Re-enables GSC/PXP after disabling VFs.
+- Holds GSC forcewake during MTL VF gating so PF-side GSC shutdown is stable.
+
+Why it exists:
+- Upstream did not enable MTL SR-IOV in xe.
+- MTL PF/VF bring-up needs extra GSC/PXP care during VF lifecycle.
+
+
+2. Explicit VF->PF GGTT update transport for MTL
+
+Files:
+- drivers/gpu/drm/xe/abi/guc_actions_pf_mmio_abi.h
+- drivers/gpu/drm/xe/abi/guc_relay_actions_abi.h
+- drivers/gpu/drm/xe/abi/iov_actions_mmio_abi.h
+- drivers/gpu/drm/xe/abi/iov_version_abi.h
+- drivers/gpu/drm/xe/xe_guc_ct.c
+- drivers/gpu/drm/xe/xe_gt_sriov_pf_service.c
+- drivers/gpu/drm/xe/xe_sriov.h
+
+Changes:
+- Adds MMIO relay / GGTT update ABI definitions needed for VF->PF GGTT traffic.
+- Adds PF-side parsing of VF MMIO bootstrap GGTT update messages.
+- Adds PF-side parsing of VF steady-state relay GGTT update messages.
+- Splits mixed relay packets into homogeneous chunks when required by PTE flags.
+- Preserves MMIO bootstrap before relay is enabled, then switches to relay after
+  GuC CT submission is ready on the VF side.
+
+Why it exists:
+- On MTL, VF GGTT updates needed a more explicit PF-mediated transport path than
+  upstream had.
+- The resulting model is:
+  - bootstrap via MMIO message path
+  - steady-state via VF2PF relay path
+
+
+3. GGTT sender coalescing modeled after i915
+
+Files:
+- drivers/gpu/drm/xe/abi/iov_actions_mmio_abi.h
+- drivers/gpu/drm/xe/xe_ggtt.c
+- drivers/gpu/drm/xe/xe_ggtt_types.h
+
+Changes:
+- Adds VF-side buffered GGTT update state in `struct xe_ggtt`.
+- Buffers sequential VF GGTT updates and emits compact duplicate/replicate runs.
+- Uses i915-like coalescing rules for GGTT PTE updates.
+- Keeps the explicit MMIO sender limited to one literal PTE per MMIO request,
+  while the relay path can carry multiple literal PTEs per message.
+
+Why it exists:
+- This reduces GGTT message volume and makes VF update semantics match the i915
+  model more closely.
+- This is one of the functional parts we still want to keep while dropping the
+  later diagnostic scaffolding around it.
+
+
+4. PF-side staged shadow apply path for MTL VF GGTT updates
+
+Files:
+- drivers/gpu/drm/xe/xe_ggtt.c
+- drivers/gpu/drm/xe/xe_ggtt.h
+- drivers/gpu/drm/xe/xe_ggtt_types.h
+- drivers/gpu/drm/xe/xe_gt_sriov_pf_config.c
+
+Changes:
+- Adds PF shadow tracking of VF GGTT contents in each VF GGTT region node.
+- Adds `vf_apply_work` staging so PF can apply VF GGTT updates from shadow state
+  on CPU/MMIO-backed GGTT writes.
+- Resets shadow state on GGTT region assignment.
+- Keeps explicit map/clear helpers for VF GGTT region management on MTL.
+
+Why it exists:
+- This is the functional GGTT apply path currently kept in the clean branch.
+- It is the path we are still testing against Windows-side failures.
+
+Important note:
+- The branch history contains experiments that briefly forced synchronous direct
+  PF apply, but the clean branch removes those validation-only branches.
+- The effective code today keeps the staged shadow apply mechanism, not the
+  later forced direct-sync validation path.
+
+
+5. MTL PF direct GSM mapping instead of BAR-backed GGTT window
+
+Files:
+- drivers/gpu/drm/xe/regs/xe_regs.h
+- drivers/gpu/drm/xe/xe_ggtt.c
+
+Changes:
+- Adds `MTL_PCODE_STOLEN_ACCESS` register definitions.
+- Detects whether firmware allows direct stolen/GSM access.
+- On MTL PF root tile, maps GGTT PTE access through direct GSM ioremap when
+  allowed instead of always using the BAR-backed MMIO window.
+
+Why it exists:
+- This was one of the most important functional changes from the later debug
+  series.
+- It mirrors i915's preference on MTL PF more closely.
+- This change fixed real issues and is intentionally preserved.
+
+
+6. MTL-specific invalidate behavior retained in this branch
+
+Files:
+- drivers/gpu/drm/xe/xe_ggtt.c
+
+Changes:
+- Keeps the MTL PF path that uses the i915-like direct MMIO GGTT invalidate
+  primitive.
+
+Why it exists:
+- That path is part of the functional baseline currently under test.
+- A later attempt to replace it with GuC-backed synchronous invalidation caused
+  boot failures and is not part of this branch.
+
+
+What this branch intentionally removes
+--------------------------------------
+
+The clean branch removes validation/debug-only logic that had accumulated while
+testing hypotheses. The most important removals are:
+
+1. PF post-ABI direct-sync apply path
+- Removed the branch that switched PF GGTT updates to immediate direct writes
+  once VF/PF ABI negotiation completed.
+
+2. PF readback verification on every GGTT write
+- Removed the helper path that read GGTT back after every PF-applied update and
+  emitted verification failures.
+
+3. High-volume GGTT tracing
+- Removed routine relay/MMIO/update/apply/stage/flush chatter.
+- Removed per-flush sender logs.
+- Removed per-packet relay split/done logs.
+
+4. Extra validation wording
+- Kept only a few one-shot path markers that still help identify which runtime
+  path is active.
+- Removed wording and branches that existed only for experimental validation.
+
+
+Files changed relative to upstream/master
+-----------------------------------------
+
+The effective branch delta relative to upstream/master is in:
+
+- drivers/gpu/drm/xe/abi/guc_actions_pf_mmio_abi.h
+- drivers/gpu/drm/xe/abi/guc_relay_actions_abi.h
+- drivers/gpu/drm/xe/abi/iov_actions_mmio_abi.h
+- drivers/gpu/drm/xe/abi/iov_version_abi.h
+- drivers/gpu/drm/xe/regs/xe_regs.h
+- drivers/gpu/drm/xe/xe_ggtt.c
+- drivers/gpu/drm/xe/xe_ggtt.h
+- drivers/gpu/drm/xe/xe_ggtt_types.h
+- drivers/gpu/drm/xe/xe_gt_sriov_pf_config.c
+- drivers/gpu/drm/xe/xe_gt_sriov_pf_service.c
+- drivers/gpu/drm/xe/xe_guc_ct.c
+- drivers/gpu/drm/xe/xe_pci.c
+- drivers/gpu/drm/xe/xe_pci_sriov.c
+- drivers/gpu/drm/xe/xe_sriov.h
+
+
+How to think about this branch
+------------------------------
+
+This is not "all experiments we've tried".
+
+This branch is meant to be the narrow functional base that says:
+
+- yes, keep the MTL SR-IOV enablement
+- yes, keep the GSC/PXP power handling
+- yes, keep the MTL GGTT bootstrap + relay transport
+- yes, keep the i915-like VF GGTT coalescing
+- yes, keep the staged shadow PF GGTT apply model
+- yes, keep direct GSM GGTT access on MTL PF
+- no, do not keep the later verification scaffolding and trace spam
+
+That makes `upstream-mtl-cleanpath` the branch to use for future debugging and
+new experiments, rather than piling more work onto the earlier validation-heavy
+branches.
