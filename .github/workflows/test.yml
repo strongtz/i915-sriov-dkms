@@ -32,6 +32,7 @@ jobs:
       - name: Check Kernel Compatibility
         if: github.event_name != 'workflow_dispatch'
         id: check_kernel
+        shell: bash
         working-directory: i915-sriov-dkms
         run: |
           KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s $(dpkg -s proxmox-default-headers | grep "Depends: " | cut -d " " -f2) | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
