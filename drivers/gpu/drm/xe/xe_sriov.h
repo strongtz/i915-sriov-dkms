@@ -45,4 +45,14 @@ static inline bool xe_device_is_sriov_vf(const struct xe_device *xe)
 
 #define IS_SRIOV(xe) (IS_SRIOV_PF(xe) || IS_SRIOV_VF(xe))
 
+static inline bool xe_device_needs_mtl_ggtt_binder(const struct xe_device *xe)
+{
+	/*
+	 * Match the i915 MTL binder WA scope as closely as xe can without
+	 * importing the whole binder machinery: integrated SR-IOV platforms
+	 * with MEDIA_VER 13.0.
+	 */
+	return IS_SRIOV(xe) && !IS_DGFX(xe) && MEDIA_VERx100(xe) == 1300;
+}
+
 #endif

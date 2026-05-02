@@ -6,6 +6,9 @@
 #ifndef _XE_GGTT_TYPES_H_
 #define _XE_GGTT_TYPES_H_
 
+#include <linux/atomic.h>
+#include <linux/workqueue.h>
+
 #include <drm/drm_mm.h>
 
 #include "xe_pt_types.h"
@@ -49,6 +52,14 @@ struct xe_ggtt {
 	unsigned int access_count;
 	/** @wq: Dedicated unordered work queue to process node removals */
 	struct workqueue_struct *wq;
+	/** @invalidate_work: Deferred GGTT invalidate work */
+	struct work_struct invalidate_work;
+	/** @invalidate_pending: Pending invalidate request */
+	atomic_t invalidate_pending;
+#ifdef CONFIG_PCI_IOV
+	/** @vf_relay_ready: use explicit VF->PF relay for steady-state GGTT updates */
+	bool vf_relay_ready;
+#endif
 };
 
 /**
@@ -67,6 +78,24 @@ struct xe_ggtt_node {
 	struct work_struct delayed_removal_work;
 	/** @invalidate_on_remove: If it needs invalidation upon removal */
 	bool invalidate_on_remove;
+#ifdef CONFIG_PCI_IOV
+	/** @vf_shadow_ptes: MTL-only PF shadow of VF GGTT contents, without VFID bits */
+	u64 *vf_shadow_ptes;
+	/** @vf_shadow_len: Number of PTEs tracked in @vf_shadow_ptes */
+	u32 vf_shadow_len;
+	/** @vfid: VF identifier assigned to this GGTT region */
+	u16 vfid;
+	/** @vf_apply_work: MTL-only staged PF GGTT apply worker */
+	struct work_struct vf_apply_work;
+	/** @vf_apply_dirty: Whether staged PF GGTT updates are pending */
+	bool vf_apply_dirty;
+	/** @vf_apply_queued: Whether @vf_apply_work is queued or running */
+	bool vf_apply_queued;
+	/** @vf_apply_start: Dirty PTE start offset, inclusive */
+	u32 vf_apply_start;
+	/** @vf_apply_end: Dirty PTE end offset, exclusive */
+	u32 vf_apply_end;
+#endif
 };
 
 /**

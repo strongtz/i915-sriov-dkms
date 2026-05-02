@@ -4,6 +4,7 @@
  */
 
 #include <linux/string_choices.h>
+#include <linux/vmalloc.h>
 #include <linux/wordpart.h>
 
 #include "abi/guc_actions_sriov_abi.h"
@@ -437,6 +438,11 @@ static int pf_distribute_config_ggtt(struct xe_tile *tile, unsigned int vfid, u6
 
 static void pf_release_ggtt(struct xe_tile *tile, struct xe_ggtt_node *node)
 {
+	xe_ggtt_node_quiesce_vf_apply(node);
+	kvfree(node->vf_shadow_ptes);
+	node->vf_shadow_ptes = NULL;
+	node->vf_shadow_len = 0;
+
 	if (xe_ggtt_node_allocated(node)) {
 		/*
 		 * explicit GGTT PTE assignment to the PF using xe_ggtt_assign()
@@ -493,6 +499,17 @@ static int pf_provision_vf_ggtt(struct xe_gt *gt, unsigned int vfid, u64 size)
 	err = xe_ggtt_node_insert(node, size, alignment);
 	if (unlikely(err))
 		goto err;
+
+	if (xe_device_needs_mtl_ggtt_binder(gt_to_xe(gt))) {
+		node->vf_shadow_len = node->base.size / XE_PAGE_SIZE;
+		node->vf_shadow_ptes = kvcalloc(node->vf_shadow_len,
+						sizeof(*node->vf_shadow_ptes),
+						GFP_KERNEL);
+		if (!node->vf_shadow_ptes) {
+			err = -ENOMEM;
+			goto err;
+		}
+	}
 
 	xe_ggtt_assign(node, vfid);
 	xe_gt_sriov_dbg_verbose(gt, "VF%u assigned GGTT %llx-%llx\n",
