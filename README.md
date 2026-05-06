@@ -15,7 +15,7 @@ You need to install this dkms module in **both host and guest!**
 
 **Required kernel**: 6.17.x ~ 7.0.x
 
-**Latest release**: [2026.05.03](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.05.03)
+**Latest release**: [2026.05.06](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.05.06)
 
 For older kernel (v6.12 ~ v6.19), please use the [2026.03.05.1](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.03.05.1) release.
 
@@ -87,11 +87,11 @@ For detailed installation instructions, please refer to the specific guide for y
 ### Host Installation
 - [Arch Linux Host](docs/install-arch-host.md)
 - [NixOS Linux Host (Tested Kernel 6.17)](docs/install-nixos-host.md)
-- [Proxmox PVE Host (PVE 9.1)](docs/install-pve-host.md)
+- [Proxmox PVE Host](docs/install-pve-host.md)
 - [Manual Host Installation Steps](docs/install-manual.md) - Applicable to Debian, Ubuntu, and Arch Linux hosts.
 
 ### Guest Installation
-- [Linux Guest (Ubuntu 25.04/Kernel 6.14)](docs/install-linux-guest.md)
+- [Linux Guest (Ubuntu)](docs/install-linux-guest.md)
 - [Linux Guest (Ubuntu 25.04 Cloud-Init VM on Proxmox)](docs/install-linux-guest-proxmox-cloud-init.md)
 - [Windows Guest (Tested with Proxmox 8.3 + Windows 11 24H2 + Intel Driver 32.0.101.6460/32.0.101.6259)](docs/install-windows-guest.md)
 

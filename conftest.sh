@@ -18,7 +18,8 @@ fi
 
 CFLAGS="$NOSTDINC_FLAGS $LINUXINCLUDE $KBUILD_CPPFLAGS $KBUILD_CFLAGS $KBUILD_MODFLAGS \
  -DKBUILD_BASENAME=\"conftest\" -DKBUILD_MODNAME=\"conftest\" \
- -Wno-missing-prototypes -w
+ -Werror=implicit-function-declaration -Wno-missing-prototypes 
+ -Wno-unused-function 
 "
 
 TMPDIR="${KBUILD_EXTMOD:-.}/conftest_tmp"

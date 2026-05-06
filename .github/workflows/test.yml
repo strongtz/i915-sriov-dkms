@@ -56,15 +56,13 @@ jobs:
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
           make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
-  test-ubuntu-questing:
+  test-ubuntu-noble:
     runs-on: ubuntu-24.04
-    container:
-      image: ubuntu:25.10
     steps:
     - name: Install Dependencies
       run: |
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y git build-essential linux-generic linux-headers-generic
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y git build-essential linux-image-generic-6.17 linux-headers-generic-6.17
     - name: Checkout
       uses: actions/checkout@v6
       with:
@@ -72,9 +70,9 @@ jobs:
     - name: Build Module
       working-directory: i915-sriov-dkms
       run: |
-        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
+        KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic-6.17 | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
         KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-        make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+        sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux:
     runs-on: ubuntu-24.04

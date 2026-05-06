@@ -8,8 +8,8 @@ We will need to run the same driver under Linux guests.
    ```
 2. Download and install the `.deb`
    ```
-   wget -O /tmp/i915-sriov-dkms_2026.05.03_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.05.03/i915-sriov-dkms_2026.05.03_amd64.deb"
-   dpkg -i /tmp/i915-sriov-dkms_2026.05.03_amd64.deb
+   wget -O /tmp/i915-sriov-dkms_2026.05.06_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.05.06/i915-sriov-dkms_2026.05.06_amd64.deb"
+   dpkg -i /tmp/i915-sriov-dkms_2026.05.06_amd64.deb
    ```
 3. Update kernel parameters
    `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `i915.enable_guc=3 module_blacklist=xe`, or add to it if you have other arguments there already.
@@ -33,4 +33,4 @@ We will need to run the same driver under Linux guests.
 Remove the package with `dpkg -P i915-sriov-dkms`.
 
 If you installed the module manually, or if the package manager fails to remove it from the kernel tree, you can remove it forcibly with:
-`dkms remove i915-sriov-dkms/2026.05.03`
+`dkms remove i915-sriov-dkms/2026.05.06`
