@@ -18,7 +18,8 @@ fi
 
 CFLAGS="$NOSTDINC_FLAGS $LINUXINCLUDE $KBUILD_CPPFLAGS $KBUILD_CFLAGS $KBUILD_MODFLAGS \
  -DKBUILD_BASENAME=\"conftest\" -DKBUILD_MODNAME=\"conftest\" \
- -Wno-missing-prototypes -w
+ -Werror=implicit-function-declaration -Wno-missing-prototypes 
+ -Wno-unused-function 
 "
 
 TMPDIR="${KBUILD_EXTMOD:-.}/conftest_tmp"
@@ -50,7 +51,7 @@ compile_check() {
 
 	printf '%s\n%s\n' "${PREAMBLE}" "${_code}" >"${TMP}.c"
 
-	if ${CC} ${CFLAGS} -c -o "${TMP}.o" "${TMP}.c" >/dev/null; then
+	if ${CC} ${CFLAGS} -c -o "${TMP}.o" "${TMP}.c" >/dev/null 2>&1; then
 		_compiled=1
 	else
 		_compiled=0
