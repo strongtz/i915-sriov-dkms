@@ -6,6 +6,61 @@
 
 #define MODULE_ABS_PATH(path) DKMS_MODULE_SOURCE_DIR/path
 
+/*
+ * Linux 7.1: the buddy allocator was split out of the DRM subsystem and moved
+ * to <linux/gpu_buddy.h> as gpu_buddy_*. Only the two DRM print helpers
+ * (drm_buddy_print, drm_buddy_block_print) keep their names in
+ * <drm/drm_buddy.h>. The i915 tree vendored from 7.0 only knows the old
+ * drm_buddy_* names — remapped globally here so that struct FIELDS
+ * (struct drm_buddy *mm;) in early-included i915 headers are covered too, not
+ * just the later use sites. That is why this lives in the -include config and
+ * not in a header shim (include-ordering trap).
+ * Macro replacement is token-based: drm_buddy_print stays untouched.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+#define drm_buddy                       gpu_buddy
+#define drm_buddy_block                 gpu_buddy_block
+#define drm_buddy_block_size            gpu_buddy_block_size
+#define drm_buddy_block_offset          gpu_buddy_block_offset
+#define drm_buddy_block_order           gpu_buddy_block_order
+#define drm_buddy_block_is_free         gpu_buddy_block_is_free
+#define drm_buddy_block_is_clear        gpu_buddy_block_is_clear
+#define drm_buddy_block_trim            gpu_buddy_block_trim
+#define drm_buddy_free_block            gpu_buddy_free_block
+#define drm_buddy_free_list             gpu_buddy_free_list
+#define drm_buddy_alloc_blocks          gpu_buddy_alloc_blocks
+#define drm_buddy_init                  gpu_buddy_init
+#define drm_buddy_fini                  gpu_buddy_fini
+#define DRM_BUDDY_RANGE_ALLOCATION      GPU_BUDDY_RANGE_ALLOCATION
+#define DRM_BUDDY_TOPDOWN_ALLOCATION    GPU_BUDDY_TOPDOWN_ALLOCATION
+#define DRM_BUDDY_CONTIGUOUS_ALLOCATION GPU_BUDDY_CONTIGUOUS_ALLOCATION
+#define DRM_BUDDY_CLEAR_ALLOCATION      GPU_BUDDY_CLEAR_ALLOCATION
+#define DRM_BUDDY_CLEARED               GPU_BUDDY_CLEARED
+#endif
+
+/*
+ * Linux 7.1: INTEL_GMCH_CTRL (PCI config offset 0x52 of the GMCH control
+ * register) was renamed to I830_GMCH_CTRL in <drm/intel/i915_drm.h> — same
+ * value (0x52). INTEL_GMCH_VGA_DISABLE is unchanged. Pure rename with identical
+ * semantics -> global #define (class 2), keeping the intel_vga.c vendored from
+ * 7.0 unchanged. Token-based: I830_GMCH_CTRL/SNB_GMCH_CTRL stay untouched.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+#define INTEL_GMCH_CTRL I830_GMCH_CTRL
+#endif
+
+/*
+ * Linux 7.1 ("dynamic dma-buf" rework): the exported function
+ * dma_buf_move_notify(struct dma_buf *) was renamed to
+ * dma_buf_invalidate_mappings() (same signature/semantics: notify importers of
+ * a move). Unique token -> global #define (class 2). The corresponding callback
+ * FIELD dma_buf_attach_ops.move_notify -> .invalidate_mappings is NOT mapped
+ * here (move_notify is a common name); it is handled locally in xe_dma_buf.c.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+#define dma_buf_move_notify dma_buf_invalidate_mappings
+#endif
+
 // We vendor our own copy of the DRM_GPUSVM module, so enable it here.
 
 #ifndef CONFIG_HMM_MIRROR 

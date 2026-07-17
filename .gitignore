@@ -2,3 +2,10 @@
 .vscode/
 src/
 pkg/
+
+# Persönliches Claude-Tooling / Dev-Artefakte (nicht Teil des Upstream-Forks)
+CLAUDE.md
+.claude/
+HANDOFF.md
+build.log
+build-against-kernel.sh

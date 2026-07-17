@@ -29,4 +29,17 @@ dma_fence_test_signaled_flag(struct dma_fence *fence)
 	return test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 }
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 1, 0)
+/*
+ * Linux 7.1: struct dma_fence.lock (spinlock_t *) was replaced by a union
+ * extern_lock/inline_lock; access is now only via dma_fence_spinlock().
+ * Backport for older kernels so the vendored code can use the accessor
+ * uniformly (on 7.1+ the kernel header provides the real static inline).
+ */
+static inline spinlock_t *dma_fence_spinlock(struct dma_fence *fence)
+{
+	return fence->lock;
+}
+#endif
 #endif

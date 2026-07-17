@@ -173,8 +173,27 @@ int xe_pmt_telem_read(struct pci_dev *pdev, u32 guid, u64 *data, loff_t user_off
 	return count;
 }
 
+/*
+ * Linux 7.1: struct pmt_callbacks.read_telem and intel_vsec_register() now take
+ * struct device * instead of struct pci_dev *. xe_pmt_telem_read keeps its
+ * pci_dev * signature (internal callers in xe_hwmon.c/xe_debugfs.c and the
+ * prototype in xe_vsec.h stay unchanged); only the callback is bridged through
+ * a thin 7.1 adapter.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+static int xe_pmt_telem_read_cb(struct device *dev, u32 guid, u64 *data,
+				loff_t user_offset, u32 count)
+{
+	return xe_pmt_telem_read(to_pci_dev(dev), guid, data, user_offset, count);
+}
+#endif
+
 static struct pmt_callbacks xe_pmt_cb = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+	.read_telem = xe_pmt_telem_read_cb,
+#else
 	.read_telem = xe_pmt_telem_read,
+#endif
 };
 
 static const int vsec_platforms[] = {
@@ -221,6 +240,10 @@ void xe_vsec_init(struct xe_device *xe)
 	 * Register a VSEC. Cleanup is handled using device managed
 	 * resources.
 	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+	intel_vsec_register(&pdev->dev, info);
+#else
 	intel_vsec_register(pdev, info);
+#endif
 }
 MODULE_IMPORT_NS("INTEL_VSEC");

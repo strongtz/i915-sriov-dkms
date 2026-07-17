@@ -47,9 +47,9 @@ bool dma_fence_check_and_signal(struct dma_fence *fence)
 	unsigned long flags;
 	bool ret;
 
-	spin_lock_irqsave(fence->lock, flags);
+	spin_lock_irqsave(dma_fence_spinlock(fence), flags);
 	ret = dma_fence_check_and_signal_locked(fence);
-	spin_unlock_irqrestore(fence->lock, flags);
+	spin_unlock_irqrestore(dma_fence_spinlock(fence), flags);
 
 	return ret;
 }
