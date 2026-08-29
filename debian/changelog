@@ -1,6 +1,5 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
-  * Apply patches from v6.18.44
-  * Add conftest for v6.18.44
+  * Resolves build error on >=6.12.103
 
- -- bbaa <bbaa@bbaa.moe>  Wed, 12 Aug 2026 18:36:55 +0800
+ -- bbaa <bbaa@bbaa.me>  Sat, 29 Aug 2026 23:11:18 +0800
