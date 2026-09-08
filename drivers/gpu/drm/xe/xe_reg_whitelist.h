@@ -3,8 +3,8 @@
  * Copyright © 2023 Intel Corporation
  */
 
-#ifndef _XE_REG_WHITELIST_
-#define _XE_REG_WHITELIST_
+#ifndef _XE_REG_WHITELIST_H_
+#define _XE_REG_WHITELIST_H_
 
 #include <linux/types.h>
 

@@ -898,8 +898,6 @@ static struct i915_vma *eb_lookup_vma(struct i915_execbuffer *eb, u32 handle)
 		vma = radix_tree_lookup(&eb->gem_context->handles_vma, handle);
 		if (likely(vma))
 			vma = i915_vma_tryget(vma);
-		else
-			vma = NULL;
 		rcu_read_unlock();
 		if (likely(vma))
 			return vma;
@@ -3202,11 +3200,18 @@ eb_composite_fence_create(struct i915_execbuffer *eb, int out_fence_fd)
 			  &eb->requests[i]->fence.flags);
 	}
 
+#ifdef IDB_DMA_FENCE_ARRAY_CREATE_4ARGS
+	fence_array = dma_fence_array_create(eb->num_batches,
+					     fences,
+					     eb->context->parallel.fence_context,
+					     eb->context->parallel.seqno++);
+#else
 	fence_array = dma_fence_array_create(eb->num_batches,
 					     fences,
 					     eb->context->parallel.fence_context,
 					     eb->context->parallel.seqno++,
 					     false);
+#endif
 	if (!fence_array) {
 		kfree(fences);
 		return ERR_PTR(-ENOMEM);

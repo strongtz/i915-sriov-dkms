@@ -336,17 +336,12 @@ struct drm_pagemap_devmem {
  * struct drm_pagemap_migrate_details - Details to govern migration.
  * @timeslice_ms: The time requested for the migrated pagemap pages to
  * be present in @mm before being allowed to be migrated back.
- * @can_migrate_same_pagemap: Whether the copy function as indicated by
- * the @source_peer_migrates flag, can migrate device pages within a
- * single drm_pagemap.
- * @source_peer_migrates: Whether on p2p migration, The source drm_pagemap
- * should use the copy_to_ram() callback rather than the destination
- * drm_pagemap should use the copy_to_devmem() callback.
+ * @can_migrate_same_pagemap: Whether the copy function can migrate
+ * device pages within a single drm_pagemap.
  */
 struct drm_pagemap_migrate_details {
 	unsigned long timeslice_ms;
 	u32 can_migrate_same_pagemap : 1;
-	u32 source_peer_migrates : 1;
 };
 
 #if IS_ENABLED(CONFIG_ZONE_DEVICE)
@@ -391,7 +386,12 @@ static inline struct drm_pagemap_zdd *drm_pagemap_page_zone_device_data(struct p
 #else
 static inline struct drm_pagemap_zdd *drm_pagemap_page_zone_device_data(struct page *page)
 {
-	return NULL;
+	/*
+	 * Pre-6.19 kernels have no folio_zone_device_data() accessor, but
+	 * the underlying field is the same one drm_pagemap_get_devmem_page()
+	 * already writes directly on these kernels.
+	 */
+	return page->zone_device_data;
 }
 #endif
 

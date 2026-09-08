@@ -75,6 +75,18 @@ ct_copy_from_user_inatomic_nontemporal() {
 	compile_check "$CODE" "IDB_COPY_FROM_USER_INATOMIC_NONTEMPORAL" 1
 }
 
+ct_dma_fence_array_create_4args() {
+	CODE="
+	#include <linux/dma-fence-array.h>
+	static void conftest_dma_fence_array_create_4args(void)
+	{
+		dma_fence_array_create(0, NULL, 0, 0);
+	}
+	"
+
+	compile_check "$CODE" "IDB_DMA_FENCE_ARRAY_CREATE_4ARGS" 1
+}
+
 ct_pci_resize_resource_4args() {
 	CODE="
 	#include <linux/pci.h>
@@ -114,6 +126,35 @@ ct_drm_exec_for_each_locked_object_no_index() {
 	"
 
 	compile_check "$CODE" "IDB_DRM_EXEC_FOR_EACH_LOCKED_OBJECT_NO_INDEX" 1
+}
+
+ct_drm_pagemap_compound_folio() {
+	CODE="
+	#include <linux/migrate.h>
+	#include <linux/memremap.h>
+	#include <linux/mm.h>
+
+	static void conftest_drm_pagemap_compound_folio(struct folio *folio,
+							struct dev_pagemap *pgmap,
+							void *data)
+	{
+		unsigned long flags = MIGRATE_VMA_SELECT_COMPOUND;
+		unsigned long pfn = MIGRATE_PFN_COMPOUND;
+
+		(void)flags;
+		(void)pfn;
+		zone_device_folio_init(folio, pgmap, 0);
+		folio_set_zone_device_data(folio, data);
+		(void)folio_zone_device_data(folio);
+	}
+
+	static const struct dev_pagemap_ops conftest_pagemap_ops = {
+		.folio_free = NULL,
+	};
+	static const void *conftest_pagemap_ops_ptr = &conftest_pagemap_ops;
+	"
+
+	compile_check "$CODE" "IDB_DRM_PAGEMAP_COMPOUND_FOLIO" 1
 }
 
 ct_xe_pmt_telem_read_kernel_device() {

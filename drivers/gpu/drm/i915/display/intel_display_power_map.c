@@ -4,6 +4,7 @@
  */
 
 #include <drm/drm_print.h>
+#include <drm/intel/vlv_iosf_sb_regs.h>
 
 // TODO: Disable display initialization on VF to align with Xe
 #ifdef I915
@@ -15,7 +16,6 @@
 #include "intel_display_power_well.h"
 #include "intel_display_regs.h"
 #include "intel_display_types.h"
-#include "vlv_iosf_sb_reg.h"
 
 #define __LIST_INLINE_ELEMS(__elem_type, ...) \
 	((__elem_type[]) { __VA_ARGS__ })
