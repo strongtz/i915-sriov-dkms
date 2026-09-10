@@ -16,11 +16,16 @@
  * every way.  It is not accessible from the CP register read instructions.
  *
  * Starting from Haswell, you can't write registers using the MCHBAR mirror,
- * just read.
+ * just read. On MTL+ the mirror no longer exists.
  */
 
 #define MCHBAR_MIRROR_BASE			0x10000
+#define MCHBAR_MIRROR_END			0x13fff
+
 #define MCHBAR_MIRROR_BASE_SNB			0x140000
+#define MCHBAR_MIRROR_END_SNB			0x147fff
+#define MCHBAR_MIRROR_END_ICL_RKL		0x14ffff
+#define MCHBAR_MIRROR_END_TGL			0x15ffff
 
 #define CTG_STOLEN_RESERVED			_MMIO(MCHBAR_MIRROR_BASE + 0x34)
 #define ELK_STOLEN_RESERVED			_MMIO(MCHBAR_MIRROR_BASE + 0x48)

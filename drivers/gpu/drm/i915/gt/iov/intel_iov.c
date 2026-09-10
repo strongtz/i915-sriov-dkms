@@ -14,6 +14,7 @@
 #include "intel_iov_utils.h"
 
 #include "i915_reg.h"
+#include "display/intel_display_regs.h"
 
 /**
  * intel_iov_init_early - Prepare IOV data.

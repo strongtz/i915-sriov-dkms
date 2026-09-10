@@ -1,5 +1,5 @@
-DKMS_MODULE_VERSION := "2026.08.12.1-sriov"
-DKMS_MODULE_ORIGIN_KERNEL := "7.1.8"
+DKMS_MODULE_VERSION := "2026.09.08-sriov"
+DKMS_MODULE_ORIGIN_KERNEL := "7.2.3"
 
 LINUXINCLUDE := \
 	-I$(src)/include \
@@ -21,8 +21,10 @@ CONFTEST_H := $(CONFTEST_DIR)/results.h
 
 CONFTEST_COMPILE_TESTS := \
 	copy_from_user_inatomic_nontemporal \
+	dma_fence_array_create_4args \
 	drm_exec_for_each_locked_object_no_index \
 	drm_fb_helper_alloc_info \
+	drm_pagemap_compound_folio \
 	pci_resize_resource_4args \
 	xe_pmt_telem_read_kernel_device
 

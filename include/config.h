@@ -163,3 +163,24 @@
 #ifndef CONFIG_DRM_XE_TIMESLICE_MIN
 #define CONFIG_DRM_XE_TIMESLICE_MIN 1
 #endif
+
+// Upstream renamed struct drm_atomic_state -> struct drm_atomic_commit
+// (and its alloc/get/put/clear/init helpers) starting with kernel 7.2.
+// Alias the new names back to the pre-rename ones on older kernels.
+// Safe despite the pre-existing drm_atomic_commit() DRM core function
+// (a different, unrelated commit-submission call): this header is force
+// -included before every other header (see LINUXINCLUDE in Makefile), so
+// the substitution applies uniformly to the kernel's own declaration of
+// drm_atomic_commit() too -- it becomes a function literally named
+// drm_atomic_state, which is legal C (function names and struct tags are
+// separate namespaces) and keeps every call site consistent.
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 2, 0)
+#define drm_atomic_commit                 drm_atomic_state
+#define drm_atomic_commit_alloc           drm_atomic_state_alloc
+#define drm_atomic_commit_clear           drm_atomic_state_clear
+#define drm_atomic_commit_get             drm_atomic_state_get
+#define drm_atomic_commit_put             drm_atomic_state_put
+#define drm_atomic_commit_init            drm_atomic_state_init
+#define drm_atomic_commit_default_clear   drm_atomic_state_default_clear
+#define drm_atomic_commit_default_release drm_atomic_state_default_release
+#endif

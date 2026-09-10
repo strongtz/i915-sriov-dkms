@@ -13,8 +13,9 @@
 #include "i915_pci.h"
 #include "i915_utils.h"
 #include "i915_reg.h"
+#include "display/intel_display_regs.h"
 #include "i915_wait_util.h"
-#include "intel_pci_config.h"
+#include <drm/intel/pci_config.h>
 #include "gem/i915_gem_context.h"
 #include "gem/i915_gem_pm.h"
 

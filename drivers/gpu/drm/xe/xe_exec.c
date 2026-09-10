@@ -303,26 +303,20 @@ retry:
 	if (!xe_vm_in_lr_mode(vm)) {
 		struct drm_gem_object *obj;
 #ifndef IDB_DRM_EXEC_FOR_EACH_LOCKED_OBJECT_NO_INDEX
-	unsigned long index;
+		unsigned long index;
 #endif
 
 #ifdef IDB_DRM_EXEC_FOR_EACH_LOCKED_OBJECT_NO_INDEX
 		drm_exec_for_each_locked_object(exec, obj) {
-			err = xe_sched_job_add_deps(job, obj->resv,
-						    DMA_RESV_USAGE_KERNEL);
-			if (err)
-				goto err_put_job;
-		}
-	}
 #else
-	drm_exec_for_each_locked_object(exec, index, obj) {
+		drm_exec_for_each_locked_object(exec, index, obj) {
+#endif
 			err = xe_sched_job_add_deps(job, obj->resv,
 						    DMA_RESV_USAGE_KERNEL);
 			if (err)
 				goto err_put_job;
 		}
 	}
-#endif
 
 	for (i = 0; i < num_syncs && !err; i++)
 		err = xe_sync_entry_add_deps(&syncs[i], job);

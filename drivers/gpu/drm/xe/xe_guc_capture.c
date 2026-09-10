@@ -111,7 +111,7 @@ struct __guc_capture_parsed_output {
 	{ RING_TAIL(0),			REG_32BIT,	0,	0,	0,	"RING_TAIL"}, \
 	{ RING_CTL(0),			REG_32BIT,	0,	0,	0,	"RING_CTL"}, \
 	{ RING_MI_MODE(0),		REG_32BIT,	0,	0,	0,	"RING_MI_MODE"}, \
-	{ RING_MODE(0),			REG_32BIT,	0,	0,	0,	"RING_MODE"}, \
+	{ GFX_MODE(0),			REG_32BIT,	0,	0,	0,	"GFX_MODE"}, \
 	{ RING_ESR(0),			REG_32BIT,	0,	0,	0,	"RING_ESR"}, \
 	{ RING_EMR(0),			REG_32BIT,	0,	0,	0,	"RING_EMR"}, \
 	{ RING_EIR(0),			REG_32BIT,	0,	0,	0,	"RING_EIR"}, \
@@ -1847,12 +1847,6 @@ void xe_engine_snapshot_print(struct xe_hw_engine_snapshot *snapshot, struct drm
 		   str_yes_no(snapshot->kernel_reserved));
 
 	for (type = GUC_STATE_CAPTURE_TYPE_GLOBAL; type < GUC_STATE_CAPTURE_TYPE_MAX; type++) {
-		/*
-		 * FIXME: During devcoredump print we should avoid accessing the
-		 * driver pointers for gt or engine. Printing should be done only
-		 * using the snapshot captured. Here we are accessing the gt
-		 * pointer. It should be fixed.
-		 */
 		list = xe_guc_capture_get_reg_desc_list(gt, GUC_CAPTURE_LIST_INDEX_PF, type,
 							capture_class, false);
 		snapshot_print_by_list_order(snapshot, p, type, list);
