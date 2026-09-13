@@ -54,7 +54,7 @@ jobs:
         run: |
           KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s $(dpkg -s proxmox-default-headers | grep "Depends: " | cut -d " " -f2) | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-          make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+          make -kj$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-ubuntu-questing:
     runs-on: ubuntu-26.04
@@ -96,7 +96,7 @@ jobs:
         run: |
           KERNEL_SOURCE_DIR=$(dpkg -L $(dpkg -s linux-headers-generic-6.17 | grep "Depends: " | cut -d " " -f2) | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-          make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+          make -kj$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux:
     runs-on: ubuntu-26.04
@@ -136,7 +136,7 @@ jobs:
         run: |
           KERNEL_SOURCE_DIR=$(pacman -Qql linux-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-          sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+          sudo make -kj$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux-lts:
     runs-on: ubuntu-26.04
@@ -176,7 +176,7 @@ jobs:
         run: |
           KERNEL_SOURCE_DIR=$(pacman -Qql linux-lts-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-          sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+          sudo make -kj$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
 
   test-archlinux-mainline:
     runs-on: ubuntu-26.04
@@ -221,4 +221,4 @@ jobs:
         run: |
           KERNEL_SOURCE_DIR=$(pacman -Qql linux-mainline-headers | grep -m 1 -Eo ".*/lib/modules/[^/]+/build")
           KERNELRELEASE=$(echo -n "$KERNEL_SOURCE_DIR" | sed 's/.*\/lib\/modules\///g;s/\/build//')
-          sudo make -j$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
+          sudo make -kj$(nproc) KERNELRELEASE=$KERNELRELEASE -C $KERNEL_SOURCE_DIR M=$(pwd)
