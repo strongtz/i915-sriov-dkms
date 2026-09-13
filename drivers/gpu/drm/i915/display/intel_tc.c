@@ -1792,7 +1792,7 @@ static int reset_link_commit(struct intel_tc_port *tc,
 	if (!__intel_tc_port_link_needs_reset(tc))
 		return 0;
 
-	return drm_atomic_commit(&state->base);
+	return __idb_shim_drm_atomic_commit(&state->base);
 }
 
 static int reset_link(struct intel_tc_port *tc)

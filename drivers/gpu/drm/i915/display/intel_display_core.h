@@ -13,6 +13,7 @@
 #include <linux/wait.h>
 #include <linux/workqueue.h>
 
+#include <drm/drm_atomic.h>
 #include <drm/drm_connector.h>
 #include <drm/drm_modeset_lock.h>
 

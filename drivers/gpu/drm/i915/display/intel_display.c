@@ -4912,6 +4912,8 @@ static bool
 intel_compare_dp_as_sdp(const struct drm_dp_as_sdp *a,
 			const struct drm_dp_as_sdp *b)
 {
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	return a->sdp_type == b->sdp_type &&
 		a->revision == b->revision &&
 		a->length == b->length &&
@@ -4922,6 +4924,17 @@ intel_compare_dp_as_sdp(const struct drm_dp_as_sdp *a,
 		a->target_rr_divider == b->target_rr_divider &&
 		a->mode == b->mode &&
 		a->coasting_vtotal == b->coasting_vtotal;
+#else
+	return a->sdp_type == b->sdp_type &&
+		a->revision == b->revision &&
+		a->length == b->length &&
+		a->vtotal == b->vtotal &&
+		a->target_rr == b->target_rr &&
+		a->duration_incr_ms == b->duration_incr_ms &&
+		a->duration_decr_ms == b->duration_decr_ms &&
+		a->target_rr_divider == b->target_rr_divider &&
+		a->mode == b->mode;
+#endif
 }
 
 static bool
@@ -5694,7 +5707,7 @@ int intel_modeset_commit_pipes(struct intel_display *display,
 		crtc_state->uapi.connectors_changed = true;
 	}
 
-	ret = drm_atomic_commit(state);
+	ret = __idb_shim_drm_atomic_commit(state);
 out:
 	drm_atomic_commit_put(state);
 
@@ -8336,7 +8349,7 @@ retry:
 		}
 	}
 
-	ret = drm_atomic_commit(state);
+	ret = __idb_shim_drm_atomic_commit(state);
 
 out:
 	if (ret == -EDEADLK) {

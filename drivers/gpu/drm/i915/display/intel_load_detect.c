@@ -170,7 +170,7 @@ found:
 		goto fail;
 	}
 
-	ret = drm_atomic_commit(state);
+	ret = __idb_shim_drm_atomic_commit(state);
 	if (ret) {
 		drm_dbg_kms(display->drm,
 			    "failed to set mode on load-detect pipe\n");

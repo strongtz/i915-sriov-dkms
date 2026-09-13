@@ -374,9 +374,15 @@ xe_sync_in_fence_get(struct xe_sync_entry *sync, int num_sync,
 		}
 
 		xe_assert(vm->xe, current_fence == num_fence);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 		cf = dma_fence_array_create(num_fence, fences,
 					    dma_fence_context_alloc(1),
 					    1);
+#else
+		cf = dma_fence_array_create(num_fence, fences,
+					    dma_fence_context_alloc(1),
+					    1, false);
+#endif
 		if (!cf)
 			goto err_out;
 

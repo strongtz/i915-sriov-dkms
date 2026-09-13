@@ -3477,8 +3477,13 @@ collect_fences:
 	}
 
 	xe_assert(vm->xe, current_fence == n_fence);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	dma_fence_array_init(cf, n_fence, fences, dma_fence_context_alloc(1),
 			     1);
+#else
+	dma_fence_array_init(cf, n_fence, fences, dma_fence_context_alloc(1),
+			     1, false);
+#endif
 	fence = &cf->base;
 
 	for_each_tile(tile, vm->xe, id) {

@@ -6,6 +6,8 @@
 #ifndef __INTEL_LOAD_DETECT_H__
 #define __INTEL_LOAD_DETECT_H__
 
+#include <drm/drm_atomic.h>
+
 struct drm_atomic_commit;
 struct drm_connector;
 struct drm_modeset_acquire_ctx;

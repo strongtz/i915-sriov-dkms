@@ -3470,7 +3470,7 @@ retry:
 	drm_connector_list_iter_end(&conn_iter);
 
 	if (err == 0)
-		err = drm_atomic_commit(state);
+		err = __idb_shim_drm_atomic_commit(state);
 
 	if (err == -EDEADLK) {
 		drm_atomic_commit_clear(state);

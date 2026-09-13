@@ -7,6 +7,7 @@
 #define __INTEL_DISPLAY_DRIVER_H__
 
 #include <linux/types.h>
+#include <drm/drm_atomic.h>
 
 struct drm_atomic_commit;
 struct drm_modeset_acquire_ctx;

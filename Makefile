@@ -21,7 +21,6 @@ CONFTEST_H := $(CONFTEST_DIR)/results.h
 
 CONFTEST_COMPILE_TESTS := \
 	copy_from_user_inatomic_nontemporal \
-	dma_fence_array_create_4args \
 	drm_exec_for_each_locked_object_no_index \
 	drm_fb_helper_alloc_info \
 	drm_pagemap_compound_folio \

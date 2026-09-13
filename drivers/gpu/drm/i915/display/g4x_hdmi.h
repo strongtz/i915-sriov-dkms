@@ -7,6 +7,7 @@
 #define _G4X_HDMI_H_
 
 #include <linux/types.h>
+#include <drm/drm_atomic.h>
 
 #include "intel_display_reg_defs.h"
 

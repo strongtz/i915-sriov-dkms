@@ -947,7 +947,7 @@ static int glk_force_audio_cdclk_commit(struct intel_atomic_state *state,
 
 	intel_cdclk_force_min_cdclk(cdclk_state, enable ? 2 * 96000 : 0);
 
-	return drm_atomic_commit(&state->base);
+	return __idb_shim_drm_atomic_commit(&state->base);
 }
 
 static void glk_force_audio_cdclk(struct intel_display *display,

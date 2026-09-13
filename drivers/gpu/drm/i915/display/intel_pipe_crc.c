@@ -317,7 +317,7 @@ retry:
 	    pipe_config->cpu_transcoder == TRANSCODER_EDP)
 		pipe_config->uapi.mode_changed = true;
 
-	ret = drm_atomic_commit(state);
+	ret = __idb_shim_drm_atomic_commit(state);
 
 put_state:
 	if (ret == -EDEADLK) {

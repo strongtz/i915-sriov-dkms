@@ -111,7 +111,7 @@ int intel_sprite_set_colorkey_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (!ret)
-			ret = drm_atomic_commit(state);
+			ret = __idb_shim_drm_atomic_commit(state);
 
 		if (ret != -EDEADLK)
 			break;

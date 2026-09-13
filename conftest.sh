@@ -75,18 +75,6 @@ ct_copy_from_user_inatomic_nontemporal() {
 	compile_check "$CODE" "IDB_COPY_FROM_USER_INATOMIC_NONTEMPORAL" 1
 }
 
-ct_dma_fence_array_create_4args() {
-	CODE="
-	#include <linux/dma-fence-array.h>
-	static void conftest_dma_fence_array_create_4args(void)
-	{
-		dma_fence_array_create(0, NULL, 0, 0);
-	}
-	"
-
-	compile_check "$CODE" "IDB_DMA_FENCE_ARRAY_CREATE_4ARGS" 1
-}
-
 ct_pci_resize_resource_4args() {
 	CODE="
 	#include <linux/pci.h>
