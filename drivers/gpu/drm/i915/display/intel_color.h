@@ -49,7 +49,9 @@ void intel_color_plane_commit_arm(struct intel_dsb *dsb,
 				  const struct intel_plane_state *plane_state);
 bool intel_color_crtc_has_3dlut(struct intel_display *display, enum pipe pipe);
 #endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 u32 intel_color_background_color_drm_to_hw(u64 drm_background_color);
 u64 intel_color_background_color_hw_to_drm(u32 hw_background_color);
-
+#endif
 #endif /* __INTEL_COLOR_H__ */

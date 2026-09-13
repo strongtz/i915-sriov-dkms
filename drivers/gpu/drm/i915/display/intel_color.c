@@ -1121,6 +1121,7 @@ static void skl_get_config(struct intel_crtc_state *crtc_state)
 	crtc_state->hw.background_color = color & GENMASK(29, 0);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 u32 intel_color_background_color_drm_to_hw(u64 drm_background_color)
 {
 	return (DRM_ARGB64_GETR_BPC(drm_background_color, 10) << 20) |
@@ -1136,6 +1137,7 @@ u64 intel_color_background_color_hw_to_drm(u32 hw_background_color)
 
 	return DRM_ARGB64_PREP_BPC(0x3ff, r, g, b, 10);
 }
+#endif
 
 static void skl_color_commit_arm(struct intel_dsb *dsb,
 				 const struct intel_crtc_state *crtc_state)
@@ -2122,10 +2124,12 @@ int intel_color_check(struct intel_atomic_state *state,
 	    old_crtc_state->hw.background_color != new_crtc_state->hw.background_color)
 		new_crtc_state->uapi.color_mgmt_changed = true;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	if (DRM_ARGB64_GETA(new_crtc_state->uapi.background_color) != 0xffff) {
 		drm_dbg_kms(display->drm, "New background not completely opaque\n");
 		return -EINVAL;
 	}
+#endif
 
 	if (!intel_crtc_needs_color_update(new_crtc_state))
 		return 0;

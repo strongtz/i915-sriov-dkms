@@ -406,8 +406,10 @@ static int __intel_crtc_init(struct intel_display *display, enum pipe pipe)
 						BIT(DRM_SCALING_FILTER_DEFAULT) |
 						BIT(DRM_SCALING_FILTER_NEAREST_NEIGHBOR));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	if (DISPLAY_VER(display) >= 9)
 		drm_crtc_attach_background_color_property(&crtc->base);
+#endif
 
 	intel_color_crtc_init(crtc);
 	intel_drrs_crtc_init(crtc);
