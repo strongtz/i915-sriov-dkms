@@ -194,11 +194,18 @@ static int pch_panel_fitting(struct intel_crtc_state *crtc_state,
 	int ret, x, y, width, height;
 
 	/* Native modes don't need fitting */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	if (adjusted_mode->crtc_hdisplay == pipe_src_w &&
 	    adjusted_mode->crtc_vdisplay == pipe_src_h &&
 	    crtc_state->output_format != INTEL_OUTPUT_FORMAT_YCBCR420 &&
 	    crtc_state->hw.sharpness_strength == 0)
 		return 0;
+#else
+	if (adjusted_mode->crtc_hdisplay == pipe_src_w &&
+	    adjusted_mode->crtc_vdisplay == pipe_src_h &&
+	    crtc_state->output_format != INTEL_OUTPUT_FORMAT_YCBCR420)
+		return 0;
+#endif
 
 	switch (conn_state->scaling_mode) {
 	case DRM_MODE_SCALE_CENTER:

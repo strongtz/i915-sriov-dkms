@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2025 Intel Corporation */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 #include <drm/drm_print.h>
 
 #include "intel_casf.h"
@@ -244,4 +243,3 @@ void intel_casf_setup(const struct intel_crtc_state *crtc_state)
 	intel_casf_filter_lut_load(crtc_state);
 	intel_casf_write_coeff(crtc_state);
 }
-#endif

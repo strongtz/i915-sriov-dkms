@@ -165,4 +165,17 @@ int drm_dp_dsc_branch_max_line_width(const u8 dsc_branch_dpcd[DP_DSC_BRANCH_CAP_
 	}
 }
 EXPORT_SYMBOL(drm_dp_dsc_branch_max_line_width);
+
+static u8 dp_link_status(const u8 link_status[DP_LINK_STATUS_SIZE], int r)
+{
+	return link_status[r - DP_LANE0_1_STATUS];
+}
+
+bool drm_dp_post_lt_adj_req_in_progress(const u8 link_status[DP_LINK_STATUS_SIZE])
+{
+	u8 lane_align = dp_link_status(link_status, DP_LANE_ALIGN_STATUS_UPDATED);
+
+	return lane_align & DP_POST_LT_ADJ_REQ_IN_PROGRESS;
+}
+EXPORT_SYMBOL(drm_dp_post_lt_adj_req_in_progress);
 #endif

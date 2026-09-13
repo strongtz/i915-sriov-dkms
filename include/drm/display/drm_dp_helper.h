@@ -14,6 +14,15 @@ int drm_dp_dsc_branch_max_overall_throughput(const u8 dsc_branch_dpcd[DP_DSC_BRA
 int drm_dp_dsc_branch_max_line_width(const u8 dsc_branch_dpcd[DP_DSC_BRANCH_CAP_SIZE]);
 
 #define DP_DPCD_QUIRK_DSC_THROUGHPUT_BPP_LIMIT ((enum drm_dp_quirk)(DP_DPCD_QUIRK_HBLANK_EXPANSION_REQUIRES_DSC + 1))
+
+bool drm_dp_post_lt_adj_req_in_progress(const u8 link_status[DP_LINK_STATUS_SIZE]);
+
+static inline bool
+drm_dp_post_lt_adj_req_supported(const u8 dpcd[DP_RECEIVER_CAP_SIZE])
+{
+	return dpcd[DP_DPCD_REV] >= 0x13 &&
+		(dpcd[DP_MAX_LANE_COUNT] & DP_POST_LT_ADJ_REQ_SUPPORTED);
+}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)

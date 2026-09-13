@@ -4555,7 +4555,9 @@ intel_crtc_copy_uapi_to_hw_state_modeset(struct intel_atomic_state *state,
 	drm_mode_copy(&crtc_state->hw.adjusted_mode,
 		      &crtc_state->uapi.adjusted_mode);
 	crtc_state->hw.scaling_filter = crtc_state->uapi.scaling_filter;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	crtc_state->hw.sharpness_strength = crtc_state->uapi.sharpness_strength;
+#endif
 
 	intel_crtc_copy_uapi_to_hw_state_nomodeset(state, crtc);
 }
@@ -4622,7 +4624,9 @@ copy_joiner_crtc_state_modeset(struct intel_atomic_state *state,
 	drm_mode_copy(&secondary_crtc_state->hw.adjusted_mode,
 		      &primary_crtc_state->hw.adjusted_mode);
 	secondary_crtc_state->hw.scaling_filter = primary_crtc_state->hw.scaling_filter;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	secondary_crtc_state->hw.sharpness_strength = primary_crtc_state->hw.sharpness_strength;
+#endif
 
 	if (primary_crtc_state->dp_tunnel_ref.tunnel)
 		drm_dp_tunnel_ref_get(primary_crtc_state->dp_tunnel_ref.tunnel,
@@ -6449,10 +6453,11 @@ int intel_atomic_check(struct drm_device *dev,
 		if (new_crtc_state->uapi.scaling_filter !=
 		    old_crtc_state->uapi.scaling_filter)
 			new_crtc_state->uapi.mode_changed = true;
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 		if (new_crtc_state->uapi.sharpness_strength !=
 		    old_crtc_state->uapi.sharpness_strength)
 			new_crtc_state->uapi.mode_changed = true;
+#endif
 	}
 
 	intel_vrr_check_modeset(state);

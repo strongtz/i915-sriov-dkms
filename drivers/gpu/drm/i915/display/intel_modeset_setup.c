@@ -333,7 +333,9 @@ static void intel_crtc_copy_hw_to_uapi_state(struct intel_crtc_state *crtc_state
 
 	crtc_state->uapi.adjusted_mode = crtc_state->hw.adjusted_mode;
 	crtc_state->uapi.scaling_filter = crtc_state->hw.scaling_filter;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	crtc_state->uapi.sharpness_strength = crtc_state->hw.sharpness_strength;
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	crtc_state->uapi.background_color =
 		intel_color_background_color_hw_to_drm(crtc_state->hw.background_color);

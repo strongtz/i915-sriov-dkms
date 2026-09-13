@@ -8,6 +8,10 @@
 # define DP_DSC_THROUGHPUT_MODE_0_DELTA_MASK  (0x1f << DP_DSC_THROUGHPUT_MODE_0_DELTA_SHIFT)
 
 #define DP_DSC_BRANCH_CAP_SIZE 3
+
+# define DP_POST_LT_ADJ_REQ_SUPPORTED	    (1 << 5) /* 1.3 */
+# define DP_POST_LT_ADJ_REQ_GRANTED         (1 << 5) /* 1.3 */
+#define  DP_POST_LT_ADJ_REQ_IN_PROGRESS                 (1 << 1) /* 1.3 */
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
