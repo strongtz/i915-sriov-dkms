@@ -71,28 +71,6 @@ bool xe_display_driver_probe_defer(struct pci_dev *pdev)
 	return intel_display_driver_probe_defer(pdev);
 }
 
-/**
- * xe_display_driver_set_hooks - Add driver flags and hooks for display
- * @driver: DRM device driver
- *
- * Set features and function hooks in @driver that are needed for driving the
- * display IP. This sets the driver's capability of driving display, regardless
- * if the device has it enabled
- *
- * Note: This is called before xe or display device creation.
- */
-void xe_display_driver_set_hooks(struct drm_driver *driver)
-{
-	if (!xe_modparam.probe_display)
-		return;
-
-#if defined(CONFIG_DRM_FBDEV_EMULATION) && LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 19)
-	driver->fbdev_probe = intel_fbdev_driver_fbdev_probe;
-#endif
-
-	driver->driver_features |= DRIVER_MODESET | DRIVER_ATOMIC;
-}
-
 static void unset_display_features(struct xe_device *xe)
 {
 	xe->drm.driver_features &= ~XE_DISPLAY_DRIVER_FEATURES;

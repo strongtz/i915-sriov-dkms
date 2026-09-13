@@ -1526,6 +1526,8 @@ void drm_pagemap_destroy(struct drm_pagemap *dpagemap, bool is_atomic_or_reclaim
 		kfree(dpagemap);
 }
 
+void drm_pagemap_exit(void);
+
 void drm_pagemap_exit(void)
 {
 	flush_work(&drm_pagemap_work);

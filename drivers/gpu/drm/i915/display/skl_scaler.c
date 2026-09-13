@@ -270,11 +270,14 @@ int skl_update_scaler_crtc(struct intel_crtc_state *crtc_state)
 {
 	const struct drm_display_mode *pipe_mode = &crtc_state->hw.pipe_mode;
 	int width, height;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	int ret;
 
 	ret = intel_casf_compute_config(crtc_state);
 	if (ret)
 		return ret;
+#endif
 
 	if (crtc_state->pch_pfit.enabled) {
 		width = drm_rect_width(&crtc_state->pch_pfit.dst);
@@ -974,8 +977,11 @@ void skl_scaler_get_config(struct intel_crtc_state *crtc_state)
 	if (scaler_id < 0)
 		return;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
+	/* Read CASF regs for second scaler */
 	if (scaler_has_casf(display, scaler_id))
 		intel_casf_sharpness_get_config(crtc_state);
+#endif
 
 	crtc_state->pch_pfit.enabled = true;
 

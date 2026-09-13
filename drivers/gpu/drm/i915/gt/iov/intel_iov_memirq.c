@@ -255,11 +255,16 @@ static void __engine_mem_irq_handler(struct intel_engine_cs *engine, u8 *status)
 
 	MEMIRQ_DEBUG(gt, "STATUS %s %*ph\n", engine->name, 16, status);
 
-	if (READ_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)]) == 0xFF) {
-		WRITE_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)], 0x00);
-		intel_engine_signal_breadcrumbs(engine);
-		tasklet_hi_schedule(&engine->sched_engine->tasklet);
-	}
+	/*
+	 * The programming note says to assume that GT_RENDER_USER_INTERRUPT is
+	 * always set. Check and clear related status byte just for a debug.
+	 */
+	if (READ_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)]) != 0xFF)
+		gt_err(gt, "Unexpected memirq status %#x from %s\n",
+		       status[ilog2(GT_RENDER_USER_INTERRUPT)], engine->name);
+	WRITE_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)], 0x00);
+	intel_engine_signal_breadcrumbs(engine);
+	tasklet_hi_schedule(&engine->sched_engine->tasklet);
 }
 
 static void __guc_mem_irq_handler(struct intel_guc *guc, u8 *status)
@@ -268,14 +273,26 @@ static void __guc_mem_irq_handler(struct intel_guc *guc, u8 *status)
 
 	MEMIRQ_DEBUG(gt, "STATUS %s %*ph\n", "GUC", 16, status);
 
-	if (READ_ONCE(status[ilog2(GUC_INTR_SW_INT_0)]) == 0xFF) {
+	/*
+	 * The programming note says to assume that GUC_INTR_GUC2HOST is always
+	 * set. Check and clear related status byte just for a debug.
+	 */
+	if (READ_ONCE(status[ilog2(GUC_INTR_GUC2HOST)]) != 0xFF)
+		gt_err(gt, "Unexpected memirq status %#x from GUC\n",
+		       status[ilog2(GUC_INTR_GUC2HOST)]);
+	WRITE_ONCE(status[ilog2(GUC_INTR_GUC2HOST)], 0x00);
+	intel_guc_to_host_event_handler(guc);
+
+	/*
+	 * This is a software interrupt that must be cleared after it's consumed
+	 * to avoid race conditions where the migration recovery is skipped.
+	 */
+	if (READ_ONCE(status[ilog2(GUC_INTR_SW_INT_0)]) != 0) {
+		if (READ_ONCE(status[ilog2(GUC_INTR_SW_INT_0)]) != 0xFF)
+			gt_err(gt, "Unexpected memirq status %#x from GUC SW_INT_0\n",
+			       status[ilog2(GUC_INTR_SW_INT_0)]);
 		WRITE_ONCE(status[ilog2(GUC_INTR_SW_INT_0)], 0x00);
 		intel_sriov_vf_migrated_event_handler(guc);
-	}
-
-	if (READ_ONCE(status[ilog2(GUC_INTR_GUC2HOST)]) == 0xFF) {
-		WRITE_ONCE(status[ilog2(GUC_INTR_GUC2HOST)], 0x00);
-		intel_guc_to_host_event_handler(guc);
 	}
 }
 
@@ -307,7 +324,10 @@ void intel_iov_memirq_handler(struct intel_iov *iov)
 	for_each_engine(engine, gt, id) {
 		source = source_base + engine->irq_offset;
 		value = READ_ONCE(*source);
-		if (value == 0xff) {
+		if (value != 0) {
+			if (value != 0xff)
+				gt_err(gt, "Unexpected memirq value %#x from %s\n",
+				       value, engine->name);
 			WRITE_ONCE(*source, 0x00);
 			__engine_mem_irq_handler(engine, status_base +
 						 engine->irq_offset * SZ_16);
@@ -317,7 +337,9 @@ void intel_iov_memirq_handler(struct intel_iov *iov)
 	/* GuC must be check separately */
 	source = source_base + GEN11_GUC;
 	value = READ_ONCE(*source);
-	if (value == 0xff) {
+	if (value != 0) {
+		if (value != 0xff)
+			gt_err(gt, "Unexpected memirq value %#x from GUC\n", value);
 		WRITE_ONCE(*source, 0x00);
 		__guc_mem_irq_handler(&gt->uc.guc, status_base +
 				      GEN11_GUC * SZ_16);

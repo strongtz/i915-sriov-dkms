@@ -1494,6 +1494,7 @@ guc_exec_queue_timedout_job(struct drm_sched_job *drm_job)
 	 * list so job can be freed and kick scheduler ensuring free job is not
 	 * lost.
 	 */
+
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &job->fence->flags) ||
 	    vf_recovery(guc))
 		return DRM_GPU_SCHED_STAT_NO_HANG;

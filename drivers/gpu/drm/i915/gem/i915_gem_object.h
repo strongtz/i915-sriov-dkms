@@ -17,7 +17,6 @@
 #include "i915_gem_ww.h"
 #include "i915_vma_types.h"
 
-struct drm_scanout_buffer;
 enum intel_region_id;
 struct drm_scanout_buffer;
 struct intel_panic;

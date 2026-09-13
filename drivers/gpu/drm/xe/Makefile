@@ -11,9 +11,6 @@ subdir-ccflags-$(CONFIG_DRM_XE_WERROR) += -Werror
 
 subdir-ccflags-y += -I$(obj) -I$(src)
 
-# Backport drm_exec_retry() and friends for kernels older than 7.2
-subdir-ccflags-y += -include $(src)/../../../../compat/v7.2/drm_exec_compat.h
-
 # generated sources
 
 hostprogs := xe_gen_wa_oob

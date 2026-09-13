@@ -2,6 +2,7 @@
 /*
  * Copyright © 2023 Intel Corporation
  */
+#include <drm/intel/pci_config.h>
 
 #include <drm/i915_sriov.h>
 #include <drm/intel/intel_gmd_interrupt_regs.h>
@@ -13,13 +14,12 @@
 #include "i915_pci.h"
 #include "i915_utils.h"
 #include "i915_reg.h"
-#include "display/intel_display_regs.h"
 #include "i915_wait_util.h"
-#include <drm/intel/pci_config.h>
-#include "gem/i915_gem_context.h"
-#include "gem/i915_gem_pm.h"
+
 
 #include "display/intel_display_core.h"
+#include "gem/i915_gem_context.h"
+#include "gem/i915_gem_pm.h"
 #include "gt/intel_engine_heartbeat.h"
 #include "gt/intel_gt.h"
 #include "gt/intel_gt_pm.h"

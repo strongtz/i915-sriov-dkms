@@ -522,11 +522,15 @@ int xe_device_init_early(struct xe_device *xe)
 {
 	int err;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	err = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
 			      xe->drm.anon_inode->i_mapping,
 			      xe->drm.vma_offset_manager,
 			      TTM_ALLOCATION_POOL_BENEFICIAL_ORDER(get_order(SZ_2M)));
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
+	err = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
+			      xe->drm.anon_inode->i_mapping,
+			      xe->drm.vma_offset_manager, 0);
 #else
 	err = ttm_device_init(&xe->ttm, &xe_ttm_funcs, xe->drm.dev,
 			      xe->drm.anon_inode->i_mapping,

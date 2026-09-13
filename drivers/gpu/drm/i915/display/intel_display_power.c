@@ -10,7 +10,6 @@
 #include <drm/intel/intel_pcode_regs.h>
 #include <drm/intel/step.h>
 
-// TODO: Disable display initialization on VF to align with Xe
 #ifdef I915
 #include "i915_drv.h"
 #endif
@@ -2267,13 +2266,6 @@ static void intel_power_domains_verify_state(struct intel_display *display)
 
 void intel_display_power_suspend_late(struct intel_display *display, bool s2idle)
 {
-#ifdef I915
-	struct drm_i915_private *i915 = to_i915(display->drm);
-
-	if (IS_SRIOV_VF(i915))
-		return;
-#endif
-
 	intel_power_domains_suspend(display, s2idle);
 
 	if (DISPLAY_VER(display) >= 11 || display->platform.geminilake ||
@@ -2291,13 +2283,6 @@ void intel_display_power_suspend_late(struct intel_display *display, bool s2idle
 
 void intel_display_power_resume_early(struct intel_display *display)
 {
-#ifdef I915
-	struct drm_i915_private *i915 = to_i915(display->drm);
-
-	if (IS_SRIOV_VF(i915))
-		return;
-#endif
-
 	if (DISPLAY_VER(display) >= 11 || display->platform.geminilake ||
 	    display->platform.broxton) {
 		gen9_sanitize_dc_state(display);
@@ -2315,13 +2300,6 @@ void intel_display_power_resume_early(struct intel_display *display)
 
 void intel_display_power_runtime_suspend(struct intel_display *display)
 {
-#ifdef I915
-	struct drm_i915_private *i915 = to_i915(display->drm);
-
-	if (IS_SRIOV_VF(i915))
-		return;
-#endif
-
 	if (DISPLAY_VER(display) >= 11) {
 		icl_display_core_uninit(display);
 		bxt_enable_dc9(display);
@@ -2336,12 +2314,6 @@ void intel_display_power_runtime_suspend(struct intel_display *display)
 void intel_display_power_runtime_resume(struct intel_display *display)
 {
 	struct i915_power_domains *power_domains = &display->power.domains;
-#ifdef I915
-	struct drm_i915_private *i915 = to_i915(display->drm);
-
-	if (IS_SRIOV_VF(i915))
-		return;
-#endif
 
 	if (DISPLAY_VER(display) >= 11) {
 		bxt_disable_dc9(display);

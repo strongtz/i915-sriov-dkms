@@ -205,7 +205,6 @@ static const struct drm_fb_helper_funcs intel_fb_helper_funcs = {
 	.fb_set_suspend = intelfb_set_suspend,
 };
 
-
 static void intel_fbdev_fill_mode_cmd(struct intel_display *display,
 				      struct drm_fb_helper_surface_size *sizes,
 				      struct drm_mode_fb_cmd2 *mode_cmd)

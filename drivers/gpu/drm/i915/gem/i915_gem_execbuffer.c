@@ -3200,18 +3200,10 @@ eb_composite_fence_create(struct i915_execbuffer *eb, int out_fence_fd)
 			  &eb->requests[i]->fence.flags);
 	}
 
-#ifdef IDB_DMA_FENCE_ARRAY_CREATE_4ARGS
 	fence_array = dma_fence_array_create(eb->num_batches,
 					     fences,
 					     eb->context->parallel.fence_context,
 					     eb->context->parallel.seqno++);
-#else
-	fence_array = dma_fence_array_create(eb->num_batches,
-					     fences,
-					     eb->context->parallel.fence_context,
-					     eb->context->parallel.seqno++,
-					     false);
-#endif
 	if (!fence_array) {
 		kfree(fences);
 		return ERR_PTR(-ENOMEM);
