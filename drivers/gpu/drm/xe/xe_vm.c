@@ -2436,7 +2436,6 @@ vm_bind_ioctl_ops_create(struct xe_vm *vm, struct xe_vma_ops *vops,
 
 		fallthrough;
 	case DRM_XE_VM_BIND_OP_MAP_USERPTR: {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 		struct drm_gpuvm_map_req map_req = {
 			.map.va.addr = range_start,
 			.map.va.range = range_end - range_start,
@@ -2444,10 +2443,6 @@ vm_bind_ioctl_ops_create(struct xe_vm *vm, struct xe_vma_ops *vops,
 			.map.gem.offset = bo_offset_or_userptr,
 		};
 		ops = drm_gpuvm_sm_map_ops_create(&vm->gpuvm, &map_req);
-#else
-		ops = drm_gpuvm_sm_map_ops_create(&vm->gpuvm, addr, range,
-						  obj, bo_offset_or_userptr);
-#endif
 		break;
 	}
 	case DRM_XE_VM_BIND_OP_UNMAP:
@@ -4867,14 +4862,7 @@ static int xe_vm_alloc_vma(struct xe_vm *vm,
 	if (is_madvise)
 		ops = drm_gpuvm_madvise_ops_create(&vm->gpuvm, map_req);
 	else
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 		ops = drm_gpuvm_sm_map_ops_create(&vm->gpuvm, map_req);
-#else
-		ops = drm_gpuvm_sm_map_ops_create(&vm->gpuvm, map_req->map.va.addr,
-						  map_req->map.va.range,
-						  map_req->map.gem.obj,
-						  map_req->map.gem.offset);
-#endif
 
 	if (IS_ERR(ops))
 		return PTR_ERR(ops);

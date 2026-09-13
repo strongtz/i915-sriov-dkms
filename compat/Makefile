@@ -3,9 +3,6 @@
 
 subdir-ccflags-y += -include $(src)/export.h
 
-intel_sriov_compat-y += v6.18/drm_gpuvm.o \
-			v6.18/drm_ttm_bo.o
-
 intel_sriov_compat-y += v6.19/drm_dp_helper.o \
 			v6.19/pci_rebar.o
 
