@@ -221,11 +221,7 @@ static void drm_pagemap_get_devmem_page(struct page *page,
 	 * migrate_vma_setup() never hands back an order > 0 here.
 	 */
 	page->zone_device_data = drm_pagemap_zdd_get(zdd);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
-	zone_device_page_init(page, page_pgmap(page), order);
-#else
 	zone_device_page_init(page);
-#endif
 #endif
 }
 
@@ -579,7 +575,6 @@ out:
  *
  * Return: Total number of minimum-sized pages.
  */
-#ifdef IDB_DRM_PAGEMAP_COMPOUND_FOLIO
 static int drm_pagemap_cpages(unsigned long *migrate_pfn, unsigned long npages)
 {
 	unsigned long i, cpages = 0;
@@ -603,7 +598,6 @@ static int drm_pagemap_cpages(unsigned long *migrate_pfn, unsigned long npages)
 
 	return cpages;
 }
-#endif
 
 /**
  * drm_pagemap_migrate_to_devmem() - Migrate a struct mm_struct range to device memory
@@ -642,11 +636,7 @@ int drm_pagemap_migrate_to_devmem(struct drm_pagemap_devmem *devmem_allocation,
 		.end		= end,
 		.pgmap_owner	= pagemap->owner,
 		.flags		= MIGRATE_VMA_SELECT_SYSTEM | MIGRATE_VMA_SELECT_DEVICE_COHERENT |
-		MIGRATE_VMA_SELECT_DEVICE_PRIVATE
-#ifdef IDB_DRM_PAGEMAP_COMPOUND_FOLIO
-		| MIGRATE_VMA_SELECT_COMPOUND
-#endif
-		,
+		MIGRATE_VMA_SELECT_DEVICE_PRIVATE | MIGRATE_VMA_SELECT_COMPOUND,
 	};
 	unsigned long i, npages = npages_in_range(start, end);
 	unsigned long own_pages = 0, migrated_pages = 0;
@@ -711,16 +701,8 @@ int drm_pagemap_migrate_to_devmem(struct drm_pagemap_devmem *devmem_allocation,
 		goto err_free;
 	}
 
-#ifdef IDB_DRM_PAGEMAP_COMPOUND_FOLIO
 	if (migrate.cpages != npages &&
 	    drm_pagemap_cpages(migrate.src, npages) != npages) {
-#else
-	/*
-	 * Without compound folio support migrate.cpages already counts in
-	 * base-page units (every entry is order 0), so no recount is needed.
-	 */
-	if (migrate.cpages != npages) {
-#endif
 		/*
 		 * Some pages to migrate. But we want to migrate all or
 		 * nothing. Raced or unknown device pages.
@@ -1256,11 +1238,8 @@ static int __drm_pagemap_migrate_to_ram(struct vm_area_struct *vas,
 		.vma		= vas,
 		.pgmap_owner	= page_pgmap(page)->owner,
 		.flags		= MIGRATE_VMA_SELECT_DEVICE_PRIVATE |
-				  MIGRATE_VMA_SELECT_DEVICE_COHERENT
-#ifdef IDB_DRM_PAGEMAP_COMPOUND_FOLIO
-				  | MIGRATE_VMA_SELECT_COMPOUND
-#endif
-				  ,
+				  MIGRATE_VMA_SELECT_DEVICE_COHERENT |
+				  MIGRATE_VMA_SELECT_COMPOUND,
 		.fault_page	= page,
 	};
 	struct drm_pagemap_iova_state state = {};
