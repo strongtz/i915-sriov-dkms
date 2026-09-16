@@ -4,9 +4,9 @@
 1. Install the kernel and headers for desired version: `apt install proxmox-default-kernel proxmox-default-headers` (for unsigned kernel).
 1. Download deb package from the [releases page](https://github.com/strongtz/i915-sriov-dkms/releases)
    ```sh
-   wget -O /tmp/i915-sriov-dkms_2026.09.14_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.09.14/i915-sriov-dkms_2026.09.14_amd64.deb"
+   wget -O /tmp/i915-sriov-dkms_2026.09.16_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.09.16/i915-sriov-dkms_2026.09.16_amd64.deb"
    ```
-1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2026.09.14_amd64.deb`
+1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2026.09.16_amd64.deb`
 1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or add to it if you have other arguments there already.
 1. You can also use `xe` driver instead of `i915` as described in the [Required Kernel Parameters](https://github.com/strongtz/i915-sriov-dkms?tab=readme-ov-file#required-kernel-parameters) section.
 1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
@@ -37,4 +37,4 @@ To apply this configuration, follow the **[UEFI Secure Boot Setup Guide](secure-
 Remove the package with `dpkg -P i915-sriov-dkms`.
 
 If you installed the module manually, or if the package manager fails to remove it from the kernel tree, you can remove it forcibly with:
-`dkms remove i915-sriov-dkms/2026.09.14`
+`dkms remove i915-sriov-dkms/2026.09.16`

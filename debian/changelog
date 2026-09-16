@@ -1,5 +1,11 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
+  * Fix ETIME probe timeout on Xe_LP platforms by making CCS opt-in
+
+ -- bbaa <bbaa@bbaa.me>  Wed, 16 Sep 2026 22:29:56 +0800
+
+i915-sriov-dkms (2026.09.14) UNRELEASED; urgency=medium
+
   * Sync with v7.2
 
  -- bbaa <bbaa@bbaa.me>  Mon, 14 Sep 2026 22:28:18 +0800
