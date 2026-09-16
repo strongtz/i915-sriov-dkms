@@ -15,7 +15,7 @@ You need to install this dkms module in **both host and guest!**
 
 **Required kernel**: 6.18.x ~ 7.2.x
 
-**Latest release**: [2026.09.14](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.09.14)
+**Latest release**: [2026.09.16](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.09.16)
 
 For older kernel (v6.12 ~ v6.19), please use the [2026.03.05.7](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.03.05.7) release.
 
@@ -46,11 +46,19 @@ intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe
 intel_iommu=on xe.max_vfs=7 xe.force_probe=${device_id} module_blacklist=i915
 ```
 
-**Xe module currently does not support MTL (Meteor Lake) and LNL (Lunar Lake) platforms. Please use i915 instead.**
+> **Note:** The **Xe** module currently **does not support** MTL (Meteor Lake) and LNL (Lunar Lake) platforms. **Please use i915 instead.**
 
-Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command
+*Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command*
 
-Starting from version 2026.09.16, CCS0 is no longer enabled by default on Xe_LP platforms (TGL/ADL/RPL). If you encounter issues running Windows guest VMs, please append `i915.xelp_enable_ccs=1` or `xe.xelp_enable_ccs=1` to your kernel command line.
+---
+
+#### 🚨 Important Update for Xe_LP Platforms (TGL / ADL / RPL)
+
+Starting from version **2026.09.16**, `CCS0` is **no longer enabled by default** on Xe_LP platforms. 
+
+If you encounter issues running **Windows guest VMs**, please append the appropriate parameter to your kernel command line:
+* **For i915 driver:** `i915.xelp_enable_ccs=1`
+* **For xe driver:** `xe.xelp_enable_ccs=1`
 
 ## Manually create Virtual Functions (VFs)
 
