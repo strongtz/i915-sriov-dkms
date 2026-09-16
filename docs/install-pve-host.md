@@ -7,9 +7,11 @@
    wget -O /tmp/i915-sriov-dkms_2026.09.16_amd64.deb "https://github.com/strongtz/i915-sriov-dkms/releases/download/2026.09.16/i915-sriov-dkms_2026.09.16_amd64.deb"
    ```
 1. Install the deb package with dpkg: `dpkg -i /tmp/i915-sriov-dkms_2026.09.16_amd64.deb`
-1. Once finished, the kernel commandline needs to be adjusted: `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or add to it if you have other arguments there already.
+1. Once finished, the kernel commandline needs to be set to `intel_iommu=on i915.enable_guc=3 i915.max_vfs=7 module_blacklist=xe`, or appended to it if you have other arguments there already. The procedure depends on how your PVE host is booted.
+   - If booted using GRUB (most cases), do `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT`. Then, update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
+   - If booted using systemd-boot (e.g. if using ZFS), do `nano /etc/kernel/cmdline` and put the new kernel command line there. Then, run `proxmox-boot-tool refresh`.
+   - The official Proxmox documentation has sections for [determining the boot mode](https://pve.proxmox.com/pve-docs/pve-admin-guide.html#sysboot_determine_bootloader_used) and setting the kernel command line in [GRUB](https://pve.proxmox.com/pve-docs/pve-admin-guide.html#sysboot_grub) and [systemd-boot](https://pve.proxmox.com/pve-docs/pve-admin-guide.html#sysboot_systemd_boot).
 1. You can also use `xe` driver instead of `i915` as described in the [Required Kernel Parameters](https://github.com/strongtz/i915-sriov-dkms?tab=readme-ov-file#required-kernel-parameters) section.
-1. Update `grub` and `initramfs` by executing `update-grub` and `update-initramfs -u`
 1. Optionally pin the kernel version and update the boot config via `proxmox-boot-tool`.
 1. In order to enable the VFs, a `sysfs` attribute must be set. Install `sysfsutils`, then do `echo "devices/pci0000:00/0000:00:02.0/sriov_numvfs = 7" > /etc/sysfs.conf`.
 1. Reboot the system.
