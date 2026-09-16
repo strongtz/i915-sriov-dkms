@@ -145,6 +145,9 @@ i915_param_named(enable_debug_only_api, bool, 0400,
 		 "Enable support for unstable debug only userspace API. (default:false)");
 #endif
 
+i915_param_named_unsafe(xelp_enable_ccs, bool, 0400,
+	"Enable experimental CCS on Xe_LP platforms (default: false)");
+
 static void _param_print_bool(struct drm_printer *p, const char *name,
 			      bool val)
 {

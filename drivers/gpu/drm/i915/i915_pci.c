@@ -640,9 +640,8 @@ static const struct intel_device_info tgl_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_TIGERLAKE),
 	.platform_engine_mask =
-		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
+		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
 	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
-	.__runtime.ppgtt_size = 47,
 	.has_sriov = 1,
 };
 
@@ -668,7 +667,7 @@ static const struct intel_device_info dg1_info = {
 	PLATFORM(INTEL_DG1),
 	.platform_engine_mask =
 		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) |
-		BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
+		BIT(VCS0) | BIT(VCS2),
 	/* Wa_16011227922 */
 	.__runtime.ppgtt_size = 47,
 };
@@ -677,8 +676,7 @@ static const struct intel_device_info adl_s_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ALDERLAKE_S),
 	.platform_engine_mask =
-		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
-	.__runtime.ppgtt_size = 47,
+		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
 	.dma_mask_size = 39,
 	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
@@ -688,12 +686,18 @@ static const struct intel_device_info adl_p_info = {
 	GEN12_FEATURES,
 	PLATFORM(INTEL_ALDERLAKE_P),
 	.platform_engine_mask =
-		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2) | BIT(CCS0),
-	.__runtime.ppgtt_size = 47,
+		BIT(RCS0) | BIT(BCS0) | BIT(VECS0) | BIT(VCS0) | BIT(VCS2),
+	.__runtime.ppgtt_size = 48,
 	.dma_mask_size = 39,
 	.has_guc_tlb_invalidation = 1, /* Required for SR-IOV */
 	.has_sriov = 1,
 };
+
+bool i915_pci_is_xelp_ccs(const struct intel_device_info *info)
+{
+	return info == &tgl_info || info == &adl_s_info ||
+	       info == &adl_p_info || info == &dg1_info;
+}
 
 #undef GEN
 
