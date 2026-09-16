@@ -385,6 +385,20 @@ void xe_hw_engine_setup_reg_lrc(struct xe_hw_engine *hwe)
 	xe_tuning_process_lrc(hwe);
 }
 
+static bool xe_hw_engine_match_enable_ccs(const struct xe_device *xe,
+					  const struct xe_gt *gt,
+					  const struct xe_hw_engine *hwe)
+{
+	if (GRAPHICS_VERx100(xe) >= 1255)
+		return xe_rtp_match_first_render_or_compute(xe, gt, hwe);
+
+	if (gt->info.engine_mask & XE_HW_ENGINE_CCS_MASK)
+		return xe_rtp_match_first_render_or_compute(xe, gt, hwe);
+
+	return false;
+}
+
+
 static void
 hw_engine_setup_default_state(struct xe_hw_engine *hwe)
 {
@@ -449,8 +463,7 @@ hw_engine_setup_default_state(struct xe_hw_engine *hwe)
 				     XE_RTP_ACTION_FLAG(ENGINE_BASE)))
 		},
 		{ XE_RTP_NAME("Enable CCS Engine(s)"),
-		  XE_RTP_RULES(GRAPHICS_VERSION_RANGE(1255, XE_RTP_END_VERSION_UNDEFINED),
-			       FUNC(xe_rtp_match_first_render_or_compute)),
+		  XE_RTP_RULES(FUNC(xe_hw_engine_match_enable_ccs)),
 		  XE_RTP_ACTIONS(SET(RCU_MODE, RCU_MODE_CCS_ENABLE))
 		},
 		/* Use Fixed slice CCS mode */

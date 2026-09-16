@@ -50,6 +50,8 @@ intel_iommu=on xe.max_vfs=7 xe.force_probe=${device_id} module_blacklist=i915
 
 Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command
 
+Starting from version 2026.09.16, CCS0 is no longer enabled by default on Xe_LP platforms (TGL/ADL/RPL). If you encounter issues running Windows guest VMs, please append `i915.xelp_enable_ccs=1` or `xe.xelp_enable_ccs=1` to your kernel command line.
+
 ## Manually create Virtual Functions (VFs)
 
 ```

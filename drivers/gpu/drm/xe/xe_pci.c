@@ -51,7 +51,7 @@ __diag_ignore_all("-Woverride-init", "Allow field overrides in table");
 #define NOP(x)	x
 
 static const struct xe_graphics_desc graphics_xelp = {
-	.hw_engine_mask = BIT(XE_HW_ENGINE_RCS0) | BIT(XE_HW_ENGINE_BCS0) | BIT(XE_HW_ENGINE_CCS0),
+	.hw_engine_mask = BIT(XE_HW_ENGINE_RCS0) | BIT(XE_HW_ENGINE_BCS0),
 	.num_geometry_xecore_fuse_regs = 1,
 };
 
@@ -204,7 +204,7 @@ static const struct xe_device_desc tgl_desc = {
 	.max_gt_per_tile = 1,
 	MULTI_LRC_MASK,
 	.require_force_probe = true,
-	.va_bits = 47,
+	.va_bits = 48,
 	.vm_max_level = 3,
 };
 
@@ -219,7 +219,7 @@ static const struct xe_device_desc rkl_desc = {
 	.max_gt_per_tile = 1,
 	MULTI_LRC_MASK,
 	.require_force_probe = true,
-	.va_bits = 47,
+	.va_bits = 48,
 	.vm_max_level = 3,
 };
 
@@ -241,7 +241,7 @@ static const struct xe_device_desc adl_s_desc = {
 		{ XE_SUBPLATFORM_ALDERLAKE_S_RPLS, "RPLS", adls_rpls_ids },
 		{},
 	},
-	.va_bits = 47,
+	.va_bits = 48,
 	.vm_max_level = 3,
 };
 
@@ -263,7 +263,7 @@ static const struct xe_device_desc adl_p_desc = {
 		{ XE_SUBPLATFORM_ALDERLAKE_P_RPLU, "RPLU", adlp_rplu_ids },
 		{},
 	},
-	.va_bits = 47,
+	.va_bits = 48,
 	.vm_max_level = 3,
 };
 
@@ -279,7 +279,7 @@ static const struct xe_device_desc adl_n_desc = {
 	.max_gt_per_tile = 1,
 	MULTI_LRC_MASK,
 	.require_force_probe = true,
-	.va_bits = 47,
+	.va_bits = 48,
 	.vm_max_level = 3,
 };
 
@@ -881,6 +881,12 @@ static struct xe_gt *alloc_primary_gt(struct xe_tile *tile,
 	if (MEDIA_VER(xe) < 13 && media_desc)
 		gt->info.engine_mask |= media_desc->hw_engine_mask;
 
+	if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE &&
+	    xe_modparam.xelp_enable_ccs) {
+		gt->info.engine_mask |= BIT(XE_HW_ENGINE_CCS0);
+		xe_info(xe, "Enabling experimental CCS0 on Xe_LP\n");
+	}
+
 	return gt;
 }
 
@@ -961,6 +967,12 @@ static int xe_info_init(struct xe_device *xe,
 	xe->info.graphics_verx100 = graphics_ip->verx100;
 	xe->info.graphics_name = graphics_ip->name;
 	graphics_desc = graphics_ip->desc;
+
+	if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE &&
+	    xe_modparam.xelp_enable_ccs) {
+		xe->info.va_bits = 47;
+		xe_info(xe, "Restricting VA bits to 47 on Xe_LP\n");
+	}
 
 	if (media_ip) {
 		xe->info.media_verx100 = media_ip->verx100;

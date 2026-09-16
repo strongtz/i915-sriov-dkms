@@ -12,6 +12,7 @@
 #include "gem/i915_gem_lmem.h"
 
 #include "i915_drv.h"
+#include "i915_pci.h"
 #include "i915_perf_oa_regs.h"
 #include "i915_reg.h"
 #include "intel_context.h"
@@ -950,6 +951,12 @@ int intel_gt_probe_all(struct drm_i915_private *i915)
 	gt->i915 = i915;
 	gt->name = "Primary GT";
 	gt->info.engine_mask = INTEL_INFO(i915)->platform_engine_mask;
+
+	if (i915->params.xelp_enable_ccs && i915_pci_is_xelp_ccs(INTEL_INFO(i915))) {
+		gt->info.engine_mask |= BIT(CCS0);
+		RUNTIME_INFO(i915)->ppgtt_size = 47;
+		drm_info(&i915->drm, "Enabling experimental CCS0 on Xe_LP\n");
+	}
 
 	gt_dbg(gt, "Setting up %s\n", gt->name);
 	ret = intel_gt_tile_setup(gt, phys_addr);
