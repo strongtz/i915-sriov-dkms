@@ -165,15 +165,6 @@ struct intel_gt {
 	ktime_t last_init_time;
 	struct intel_reset reset;
 
-	struct {
-		bool enabled;
-		struct hrtimer timer;
-		atomic_t boost;
-		u32 delay;
-		u32 delay_fast, delay_slow;
-		bool int_enabled;
-	} fake_int;
-
 	/**
 	 * Is the GPU currently considered idle, or busy executing
 	 * userspace requests? Whilst idle, we allow runtime power
