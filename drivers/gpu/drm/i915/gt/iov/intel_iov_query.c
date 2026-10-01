@@ -614,16 +614,23 @@ static int vf_prepare_runtime_info(struct intel_iov *iov, unsigned int regs_size
 				   unsigned int alignment)
 {
 	unsigned int regs_size_up = roundup(regs_size, alignment);
+	struct vf_runtime_reg *regs;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
 	GEM_BUG_ON(iov->vf.runtime.regs_size && !iov->vf.runtime.regs);
 
-	iov->vf.runtime.regs = krealloc(iov->vf.runtime.regs,
-					regs_size_up * sizeof(struct vf_runtime_reg),
-					__GFP_ZERO | GFP_NOWAIT | __GFP_NOWARN);
-	if (unlikely(!iov->vf.runtime.regs))
+	/*
+	 * Keep the old pointer until the reallocation succeeds, so that the
+	 * cleanup path can still free the previous array on failure, and let
+	 * krealloc_array() catch a size overflow from a bogus register count.
+	 */
+	regs = krealloc_array(iov->vf.runtime.regs, regs_size_up,
+			      sizeof(struct vf_runtime_reg),
+			      __GFP_ZERO | GFP_NOWAIT | __GFP_NOWARN);
+	if (unlikely(!regs))
 		return -ENOMEM;
 
+	iov->vf.runtime.regs = regs;
 	iov->vf.runtime.regs_size = regs_size;
 
 	return regs_size_up;
@@ -947,6 +954,18 @@ repeat:
 		  count, num, ret, start, remaining);
 
 	if (unlikely(count != num)) {
+		ret = -EPROTO;
+		goto failed;
+	}
+
+	/* an empty chunk with entries still pending would never make progress */
+	if (unlikely(remaining && !num)) {
+		ret = -EPROTO;
+		goto failed;
+	}
+
+	/* the total number of entries must not wrap the allocation size */
+	if (unlikely(remaining > U32_MAX - num)) {
 		ret = -EPROTO;
 		goto failed;
 	}
