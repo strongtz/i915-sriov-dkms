@@ -381,7 +381,7 @@ static int pf_reply_update_ggtt(struct intel_iov *iov, u32 origin,
 	if (!vfpf_update_ggtt_is_supported(iov))
 		return -EOPNOTSUPP;
 
-	if (unlikely(!msg[0]) || unlikely(!msg[1]) || len < 4 || len % 2 != 0)
+	if (len < 4 || len % 2 != 0 || unlikely(!msg[0]) || unlikely(!msg[1]))
 		return -EPROTO;
 
 	num_copies = FIELD_GET(VF2PF_UPDATE_GGTT32_REQUEST_MSG_1_NUM_COPIES, msg[1]);

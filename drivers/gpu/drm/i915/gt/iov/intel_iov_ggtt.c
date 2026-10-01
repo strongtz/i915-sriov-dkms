@@ -51,30 +51,48 @@ sg_add_pte(struct sg_table *st, struct scatterlist *sg, gen8_pte_t source_pte)
 int intel_iov_ggtt_pf_update_vf_ptes(struct intel_iov *iov, u32 vfid, u32 pte_offset, u8 mode,
 				     u16 num_copies, gen8_pte_t *ptes, u16 count)
 {
-	struct drm_mm_node *node = &iov->pf.provisioning.configs[vfid].ggtt_region;
-	u64 ggtt_addr = node->start + pte_offset * I915_GTT_PAGE_SIZE_4K;
-	u64 ggtt_addr_end = ggtt_addr + count * I915_GTT_PAGE_SIZE_4K - 1;
-	u64 vf_ggtt_end = node->start + node->size - 1;
-	gen8_pte_t pte_pattern = prepare_pattern_pte(*(ptes), vfid);
+	struct drm_mm_node *node;
+	u64 ggtt_addr, ggtt_addr_end, vf_ggtt_end;
+	gen8_pte_t pte_pattern;
 	struct sg_table *st;
 	struct scatterlist *sg;
 	bool is_duplicated;
-	u16 n_ptes;
+	u32 n_ptes;
 	int err;
 	int i;
 
 	GEM_BUG_ON(!intel_iov_is_pf(iov));
-	/* XXX: All PTEs must have the same flags */
-	for (i = 0; i < count; i++)
-		GEM_BUG_ON(prepare_pattern_pte(ptes[i], vfid) != pte_pattern);
 
 	if (!count)
 		return -EINVAL;
 
+	/*
+	 * GGTT is provisioned from the root tile only. A request that arrives
+	 * on a tile where this VF has no GGTT region (e.g. media GT) or for
+	 * a VF without GGTT must be rejected, otherwise an empty node would
+	 * make the range check below pass for any offset.
+	 */
+	node = &iov->pf.provisioning.configs[vfid].ggtt_region;
+	if (!drm_mm_node_allocated(node))
+		return -ENODATA;
+
+	pte_pattern = prepare_pattern_pte(*(ptes), vfid);
+	/* XXX: All PTEs must have the same flags */
+	for (i = 0; i < count; i++)
+		GEM_BUG_ON(prepare_pattern_pte(ptes[i], vfid) != pte_pattern);
+
+	/*
+	 * The PF writes @count PTEs supplied by the VF plus @num_copies PTEs
+	 * derived from the first/last one. Every PTE that will be written,
+	 * not just the supplied ones, must fall inside the VF's GGTT region.
+	 */
+	n_ptes = (u32)count + num_copies;
+	ggtt_addr = node->start + (u64)pte_offset * I915_GTT_PAGE_SIZE_4K;
+	ggtt_addr_end = ggtt_addr + (u64)n_ptes * I915_GTT_PAGE_SIZE_4K - 1;
+	vf_ggtt_end = node->start + node->size - 1;
+
 	if (ggtt_addr_end > vf_ggtt_end)
 		return -ERANGE;
-
-	n_ptes = num_copies ? num_copies + count : count;
 
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
 	if (!st)
