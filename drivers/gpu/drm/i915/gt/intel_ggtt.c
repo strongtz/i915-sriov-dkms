@@ -1421,7 +1421,13 @@ static int ggtt_probe_common(struct i915_ggtt *ggtt, u64 size)
 	if (ret) {
 		drm_err(&i915->drm, "Scratch setup failed\n");
 		/* iounmap will also get called at remove, but meh */
-		iounmap(ggtt->gsm);
+		if (i915_ggtt_require_binder(i915) && IS_SRIOV_VF(i915)) {
+			/* Wa_22018453856 */
+			if (ggtt->gsm)
+				iounmap(ggtt->gsm);
+		} else {
+			iounmap(ggtt->gsm);
+		}
 		return ret;
 	}
 
@@ -1441,8 +1447,15 @@ static int ggtt_probe_common(struct i915_ggtt *ggtt, u64 size)
 static void gen6_gmch_remove(struct i915_address_space *vm)
 {
 	struct i915_ggtt *ggtt = i915_vm_to_ggtt(vm);
+	struct drm_i915_private *i915 = vm->i915;
 
-	iounmap(ggtt->gsm);
+	if (i915_ggtt_require_binder(i915) && IS_SRIOV_VF(i915)) {
+		/* Wa_22018453856 */
+		if (ggtt->gsm)
+			iounmap(ggtt->gsm);
+	} else {
+		iounmap(ggtt->gsm);
+	}
 	free_scratch(vm);
 }
 
