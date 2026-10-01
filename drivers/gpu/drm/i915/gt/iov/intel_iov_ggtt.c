@@ -67,6 +67,13 @@ int intel_iov_ggtt_pf_update_vf_ptes(struct intel_iov *iov, u32 vfid, u32 pte_of
 		return -EINVAL;
 
 	/*
+	 * @vfid originates from a GuC message and is used to index per-VF
+	 * arrays, so it must be validated before any lookup.
+	 */
+	if (unlikely(!vfid || vfid > pf_get_totalvfs(iov)))
+		return -EINVAL;
+
+	/*
 	 * GGTT is provisioned from the root tile only. A request that arrives
 	 * on a tile where this VF has no GGTT region (e.g. media GT) or for
 	 * a VF without GGTT must be rejected, otherwise an empty node would

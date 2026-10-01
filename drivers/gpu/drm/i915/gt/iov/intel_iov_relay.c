@@ -663,6 +663,10 @@ int intel_iov_relay_process_guc2pf(struct intel_iov_relay *relay, const u32 *msg
 	if (unlikely(!origin))
 		return -EPROTO;
 
+	/* origin is later used to index per-VF data, reject unknown VFs */
+	if (unlikely(origin > pf_get_totalvfs(relay_to_iov(relay))))
+		return -ENOENT;
+
 	return relay_process_msg(relay, origin, relay_id,
 				 msg + GUC2PF_RELAY_FROM_VF_EVENT_MSG_MIN_LEN,
 				 len - GUC2PF_RELAY_FROM_VF_EVENT_MSG_MIN_LEN);

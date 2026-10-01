@@ -672,6 +672,10 @@ int intel_iov_service_process_mmio_relay(struct intel_iov *iov, const u32 *msg,
 	if (unlikely(!vfid))
 		return -EPROTO;
 
+	/* vfid is later used to index per-VF data, reject unknown VFs */
+	if (unlikely(vfid > pf_get_totalvfs(iov)))
+		return -ENOENT;
+
 	wakeref = intel_runtime_pm_get(rpm);
 
 	switch (opcode) {
