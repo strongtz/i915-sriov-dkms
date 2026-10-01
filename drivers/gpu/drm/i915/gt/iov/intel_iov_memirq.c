@@ -259,8 +259,9 @@ static void __engine_mem_irq_handler(struct intel_engine_cs *engine, u8 *status)
 	 * The programming note says to assume that GT_RENDER_USER_INTERRUPT is
 	 * always set. Check and clear related status byte just for a debug.
 	 */
-	if (READ_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)]) != 0xFF)
-		gt_err(gt, "Unexpected memirq status %#x from %s\n",
+	if (IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV) &&
+	    READ_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)]) != 0xFF)
+		gt_dbg(gt, "Unexpected memirq status %#x from %s\n",
 		       status[ilog2(GT_RENDER_USER_INTERRUPT)], engine->name);
 	WRITE_ONCE(status[ilog2(GT_RENDER_USER_INTERRUPT)], 0x00);
 	intel_engine_signal_breadcrumbs(engine);
@@ -277,8 +278,9 @@ static void __guc_mem_irq_handler(struct intel_guc *guc, u8 *status)
 	 * The programming note says to assume that GUC_INTR_GUC2HOST is always
 	 * set. Check and clear related status byte just for a debug.
 	 */
-	if (READ_ONCE(status[ilog2(GUC_INTR_GUC2HOST)]) != 0xFF)
-		gt_err(gt, "Unexpected memirq status %#x from GUC\n",
+	if (IS_ENABLED(CONFIG_DRM_I915_DEBUG_IOV) &&
+	    READ_ONCE(status[ilog2(GUC_INTR_GUC2HOST)]) != 0xFF)
+		gt_dbg(gt, "Unexpected memirq status %#x from GUC\n",
 		       status[ilog2(GUC_INTR_GUC2HOST)]);
 	WRITE_ONCE(status[ilog2(GUC_INTR_GUC2HOST)], 0x00);
 	intel_guc_to_host_event_handler(guc);
