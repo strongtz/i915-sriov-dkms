@@ -84,7 +84,7 @@ static int vf_create_memirq_data(struct intel_iov *iov)
 		*enable_vector = 0x0;
 	} else {
 		/*XXX: we should start with all irqs disabled: 0xffff0000 */
-		*enable_vector = 0xffff;
+		*enable_vector = GT_RENDER_USER_INTERRUPT;
 	}
 
 	return 0;
@@ -246,7 +246,7 @@ void intel_iov_memirq_postinstall(struct intel_iov *iov)
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
 
 	if (irq)
-		*val = 0xffff;
+		*val = GT_RENDER_USER_INTERRUPT;
 }
 
 static void __engine_mem_irq_handler(struct intel_engine_cs *engine, u8 *status)
