@@ -152,7 +152,8 @@ xe-y += xe_bb.o \
 	xe_wait_user_fence.o \
 	xe_wopcm.o
 
-xe-$(CONFIG_I2C)	+= xe_i2c.o
+xe-$(CONFIG_I2C)	+= xe_i2c.o \
+			   xe_amc.o
 
 xe-y += xe_svm.o
 xe-y += xe_userptr.o

@@ -275,13 +275,6 @@ void gen11_gt_irq_postinstall(struct intel_gt *gt)
 			GT_CONTEXT_SWITCH_INTERRUPT |
 			GT_WAIT_SEMAPHORE_INTERRUPT;
 
-	/* Wa:16014207253 */
-	if (gt->fake_int.enabled)
-		irqs = 0;
-
-	if (gt->fake_int.enabled)
-		drm_info(&gt->i915->drm, "Using fake interrupt w/a, gt = %d\n", gt->info.id);
-
 	dmask = irqs << 16 | irqs;
 	smask = irqs << 16;
 
@@ -562,33 +555,5 @@ void gen5_gt_irq_postinstall(struct intel_gt *gt)
 		gt->pm_imr = 0xffffffff;
 		gen2_irq_init(uncore, GEN6_PM_IRQ_REGS, gt->pm_imr, pm_irqs);
 	}
-}
-
-void intel_boost_fake_int_timer(struct intel_gt *gt, bool on_off)
-{
-	u32 new_delay;
-	bool boost;
-
-	if (!gt->fake_int.enabled)
-		return;
-
-	if (on_off) {
-		atomic_inc(&gt->fake_int.boost);
-		boost = true;
-	} else {
-		boost = !atomic_dec_and_test(&gt->fake_int.boost);
-	}
-
-	if (!gt->fake_int.delay)
-		return;
-
-	new_delay = boost ? gt->fake_int.delay_fast : gt->fake_int.delay_slow;
-	if (new_delay == gt->fake_int.delay)
-		return;
-
-	gt->fake_int.delay = new_delay;
-	hrtimer_cancel(&gt->fake_int.timer);
-	hrtimer_start(&gt->fake_int.timer, ns_to_ktime(gt->fake_int.delay),
-			HRTIMER_MODE_REL);
 }
 
