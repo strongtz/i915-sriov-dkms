@@ -2098,8 +2098,10 @@ static void sgtable_update_shadow_ggtt(struct i915_ggtt *ggtt, unsigned int vfid
 		return;
 	}
 
-	for_each_sgt_daddr(addr, iter, st)
+	for_each_sgt_daddr(addr, iter, st) {
 		intel_iov_ggtt_shadow_set_pte(iov, vfid, ggtt_addr, pte_pattern | addr);
+		ggtt_addr += I915_GTT_PAGE_SIZE_4K;
+	}
 }
 
 int i915_ggtt_sgtable_update_ptes(struct i915_ggtt *ggtt, unsigned int vfid, u64 ggtt_addr,
