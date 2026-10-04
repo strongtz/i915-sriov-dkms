@@ -2,8 +2,7 @@
 
 1. Install the kernel headers. Note that if you are using a different kernel, replace the package name, such as `linux-headers`, `linux-zen-headers` or `linux-lts-headers`.
 
-2. For Arch Linux users, [i915-sriov-dkms](https://aur.archlinux.org/packages/i915-sriov-dkms) is available in AUR, you can install it with `yay -S i915-sriov-dkms`.
-   Or you can download the package from the [Releases Page](https://github.com/strongtz/i915-sriov-dkms/releases) and install it with `pacman -U`.
+2. Download the package from the [Releases Page](https://github.com/strongtz/i915-sriov-dkms/releases) and install it with `pacman -U`.
 
 3. Add required kernel parameters based on your bootloader. You can refer to the Arch Linux Wiki [here](https://wiki.archlinux.org/title/Kernel_parameters#).
 
