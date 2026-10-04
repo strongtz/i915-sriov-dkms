@@ -12,7 +12,8 @@ depends=('dkms')
 conflicts=("${pkgname}-git")
 backup=("etc/tmpfiles.d/i915-set-sriov-numvfs.conf")
 install=${pkgname}.install
-source=("$pkgname::git+file://$(pwd)/.git")
+_source_commit="$(git rev-parse HEAD)"
+source=("$pkgname::git+file://$(pwd)/.git#commit=${_source_commit}")
 sha256sums=('SKIP')
 
 package() {
