@@ -80,6 +80,19 @@ ct_copy_from_user_inatomic_nontemporal() {
 	compile_check "$CODE" "IDB_COPY_FROM_USER_INATOMIC_NONTEMPORAL" 1
 }
 
+ct_drm_client_dev_suspend_one_arg() {
+	CODE="
+	#include <drm/drm_client_event.h>
+	static void conftest_drm_client_dev_suspend_one_arg(void)
+	{
+		drm_client_dev_suspend((struct drm_device *)NULL);
+		drm_client_dev_resume((struct drm_device *)NULL);
+	}
+	"
+
+	compile_check "$CODE" "IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG" 1
+}
+
 ct_drm_exec_for_each_locked_object_no_index() {
 	CODE="
 	#include <drm/drm_exec.h>

@@ -1,5 +1,5 @@
 DKMS_MODULE_VERSION := "2026.03.05.7-sriov"
-DKMS_MODULE_ORIGIN_KERNEL := "6.19.14 with 6.18.48 patches"
+DKMS_MODULE_ORIGIN_KERNEL := "6.19.14 with 6.18.55 patches"
 
 LINUXINCLUDE := \
 	-I$(src)/include \
@@ -21,6 +21,7 @@ CONFTEST_H := $(obj)/$(CONFTEST_DIR)/results.h
 
 CONFTEST_COMPILE_TESTS := \
 	copy_from_user_inatomic_nontemporal \
+	drm_client_dev_suspend_one_arg \
 	drm_exec_for_each_locked_object_no_index \
 	drm_fb_helper_alloc_info \
 	drm_sched_job_init_5args \

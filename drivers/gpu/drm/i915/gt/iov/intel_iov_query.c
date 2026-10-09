@@ -392,6 +392,19 @@ static int vf_get_ggtt_info(struct intel_iov *iov)
 		return -EPROTO;
 	}
 
+	/*
+	 * The region is later used to balloon [0, start) and
+	 * [start + size, GUC_GGTT_TOP), so it must be page aligned and
+	 * must fit below GUC_GGTT_TOP without wrapping.
+	 */
+	if (unlikely(!IS_ALIGNED(start, I915_GTT_PAGE_SIZE_4K) ||
+		     !IS_ALIGNED(size, I915_GTT_PAGE_SIZE_4K) ||
+		     start >= GUC_GGTT_TOP || size > GUC_GGTT_TOP - start)) {
+		IOV_ERROR(iov, "Invalid GGTT config %#llx-%#llx\n",
+			  start, start + size - 1);
+		return -EPROTO;
+	}
+
 	if (iov->vf.config.ggtt_size && iov->vf.config.ggtt_size != size) {
 		IOV_ERROR(iov, "Unexpected GGTT reassignment: %lluK != %lluK\n",
 			  size / SZ_1K, iov->vf.config.ggtt_size / SZ_1K);
