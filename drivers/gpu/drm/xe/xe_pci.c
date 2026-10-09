@@ -50,9 +50,9 @@ __diag_ignore_all("-Woverride-init", "Allow field overrides in table");
 #define NOP(x)	x
 
 static const struct xe_graphics_desc graphics_xelp = {
-	.hw_engine_mask = BIT(XE_HW_ENGINE_RCS0) | BIT(XE_HW_ENGINE_BCS0) | BIT(XE_HW_ENGINE_CCS0),
+	.hw_engine_mask = BIT(XE_HW_ENGINE_RCS0) | BIT(XE_HW_ENGINE_BCS0),
 
-	.va_bits = 47,
+	.va_bits = 48,
 	.vm_max_level = 3,
 };
 
@@ -591,6 +591,7 @@ static int xe_info_init_early(struct xe_device *xe,
 	xe->info.has_heci_cscfi = desc->has_heci_cscfi;
 	xe->info.has_late_bind = desc->has_late_bind;
 	xe->info.has_llc = desc->has_llc;
+	xe->info.has_page_reclaim_hw_assist = desc->has_page_reclaim_hw_assist;
 	xe->info.has_pxp = desc->has_pxp;
 	xe->info.has_sriov = desc->has_sriov;
 	xe->info.skip_guc_pc = desc->skip_guc_pc;
@@ -719,6 +720,12 @@ static int xe_info_init(struct xe_device *xe,
 	if (xe->info.platform != XE_PVC)
 		xe->info.has_device_atomics_on_smem = 1;
 
+	if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE &&
+	    xe_modparam.xelp_enable_ccs) {
+		xe->info.va_bits = 47;
+		drm_info(&xe->drm, "Restricting VA bits to 47 on Xe_LP\n");
+	}
+
 	/* Runtime detection may change this later */
 	xe->info.has_flat_ccs = graphics_desc->has_flat_ccs;
 
@@ -757,6 +764,12 @@ static int xe_info_init(struct xe_device *xe,
 
 		if (MEDIA_VER(xe) < 13 && media_desc)
 			gt->info.engine_mask |= media_desc->hw_engine_mask;
+
+		if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE &&
+		    xe_modparam.xelp_enable_ccs) {
+			gt->info.engine_mask |= BIT(XE_HW_ENGINE_CCS0);
+			drm_info(&xe->drm, "Enabling experimental CCS0 on Xe_LP\n");
+		}
 
 		if (MEDIA_VER(xe) < 13 || !media_desc)
 			continue;

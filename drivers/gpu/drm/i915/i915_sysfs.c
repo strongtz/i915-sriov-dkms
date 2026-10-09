@@ -59,15 +59,15 @@ static int l3_access_valid(struct drm_i915_private *i915, loff_t offset)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static ssize_t
 i915_l3_read(struct file *filp, struct kobject *kobj,
-	     struct bin_attribute *attr, char *buf,
+	     const struct bin_attribute *attr, char *buf,
 	     loff_t offset, size_t count)
 #else
 static ssize_t
 i915_l3_read(struct file *filp, struct kobject *kobj,
-	     const struct bin_attribute *attr, char *buf,
+	     struct bin_attribute *attr, char *buf,
 	     loff_t offset, size_t count)
 #endif
 {
@@ -94,15 +94,15 @@ i915_l3_read(struct file *filp, struct kobject *kobj,
 	return count;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 static ssize_t
 i915_l3_write(struct file *filp, struct kobject *kobj,
-	      struct bin_attribute *attr, char *buf,
+	      const struct bin_attribute *attr, char *buf,
 	      loff_t offset, size_t count)
 #else
 static ssize_t
 i915_l3_write(struct file *filp, struct kobject *kobj,
-	      const struct bin_attribute *attr, char *buf,
+	      struct bin_attribute *attr, char *buf,
 	      loff_t offset, size_t count)
 #endif
 {

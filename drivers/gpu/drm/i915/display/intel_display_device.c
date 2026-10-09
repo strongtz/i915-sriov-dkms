@@ -1768,11 +1768,22 @@ static void __intel_display_device_info_runtime_init(struct intel_display *displ
 {
 	struct intel_display_runtime_info *display_runtime = DISPLAY_RUNTIME_INFO(display);
 	enum pipe pipe;
-	struct drm_i915_private *i915 = to_i915(display->drm);
 
 	BUILD_BUG_ON(BITS_PER_TYPE(display_runtime->pipe_mask) < I915_MAX_PIPES);
 	BUILD_BUG_ON(BITS_PER_TYPE(display_runtime->cpu_transcoder_mask) < I915_MAX_TRANSCODERS);
 	BUILD_BUG_ON(BITS_PER_TYPE(display_runtime->port_mask) < I915_MAX_PORTS);
+
+#ifdef I915
+	struct drm_i915_private *i915 = to_i915(display->drm);
+	/*
+	 * SR-IOV VFs have no display HW access; leave the display in whatever
+	 * state the PF left it in, like Xe does in vf_update_device_info().
+	 */
+	if (IS_SRIOV_VF(i915)) {
+		drm_info(&i915->drm, "SR-IOV VF: display support disabled\n");
+		goto display_fused_off;
+	}
+#endif
 
 	/* This covers both ULT and ULX */
 	if (display->platform.haswell_ult || display->platform.broadwell_ult)
@@ -1923,11 +1934,9 @@ static void __intel_display_device_info_runtime_init(struct intel_display *displ
 		display_runtime->edp_typec_support =
 			intel_de_read(display, PICA_PHY_CONFIG_CONTROL) & EDP_ON_TYPEC;
 
-	if (!IS_SRIOV_VF(i915)) {
-		display_runtime->rawclk_freq = intel_read_rawclk(display);
-		drm_dbg_kms(display->drm, "rawclk rate: %d kHz\n",
+	display_runtime->rawclk_freq = intel_read_rawclk(display);
+	drm_dbg_kms(display->drm, "rawclk rate: %d kHz\n",
 		    display_runtime->rawclk_freq);
-	}
 
 	return;
 

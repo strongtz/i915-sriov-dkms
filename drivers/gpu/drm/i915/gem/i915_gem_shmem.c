@@ -151,8 +151,12 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 			}
 		} while (1);
 
-		nr_pages = min_t(unsigned long,
-				folio_nr_pages(folio), page_count - i);
+		nr_pages = min_array(((unsigned long[]) {
+					folio_nr_pages(folio),
+					page_count - i,
+					max_segment / PAGE_SIZE,
+				      }), 3);
+
 		if (!i ||
 		    sg->length >= max_segment ||
 		    folio_pfn(folio) != next_pfn) {
@@ -162,7 +166,9 @@ int shmem_sg_alloc_table(struct drm_i915_private *i915, struct sg_table *st,
 			st->nents++;
 			sg_set_folio(sg, folio, nr_pages * PAGE_SIZE, 0);
 		} else {
-			/* XXX: could overflow? */
+			nr_pages = min_t(unsigned long, nr_pages,
+					 (max_segment - sg->length) / PAGE_SIZE);
+
 			sg->length += nr_pages * PAGE_SIZE;
 		}
 		next_pfn = folio_pfn(folio) + nr_pages;
@@ -296,7 +302,37 @@ shmem_truncate(struct drm_i915_gem_object *obj)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
+void __shmem_writeback(size_t size, struct address_space *mapping)
+{
+	struct writeback_control wbc = {
+		.sync_mode = WB_SYNC_NONE,
+		.nr_to_write = SWAP_CLUSTER_MAX,
+		.range_start = 0,
+		.range_end = LLONG_MAX,
+	};
+	struct folio *folio = NULL;
+	int error = 0;
+
+	/*
+	 * Leave mmapings intact (GTT will have been revoked on unbinding,
+	 * leaving only CPU mmapings around) and add those folios to the LRU
+	 * instead of invoking writeback so they are aged and paged out
+	 * as normal.
+	 */
+	while ((folio = writeback_iter(mapping, &wbc, folio, &error))) {
+		if (folio_mapped(folio))
+			folio_redirty_for_writepage(&wbc, folio);
+		else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+			error = shmem_writeout(folio, NULL, NULL);
+#else
+			error = shmem_writeout(folio, &wbc);
+#endif
+
+	}
+}
+#else
 void __shmem_writeback(size_t size, struct address_space *mapping)
 {
 	struct writeback_control wbc = {
@@ -337,36 +373,6 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 		unlock_page(page);
 put:
 		put_page(page);
-	}
-}
-#else
-void __shmem_writeback(size_t size, struct address_space *mapping)
-{
-	struct writeback_control wbc = {
-		.sync_mode = WB_SYNC_NONE,
-		.nr_to_write = SWAP_CLUSTER_MAX,
-		.range_start = 0,
-		.range_end = LLONG_MAX,
-	};
-	struct folio *folio = NULL;
-	int error = 0;
-
-	/*
-	 * Leave mmapings intact (GTT will have been revoked on unbinding,
-	 * leaving only CPU mmapings around) and add those folios to the LRU
-	 * instead of invoking writeback so they are aged and paged out
-	 * as normal.
-	 */
-	while ((folio = writeback_iter(mapping, &wbc, folio, &error))) {
-		if (folio_mapped(folio))
-			folio_redirty_for_writepage(&wbc, folio);
-		else
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-			error = shmem_writeout(folio, &wbc);
-#else
-			error = shmem_writeout(folio, NULL, NULL);
-#endif
-
 	}
 }
 #endif

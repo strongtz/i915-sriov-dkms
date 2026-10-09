@@ -1,7 +1,7 @@
 Source: i915-sriov-dkms
 Section: kernel
 Priority: optional
-Maintainer: bbaa <bbaa@bbaa.moe>
+Maintainer: bbaa <bbaa@bbaa.me>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13), dh-sequence-dkms

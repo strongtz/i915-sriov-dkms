@@ -141,6 +141,38 @@ static int xe_guid_decode(u32 guid, int *index, u32 *offset)
 	return 0;
 }
 
+#ifdef IDB_XE_PMT_TELEM_READ_USE_KERNEL_DEV
+int xe_pmt_telem_read(struct device *dev, u32 guid, u64 *data, loff_t user_offset,
+		      u32 count)
+{
+	struct xe_device *xe = kdev_to_xe_device(dev);
+	void __iomem *telem_addr = xe->mmio.regs + BMG_TELEMETRY_OFFSET;
+	u32 mem_region;
+	u32 offset;
+	int ret;
+
+	ret = xe_guid_decode(guid, &mem_region, &offset);
+	if (ret)
+		return ret;
+
+	telem_addr += offset + user_offset;
+
+	guard(mutex)(&xe->pmt.lock);
+
+	/* indicate that we are not at an appropriate power level */
+	if (!xe_pm_runtime_get_if_active(xe))
+		return -ENODATA;
+
+	/* set SoC re-mapper index register based on GUID memory region */
+	xe_mmio_rmw32(xe_root_tile_mmio(xe), SG_REMAP_INDEX1, SG_REMAP_BITS,
+		      REG_FIELD_PREP(SG_REMAP_BITS, mem_region));
+
+	memcpy_fromio(data, telem_addr, count);
+	xe_pm_runtime_put(xe);
+
+	return count;
+}
+#else
 int xe_pmt_telem_read(struct pci_dev *pdev, u32 guid, u64 *data, loff_t user_offset,
 		      u32 count)
 {
@@ -171,6 +203,7 @@ int xe_pmt_telem_read(struct pci_dev *pdev, u32 guid, u64 *data, loff_t user_off
 
 	return count;
 }
+#endif
 
 static struct pmt_callbacks xe_pmt_cb = {
 	.read_telem = xe_pmt_telem_read,
@@ -197,7 +230,9 @@ void xe_vsec_init(struct xe_device *xe)
 {
 	struct intel_vsec_platform_info *info;
 	struct device *dev = xe->drm.dev;
+#ifndef IDB_XE_PMT_TELEM_READ_USE_KERNEL_DEV
 	struct pci_dev *pdev = to_pci_dev(dev);
+#endif
 	enum xe_vsec platform;
 
 	platform = get_platform_info(xe);
@@ -220,10 +255,14 @@ void xe_vsec_init(struct xe_device *xe)
 	 * Register a VSEC. Cleanup is handled using device managed
 	 * resources.
 	 */
-	intel_vsec_register(pdev, info);
-}
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-MODULE_IMPORT_NS(INTEL_VSEC);
+#ifdef IDB_XE_PMT_TELEM_READ_USE_KERNEL_DEV
+	intel_vsec_register(dev, info);
 #else
+	intel_vsec_register(pdev, info);
+#endif
+}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 MODULE_IMPORT_NS("INTEL_VSEC");
+#else
+MODULE_IMPORT_NS(INTEL_VSEC);
 #endif

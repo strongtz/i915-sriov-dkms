@@ -890,7 +890,7 @@ gen11_dsi_set_transcoder_timings(struct intel_encoder *encoder,
 	 * non-compressed link speeds, and simplifies down to the ratio between
 	 * compressed and non-compressed bpp.
 	 */
-	if (crtc_state->dsc.compression_enable) {
+	if (is_vid_mode(intel_dsi) && crtc_state->dsc.compression_enable) {
 		mul = fxp_q4_to_int(crtc_state->dsc.compressed_bpp_x16);
 		div = mipi_dsi_pixel_format_to_bpp(intel_dsi->pixel_format);
 	}
@@ -1489,12 +1489,12 @@ static void gen11_dsi_post_disable(struct intel_atomic_state *state,
 	intel_dsi->panel_power_off_time = ktime_get_boottime();
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-static enum drm_mode_status gen11_dsi_mode_valid(struct drm_connector *connector,
-						 struct drm_display_mode *mode)
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 static enum drm_mode_status gen11_dsi_mode_valid(struct drm_connector *connector,
 						 const struct drm_display_mode *mode)
+#else
+static enum drm_mode_status gen11_dsi_mode_valid(struct drm_connector *connector,
+						 struct drm_display_mode *mode)
 #endif
 {
 	struct intel_display *display = to_intel_display(connector->dev);
@@ -1515,7 +1515,7 @@ static void gen11_dsi_get_timings(struct intel_encoder *encoder,
 	struct drm_display_mode *adjusted_mode =
 					&pipe_config->hw.adjusted_mode;
 
-	if (pipe_config->dsc.compressed_bpp_x16) {
+	if (is_vid_mode(intel_dsi) && pipe_config->dsc.compressed_bpp_x16) {
 		int div = fxp_q4_to_int(pipe_config->dsc.compressed_bpp_x16);
 		int mul = mipi_dsi_pixel_format_to_bpp(intel_dsi->pixel_format);
 

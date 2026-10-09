@@ -10,6 +10,7 @@
 #include <linux/types.h>
 
 struct pci_dev;
+struct intel_device_info;
 
 #ifdef CONFIG_PCI_IOV
 struct pci_dev *i915_pci_pf_get_vf_dev(struct pci_dev *pdev, unsigned int id);
@@ -24,5 +25,6 @@ int i915_pci_register_driver(void);
 void i915_pci_unregister_driver(void);
 
 bool i915_pci_resource_valid(struct pci_dev *pdev, int bar);
+bool i915_pci_is_xelp_ccs(const struct intel_device_info *info);
 
 #endif /* __I915_PCI_H__ */

@@ -56,7 +56,11 @@ static void resize_bar(struct xe_device *xe, int resno, resource_size_t size)
 
 	release_bars(pdev);
 
+#ifdef IDB_PCI_RESIZE_RESOURCE_4ARGS
+	ret = pci_resize_resource(pdev, resno, bar_size, 0);
+#else
 	ret = pci_resize_resource(pdev, resno, bar_size);
+#endif
 	if (ret) {
 		drm_info(&xe->drm, "Failed to resize BAR%d to %dM (%pe). Consider enabling 'Resizable BAR' support in your BIOS\n",
 			 resno, 1 << bar_size, ERR_PTR(ret));
@@ -206,12 +210,28 @@ static inline u64 get_flat_ccs_offset(struct xe_gt *gt, u64 tile_size)
 		offset = offset_hi << 32; /* HW view bits 39:32 */
 		offset |= offset_lo << 6; /* HW view bits 31:6 */
 		offset *= num_enabled; /* convert to SW view */
-		offset = round_up(offset, SZ_128K); /* SW must round up to nearest 128K */
 
-		/* We don't expect any holes */
-		xe_assert_msg(xe, offset == (xe_mmio_read64_2x32(&gt_to_tile(gt)->mmio, GSMBASE) -
-					     ccs_size),
-			      "Hole between CCS and GSM.\n");
+		drm_info(&xe->drm, "FLAT_CCS base:%llx, aligned:%s\n", offset,
+			 str_yes_no(IS_ALIGNED(offset, SZ_128K)));
+
+		/*
+		 * Everything below this offset is handed to the VRAM
+		 * allocator, so it has to be the *first* address the
+		 * compression hardware owns, rounded down.  Rounding it up
+		 * publishes CCS storage as free memory.
+		 */
+		offset = round_down(offset, SZ_4K);
+
+		/*
+		 * CCS storage must not run into GSM.  The old check compared
+		 * the offset against GSMBASE - ccs_size for equality, which
+		 * could not fail: that value is 128K aligned, so it agreed
+		 * with the rounded-up offset even when the base was not 128K
+		 * aligned - exactly the case this fixes.
+		 */
+		xe_assert_msg(xe, offset + ccs_size <=
+			      xe_mmio_read64_2x32(&gt_to_tile(gt)->mmio, GSMBASE),
+			      "CCS overlaps GSM.\n");
 	} else {
 		reg = xe_gt_mcr_unicast_read_any(gt, XEHP_FLAT_CCS_BASE_ADDR);
 		offset = (u64)REG_FIELD_GET(XEHP_FLAT_CCS_PTR, reg) * SZ_64K;

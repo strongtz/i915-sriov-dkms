@@ -132,7 +132,8 @@ void __i915_request_reset(struct i915_request *rq, bool guilty)
 	rcu_read_lock(); /* protect the GEM context */
 	if (guilty) {
 		i915_request_set_error_once(rq, -EIO);
-		__i915_request_skip(rq);
+		if (!i915_request_signaled(rq))
+			__i915_request_skip(rq);
 		banned = mark_guilty(rq);
 	} else {
 		i915_request_set_error_once(rq, -EAGAIN);
@@ -1492,13 +1493,13 @@ static void intel_gt_reset_global(struct intel_gt *gt,
 		kobject_uevent_env(kobj, KOBJ_CHANGE, reset_done_event);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	else
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-		drm_dev_wedged_event(&gt->i915->drm,
-				     DRM_WEDGE_RECOVERY_REBIND | DRM_WEDGE_RECOVERY_BUS_RESET);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 		drm_dev_wedged_event(&gt->i915->drm,
 				     DRM_WEDGE_RECOVERY_REBIND | DRM_WEDGE_RECOVERY_BUS_RESET,
 				     NULL);
+#else
+		drm_dev_wedged_event(&gt->i915->drm,
+				     DRM_WEDGE_RECOVERY_REBIND | DRM_WEDGE_RECOVERY_BUS_RESET);
 #endif
 #endif
 }

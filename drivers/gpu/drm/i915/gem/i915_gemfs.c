@@ -48,29 +48,29 @@ void i915_gemfs_init(struct drm_i915_private *i915)
 	if (!type)
 		goto err;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-	gemfs = vfs_kern_mount(type, SB_KERNMOUNT, type->name, huge_opt);
-	if (IS_ERR(gemfs))
-		goto err;
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 	fc = fs_context_for_mount(type, SB_KERNMOUNT);
 	if (IS_ERR(fc))
 		goto err;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
-	ret = vfs_parse_fs_string(fc, "source", "tmpfs", 5);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 	ret = vfs_parse_fs_string(fc, "source", "tmpfs");
+#else
+	ret = vfs_parse_fs_string(fc, "source", "tmpfs", 5);
 #endif
 	if (!ret)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
-		ret = vfs_parse_fs_string(fc, "huge", "within_size", 11);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 		ret = vfs_parse_fs_string(fc, "huge", "within_size");
+#else
+		ret = vfs_parse_fs_string(fc, "huge", "within_size", 11);
 #endif
 	if (!ret)
 		gemfs = fc_mount_longterm(fc);
 	put_fs_context(fc);
 	if (ret)
+		goto err;
+#else
+	gemfs = vfs_kern_mount(type, SB_KERNMOUNT, type->name, huge_opt);
+	if (IS_ERR(gemfs))
 		goto err;
 #endif
 

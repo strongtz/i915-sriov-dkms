@@ -5,6 +5,7 @@
 
 #include <drm/drm_managed.h>
 
+#include <generated/xe_wa_oob.h>
 #include "xe_force_wake.h"
 #include "xe_device.h"
 #include "xe_gt.h"
@@ -16,6 +17,7 @@
 #include "xe_mmio.h"
 #include "xe_pm.h"
 #include "xe_sriov.h"
+#include "xe_wa.h"
 
 /**
  * DOC: Xe GT Idle
@@ -145,6 +147,12 @@ void xe_gt_idle_enable_pg(struct xe_gt *gt)
 		xe_mmio_write32(mmio, RENDER_POWERGATE_IDLE_HYSTERESIS, 25);
 	}
 
+	if (XE_GT_WA(gt, 14020316580))
+		gtidle->powergate_enable &= ~(VDN_HCP_POWERGATE_ENABLE(0) |
+					      VDN_MFXVDENC_POWERGATE_ENABLE(0) |
+					      VDN_HCP_POWERGATE_ENABLE(2) |
+					      VDN_MFXVDENC_POWERGATE_ENABLE(2));
+
 	xe_mmio_write32(mmio, POWERGATE_ENABLE, gtidle->powergate_enable);
 	xe_force_wake_put(gt_to_fw(gt), fw_ref);
 }
@@ -228,7 +236,8 @@ int xe_gt_idle_pg_print(struct xe_gt *gt, struct drm_printer *p)
 		xe_force_wake_put(gt_to_fw(gt), fw_ref);
 	}
 
-	if (gt->info.engine_mask & XE_HW_ENGINE_RCS_MASK) {
+	if (gt->info.engine_mask &
+	    (XE_HW_ENGINE_RCS_MASK | XE_HW_ENGINE_CCS_MASK)) {
 		drm_printf(p, "Render Power Gating Enabled: %s\n",
 			   str_yes_no(pg_enabled & RENDER_POWERGATE_ENABLE));
 

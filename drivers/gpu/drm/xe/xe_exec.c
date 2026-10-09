@@ -130,7 +130,8 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 
 	if (XE_IOCTL_DBG(xe, args->extensions) ||
 	    XE_IOCTL_DBG(xe, args->pad[0] || args->pad[1] || args->pad[2]) ||
-	    XE_IOCTL_DBG(xe, args->reserved[0] || args->reserved[1]))
+	    XE_IOCTL_DBG(xe, args->reserved[0] || args->reserved[1]) ||
+	    XE_IOCTL_DBG(xe, args->num_syncs > DRM_XE_MAX_SYNCS))
 		return -EINVAL;
 
 	q = xe_exec_queue_lookup(xef, args->exec_queue_id);
@@ -181,9 +182,9 @@ int xe_exec_ioctl(struct drm_device *dev, void *data, struct drm_file *file)
 		goto err_syncs;
 	}
 
-	if (xe_exec_queue_is_parallel(q)) {
-		err = copy_from_user(addresses, addresses_user, sizeof(u64) *
-				     q->width);
+	if (args->num_batch_buffer && xe_exec_queue_is_parallel(q)) {
+		err = copy_from_user(addresses, addresses_user,
+				     sizeof(u64) * q->width);
 		if (err) {
 			err = -EFAULT;
 			goto err_syncs;
@@ -285,13 +286,35 @@ retry:
 		goto err_exec;
 	}
 
-	/* Wait behind rebinds */
+	/*
+	 * Wait behind rebinds and any kernel operations (evictions, defrag
+	 * moves, ...) on the VM and all external BOs. The VM's private BOs
+	 * carry their kernel ops in the VM dma-resv KERNEL slot, while each
+	 * external BO carries them in its own dma-resv KERNEL slot; both are
+	 * covered by iterating every object locked by the exec, mirroring the
+	 * drm_gpuvm_resv_add_fence() below.
+	 */
 	if (!xe_vm_in_lr_mode(vm)) {
-		err = xe_sched_job_add_deps(job,
-					    xe_vm_resv(vm),
-					    DMA_RESV_USAGE_KERNEL);
-		if (err)
-			goto err_put_job;
+		struct drm_gem_object *obj;
+#ifndef IDB_DRM_EXEC_FOR_EACH_LOCKED_OBJECT_NO_INDEX
+	unsigned long index;
+#endif
+
+#ifdef IDB_DRM_EXEC_FOR_EACH_LOCKED_OBJECT_NO_INDEX
+		drm_exec_for_each_locked_object(exec, obj) {
+			err = xe_sched_job_add_deps(job, obj->resv,
+						    DMA_RESV_USAGE_KERNEL);
+			if (err)
+				goto err_put_job;
+		}
+#else
+		drm_exec_for_each_locked_object(exec, index, obj) {
+			err = xe_sched_job_add_deps(job, obj->resv,
+						    DMA_RESV_USAGE_KERNEL);
+			if (err)
+				goto err_put_job;
+		}
+#endif
 	}
 
 	for (i = 0; i < num_syncs && !err; i++)

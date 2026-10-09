@@ -1870,19 +1870,25 @@ int intel_display_power_map_init(struct i915_power_domains *power_domains)
 	struct intel_display *display = container_of(power_domains,
 						     struct intel_display,
 						     power.domains);
-	struct drm_i915_private *i915 = to_i915(display->drm);
 	/*
 	 * The enabling order will be from lower to higher indexed wells,
 	 * the disabling order is reversed.
 	 */
+#ifdef I915
+	struct drm_i915_private *i915 = to_i915(display->drm);
+	/*
+	 * VFs have no display HW access (see intel_display_device_info_runtime_init()),
+	 * but GT still tracks power domains (e.g. POWER_DOMAIN_GT_IRQ on GT unpark),
+	 * so keep an always-on well set covering all domains instead of none.
+	 */
+	if (IS_SRIOV_VF(i915))
+		return set_power_wells(power_domains, i9xx_power_wells);
+#endif
 	if (!HAS_DISPLAY(display)) {
 		power_domains->power_well_count = 0;
 		return 0;
 	}
-
-	if (IS_SRIOV_VF(i915))
-		return set_power_wells(power_domains, i9xx_power_wells);
-	else if (DISPLAY_VERx100(display) == 3002)
+	if (DISPLAY_VERx100(display) == 3002)
 		return set_power_wells(power_domains, wcl_power_wells);
 	else if (DISPLAY_VER(display) >= 30)
 		return set_power_wells(power_domains, xe3lpd_power_wells);

@@ -82,12 +82,12 @@ int xe_sched_init(struct xe_gpu_scheduler *sched,
 	INIT_LIST_HEAD(&sched->msgs);
 	INIT_WORK(&sched->work_process_msg, xe_sched_process_msg_work);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+	return drm_sched_init(&sched->base, &args);
+#else
 	return drm_sched_init(&sched->base, ops, submit_wq, 1, hw_submission,
 			      hang_limit, timeout, timeout_wq, score, name,
 			      dev);
-#else
-	return drm_sched_init(&sched->base, &args);
 #endif
 }
 

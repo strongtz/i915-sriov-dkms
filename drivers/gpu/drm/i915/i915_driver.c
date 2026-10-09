@@ -1021,10 +1021,12 @@ void i915_driver_shutdown(struct drm_i915_private *i915)
 	intel_runtime_pm_disable(&i915->runtime_pm);
 	intel_power_domains_disable(display);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	intel_fbdev_set_suspend(&i915->drm, FBINFO_STATE_SUSPENDED, true);
-#else
+#ifdef IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG
+	drm_client_dev_suspend(&i915->drm);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	drm_client_dev_suspend(&i915->drm, false);
+#else
+	intel_fbdev_set_suspend(&i915->drm, FBINFO_STATE_SUSPENDED, true);
 #endif
 
 	if (intel_display_device_present(display)) {
@@ -1111,10 +1113,13 @@ static int i915_drm_suspend(struct drm_device *dev)
 	/* We do a lot of poking in a lot of registers, make sure they work
 	 * properly. */
 	intel_power_domains_disable(display);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	intel_fbdev_set_suspend(dev, FBINFO_STATE_SUSPENDED, true);
-#else
+
+#ifdef IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG
+	drm_client_dev_suspend(dev);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	drm_client_dev_suspend(dev, false);
+#else
+	intel_fbdev_set_suspend(dev, FBINFO_STATE_SUSPENDED, true);
 #endif
 
 	if (intel_display_device_present(display)) {
@@ -1176,12 +1181,14 @@ static int i915_drm_suspend_late(struct drm_device *dev, bool hibernation)
 	for_each_gt(gt, dev_priv, i)
 		intel_uncore_suspend(gt->uncore);
 
-	intel_display_power_suspend_late(display, s2idle);
+	if (intel_display_device_present(display))
+		intel_display_power_suspend_late(display, s2idle);
 
 	ret = vlv_suspend_complete(dev_priv);
 	if (ret) {
 		drm_err(&dev_priv->drm, "Suspend complete failed: %d\n", ret);
-		intel_display_power_resume_early(display);
+		if (intel_display_device_present(display))
+			intel_display_power_resume_early(display);
 
 		goto out;
 	}
@@ -1318,10 +1325,12 @@ static int i915_drm_resume(struct drm_device *dev)
 
 	intel_opregion_resume(display);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	intel_fbdev_set_suspend(dev, FBINFO_STATE_RUNNING, false);
-#else
+#ifdef IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG
+	drm_client_dev_resume(dev);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	drm_client_dev_resume(dev, false);
+#else
+	intel_fbdev_set_suspend(dev, FBINFO_STATE_RUNNING, false);
 #endif
 
 	intel_power_domains_enable(display);
@@ -1401,7 +1410,8 @@ static int i915_drm_resume_early(struct drm_device *dev)
 	for_each_gt(gt, dev_priv, i)
 		intel_gt_resume_early(gt);
 
-	intel_display_power_resume_early(display);
+	if (intel_display_device_present(display))
+		intel_display_power_resume_early(display);
 
 	enable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
 
@@ -1603,7 +1613,8 @@ static int intel_runtime_suspend(struct device *kdev)
 	for_each_gt(gt, dev_priv, i)
 		intel_uncore_suspend(gt->uncore);
 
-	intel_display_power_suspend(display);
+	if (intel_display_device_present(display))
+		intel_display_power_suspend(display);
 
 	ret = vlv_suspend_complete(dev_priv);
 	if (ret) {
@@ -1697,7 +1708,8 @@ static int intel_runtime_resume(struct device *kdev)
 		drm_dbg(&dev_priv->drm,
 			"Unclaimed access during suspend, bios?\n");
 
-	intel_display_power_resume(display);
+	if (intel_display_device_present(display))
+		intel_display_power_resume(display);
 
 	ret = vlv_resume_prepare(dev_priv, true);
 

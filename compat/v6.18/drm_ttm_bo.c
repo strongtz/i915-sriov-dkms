@@ -21,10 +21,10 @@ int ttm_bo_setup_export(struct ttm_buffer_object *bo,
 	if (ret != 0)
 		return ret;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-	ret = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 	ret = ttm_bo_populate(bo, ctx);
+#else
+	ret = ttm_tt_populate(bo->bdev, bo->ttm, ctx);
 #endif
 	ttm_bo_unreserve(bo);
 	return ret;

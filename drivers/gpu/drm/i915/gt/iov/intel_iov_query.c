@@ -379,6 +379,19 @@ static int vf_get_ggtt_info(struct intel_iov *iov)
 	IOV_DEBUG(iov, "GGTT %#llx-%#llx = %lluK\n",
 		  start, start + size - 1, size / SZ_1K);
 
+	/*
+	 * The region is later used to balloon [0, start) and
+	 * [start + size, GUC_GGTT_TOP), so it must be page aligned and
+	 * must fit below GUC_GGTT_TOP without wrapping.
+	 */
+	if (unlikely(!IS_ALIGNED(start, I915_GTT_PAGE_SIZE_4K) ||
+		     !IS_ALIGNED(size, I915_GTT_PAGE_SIZE_4K) ||
+		     start >= GUC_GGTT_TOP || size > GUC_GGTT_TOP - start)) {
+		IOV_ERROR(iov, "Invalid GGTT config %#llx-%#llx\n",
+			  start, start + size - 1);
+		return -EPROTO;
+	}
+
 	if (iov->vf.config.ggtt_size && iov->vf.config.ggtt_size != size) {
 		IOV_ERROR(iov, "Unexpected GGTT reassignment: %lluK != %lluK\n",
 			  size / SZ_1K, iov->vf.config.ggtt_size / SZ_1K);
@@ -614,16 +627,23 @@ static int vf_prepare_runtime_info(struct intel_iov *iov, unsigned int regs_size
 				   unsigned int alignment)
 {
 	unsigned int regs_size_up = roundup(regs_size, alignment);
+	struct vf_runtime_reg *regs;
 
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
 	GEM_BUG_ON(iov->vf.runtime.regs_size && !iov->vf.runtime.regs);
 
-	iov->vf.runtime.regs = krealloc(iov->vf.runtime.regs,
-					regs_size_up * sizeof(struct vf_runtime_reg),
-					__GFP_ZERO | GFP_NOWAIT | __GFP_NOWARN);
-	if (unlikely(!iov->vf.runtime.regs))
+	/*
+	 * Keep the old pointer until the reallocation succeeds, so that the
+	 * cleanup path can still free the previous array on failure, and let
+	 * krealloc_array() catch a size overflow from a bogus register count.
+	 */
+	regs = krealloc_array(iov->vf.runtime.regs, regs_size_up,
+			      sizeof(struct vf_runtime_reg),
+			      __GFP_ZERO | GFP_NOWAIT | __GFP_NOWARN);
+	if (unlikely(!regs))
 		return -ENOMEM;
 
+	iov->vf.runtime.regs = regs;
 	iov->vf.runtime.regs_size = regs_size;
 
 	return regs_size_up;
@@ -947,6 +967,18 @@ repeat:
 		  count, num, ret, start, remaining);
 
 	if (unlikely(count != num)) {
+		ret = -EPROTO;
+		goto failed;
+	}
+
+	/* an empty chunk with entries still pending would never make progress */
+	if (unlikely(remaining && !num)) {
+		ret = -EPROTO;
+		goto failed;
+	}
+
+	/* the total number of entries must not wrap the allocation size */
+	if (unlikely(remaining > U32_MAX - num)) {
 		ret = -EPROTO;
 		goto failed;
 	}

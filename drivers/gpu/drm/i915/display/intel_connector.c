@@ -159,20 +159,20 @@ int intel_connector_register(struct drm_connector *_connector)
 	struct drm_i915_private *i915 = to_i915(_connector->dev);
 	int ret;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-	ret = intel_backlight_device_register(connector);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	ret = intel_panel_register(connector);
+#else
+	ret = intel_backlight_device_register(connector);
 #endif
 	if (ret)
 		goto err;
 
 	if (i915_inject_probe_failure(i915)) {
 		ret = -EFAULT;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-		goto err_backlight;
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 		goto err_panel;
+#else
+		goto err_backlight;
 #endif
 	}
 
@@ -180,12 +180,12 @@ int intel_connector_register(struct drm_connector *_connector)
 
 	return 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-err_backlight:
-	intel_backlight_device_unregister(connector);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 err_panel:
 	intel_panel_unregister(connector);
+#else
+err_backlight:
+	intel_backlight_device_unregister(connector);
 #endif
 err:
 	return ret;
@@ -195,10 +195,10 @@ void intel_connector_unregister(struct drm_connector *_connector)
 {
 	struct intel_connector *connector = to_intel_connector(_connector);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-	intel_backlight_device_unregister(connector);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	intel_panel_unregister(connector);
+#else
+	intel_backlight_device_unregister(connector);
 #endif
 }
 

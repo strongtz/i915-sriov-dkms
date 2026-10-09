@@ -42,6 +42,7 @@ struct xe_modparam xe_modparam = {
 	.wedged_mode =		DEFAULT_WEDGED_MODE,
 	.svm_notifier_size =	DEFAULT_SVM_NOTIFIER_SIZE,
 	/* the rest are 0 by default */
+	.xelp_enable_ccs = false,
 };
 
 module_param_named(svm_notifier_size, xe_modparam.svm_notifier_size, uint, 0600);
@@ -92,6 +93,9 @@ module_param_named_unsafe(wedged_mode, xe_modparam.wedged_mode, int, 0600);
 MODULE_PARM_DESC(wedged_mode,
 		 "Module's default policy for the wedged mode (0=never, 1=upon-critical-errors, 2=upon-any-hang "
 		 "[default=" __stringify(DEFAULT_WEDGED_MODE) "])");
+
+module_param_named_unsafe(xelp_enable_ccs, xe_modparam.xelp_enable_ccs, bool, 0400);
+MODULE_PARM_DESC(xelp_enable_ccs, "Enable experimental CCS on Xe_LP platforms (default: false)");
 
 static int xe_check_nomodeset(void)
 {
@@ -200,8 +204,8 @@ MODULE_INFO(origin_kernel, DKMS_MODULE_ORIGIN_KERNEL);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL and additional rights");
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 13, 0)
-MODULE_IMPORT_NS(INTEL_SRIOV_COMPAT);
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0)
 MODULE_IMPORT_NS("INTEL_SRIOV_COMPAT");
+#else
+MODULE_IMPORT_NS(INTEL_SRIOV_COMPAT);
 #endif

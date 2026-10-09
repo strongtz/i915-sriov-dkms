@@ -944,6 +944,11 @@ drm_gpusvm_range_find_or_insert(struct drm_gpusvm *gpusvm,
 		goto err_notifier_remove;
 	}
 
+	if (vas->vm_flags & (VM_IO | VM_PFNMAP)) {
+		err = -EIO;
+		goto err_notifier_remove;
+	}
+
 	range = drm_gpusvm_range_find(notifier, fault_addr, fault_addr + 1);
 	if (range)
 		goto out_mmunlock;
@@ -1385,6 +1390,14 @@ map_pages:
 					err = -EAGAIN;
 					goto err_unmap;
 				}
+
+				/*
+				 * Set the dpagemap as soon as the first
+				 * device page is mapped so the err_unmap path
+				 * can device_unmap() the device mappings that
+				 * have already been created.
+				 */
+				svm_pages->dpagemap = dpagemap;
 			}
 			svm_pages->dma_addr[j] =
 				dpagemap->ops->device_map(dpagemap,
@@ -1427,10 +1440,8 @@ map_pages:
 		flags.has_dma_mapping = true;
 	}
 
-	if (pagemap) {
+	if (pagemap)
 		flags.has_devmem_pages = true;
-		svm_pages->dpagemap = dpagemap;
-	}
 
 	/* WRITE_ONCE pairs with READ_ONCE for opportunistic checks */
 	WRITE_ONCE(svm_pages->flags.__flags, flags.__flags);
@@ -1443,6 +1454,7 @@ set_seqno:
 	return 0;
 
 err_unmap:
+	svm_pages->flags.has_dma_mapping = true;
 	__drm_gpusvm_unmap_pages(gpusvm, svm_pages, num_dma_mapped);
 	drm_gpusvm_notifier_unlock(gpusvm);
 err_free:
@@ -1560,8 +1572,10 @@ int drm_gpusvm_range_evict(struct drm_gpusvm *gpusvm,
 		return -EFAULT;
 
 	pfns = kvmalloc_array(npages, sizeof(*pfns), GFP_KERNEL);
-	if (!pfns)
+	if (!pfns) {
+		mmput(mm);
 		return -ENOMEM;
+	}
 
 	hmm_range.hmm_pfns = pfns;
 	while (!time_after(jiffies, timeout)) {

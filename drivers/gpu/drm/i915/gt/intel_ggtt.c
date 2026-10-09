@@ -1430,7 +1430,13 @@ static int ggtt_probe_common(struct i915_ggtt *ggtt, u64 size)
 	if (ret) {
 		drm_err(&i915->drm, "Scratch setup failed\n");
 		/* iounmap will also get called at remove, but meh */
-		iounmap(ggtt->gsm);
+		if (i915_ggtt_require_binder(i915) && IS_SRIOV_VF(i915)) {
+			/* Wa_22018453856 */
+			if (ggtt->gsm)
+				iounmap(ggtt->gsm);
+		} else {
+			iounmap(ggtt->gsm);
+		}
 		return ret;
 	}
 
@@ -1450,8 +1456,15 @@ static int ggtt_probe_common(struct i915_ggtt *ggtt, u64 size)
 static void gen6_gmch_remove(struct i915_address_space *vm)
 {
 	struct i915_ggtt *ggtt = i915_vm_to_ggtt(vm);
+	struct drm_i915_private *i915 = vm->i915;
 
-	iounmap(ggtt->gsm);
+	if (i915_ggtt_require_binder(i915) && IS_SRIOV_VF(i915)) {
+		/* Wa_22018453856 */
+		if (ggtt->gsm)
+			iounmap(ggtt->gsm);
+	} else {
+		iounmap(ggtt->gsm);
+	}
 	free_scratch(vm);
 }
 
@@ -2104,8 +2117,10 @@ static void sgtable_update_shadow_ggtt(struct i915_ggtt *ggtt, unsigned int vfid
 		return;
 	}
 
-	for_each_sgt_daddr(addr, iter, st)
+	for_each_sgt_daddr(addr, iter, st) {
 		intel_iov_ggtt_shadow_set_pte(iov, vfid, ggtt_addr, pte_pattern | addr);
+		ggtt_addr += I915_GTT_PAGE_SIZE_4K;
+	}
 }
 
 int i915_ggtt_sgtable_update_ptes(struct i915_ggtt *ggtt, unsigned int vfid, u64 ggtt_addr,

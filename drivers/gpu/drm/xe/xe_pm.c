@@ -8,6 +8,7 @@
 #include <linux/fault-inject.h>
 #include <linux/pm_runtime.h>
 #include <linux/suspend.h>
+#include <linux/dmi.h>
 
 #include <drm/drm_managed.h>
 #include <drm/ttm/ttm_placement.h>
@@ -300,9 +301,15 @@ ALLOW_ERROR_INJECTION(xe_pm_init_early, ERRNO); /* See xe_pci_probe() */
 
 static u32 vram_threshold_value(struct xe_device *xe)
 {
-	/* FIXME: D3Cold temporarily disabled by default on BMG */
-	if (xe->info.platform == XE_BATTLEMAGE)
-		return 0;
+	if (xe->info.platform == XE_BATTLEMAGE) {
+		const char *product_name;
+
+		product_name = dmi_get_system_info(DMI_PRODUCT_NAME);
+		if (product_name && strstr(product_name, "NUC13RNG")) {
+			drm_warn(&xe->drm, "BMG + D3Cold not supported on this platform\n");
+			return 0;
+		}
+	}
 
 	return DEFAULT_VRAM_THRESHOLD;
 }
@@ -660,6 +667,13 @@ static void xe_pm_runtime_lockdep_prime(void)
 /**
  * xe_pm_runtime_get - Get a runtime_pm reference and resume synchronously
  * @xe: xe device instance
+ *
+ * When possible, scope-based runtime PM (through guard(xe_pm_runtime)) is
+ * be preferred over direct usage of this function.  Manual get/put handling
+ * should only be used when the function contains goto-based logic which
+ * can break scope-based handling, or when the lifetime of the runtime PM
+ * reference does not match a specific scope (e.g., runtime PM obtained in one
+ * function and released in a different one).
  */
 void xe_pm_runtime_get(struct xe_device *xe)
 {
@@ -691,6 +705,13 @@ void xe_pm_runtime_put(struct xe_device *xe)
 /**
  * xe_pm_runtime_get_ioctl - Get a runtime_pm reference before ioctl
  * @xe: xe device instance
+ *
+ * When possible, scope-based runtime PM (through
+ * ACQUIRE(xe_pm_runtime_ioctl, ...)) is be preferred over direct usage of this
+ * function.  Manual get/put handling should only be used when the function
+ * contains goto-based logic which can break scope-based handling, or when the
+ * lifetime of the runtime PM reference does not match a specific scope (e.g.,
+ * runtime PM obtained in one function and released in a different one).
  *
  * Returns: Any number greater than or equal to 0 for success, negative error
  * code otherwise.
@@ -744,14 +765,14 @@ static bool xe_pm_suspending_or_resuming(struct xe_device *xe)
 #ifdef CONFIG_PM
 	struct device *dev = xe->drm.dev;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
-	return dev->power.runtime_status == RPM_SUSPENDING ||
-		dev->power.runtime_status == RPM_RESUMING ||
-		pm_suspend_target_state != PM_SUSPEND_ON;
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
 	return dev->power.runtime_status == RPM_SUSPENDING ||
 		dev->power.runtime_status == RPM_RESUMING ||
 		pm_suspend_in_progress();
+#else
+	return dev->power.runtime_status == RPM_SUSPENDING ||
+		dev->power.runtime_status == RPM_RESUMING ||
+		pm_suspend_target_state != PM_SUSPEND_ON;
 #endif
 #else
 	return false;
@@ -767,6 +788,13 @@ static bool xe_pm_suspending_or_resuming(struct xe_device *xe)
  * It will warn if not protected.
  * The reference should be put back after this function regardless, since it
  * will always bump the usage counter, regardless.
+ *
+ * When possible, scope-based runtime PM (through guard(xe_pm_runtime_noresume))
+ * is be preferred over direct usage of this function.  Manual get/put handling
+ * should only be used when the function contains goto-based logic which can
+ * break scope-based handling, or when the lifetime of the runtime PM reference
+ * does not match a specific scope (e.g., runtime PM obtained in one function
+ * and released in a different one).
  */
 void xe_pm_runtime_get_noresume(struct xe_device *xe)
 {

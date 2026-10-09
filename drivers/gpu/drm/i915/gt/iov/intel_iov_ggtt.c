@@ -51,38 +51,51 @@ sg_add_pte(struct sg_table *st, struct scatterlist *sg, gen8_pte_t source_pte)
 int intel_iov_ggtt_pf_update_vf_ptes(struct intel_iov *iov, u32 vfid, u32 pte_offset, u8 mode,
 				     u16 num_copies, gen8_pte_t *ptes, u16 count)
 {
-	struct drm_mm_node *node = &iov->pf.provisioning.configs[vfid].ggtt_region;
-	u64 ggtt_addr = node->start + pte_offset * I915_GTT_PAGE_SIZE_4K;
-	u64 ggtt_addr_end = ggtt_addr + count * I915_GTT_PAGE_SIZE_4K - 1;
-	u64 vf_ggtt_end = node->start + node->size - 1;
-	gen8_pte_t pte_pattern = prepare_pattern_pte(*(ptes), vfid);
+	struct intel_iov *root = iov_get_root(iov);
+	struct drm_mm_node *node;
+	gen8_pte_t pte_pattern;
+	u64 ggtt_addr, region_pages;
 	struct sg_table *st;
 	struct scatterlist *sg;
 	bool is_duplicated;
-	u16 n_ptes;
+	u32 n_ptes;
 	int err;
 	int i;
 
 	GEM_BUG_ON(!intel_iov_is_pf(iov));
-	/* XXX: All PTEs must have the same flags */
-	for (i = 0; i < count; i++)
-		GEM_BUG_ON(prepare_pattern_pte(ptes[i], vfid) != pte_pattern);
-
-	if (!count)
+	if (!vfid || vfid > pf_get_totalvfs(iov) || !count)
 		return -EINVAL;
 
-	if (ggtt_addr_end > vf_ggtt_end)
-		return -ERANGE;
+	/* Media GTs share the root GGTT and its VF allocation. */
+	mutex_lock(pf_provisioning_mutex(iov));
+	node = &root->pf.provisioning.configs[vfid].ggtt_region;
+	region_pages = node->size / I915_GTT_PAGE_SIZE_4K;
+	n_ptes = (u32)count + num_copies;
+	if (!drm_mm_node_allocated(node) || pte_offset >= region_pages ||
+	    n_ptes > region_pages - pte_offset) {
+		err = -ERANGE;
+		goto unlock;
+	}
 
-	n_ptes = num_copies ? num_copies + count : count;
+	ggtt_addr = node->start + (u64)pte_offset * I915_GTT_PAGE_SIZE_4K;
+	pte_pattern = prepare_pattern_pte(*ptes, vfid);
+	for (i = 1; i < count; i++) {
+		if (prepare_pattern_pte(ptes[i], vfid) != pte_pattern) {
+			err = -EINVAL;
+			goto unlock;
+		}
+	}
 
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
-	if (!st)
-		return -ENOMEM;
+	if (!st) {
+		err = -ENOMEM;
+		goto unlock;
+	}
 
 	if (sg_alloc_table(st, n_ptes, GFP_KERNEL)) {
 		kfree(st);
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto unlock;
 	}
 
 	sg = st->sgl;
@@ -124,10 +137,13 @@ cleanup:
 	sg_free_table(st);
 	kfree(st);
 	if (err < 0)
-		return err;
+		goto unlock;
 
 	IOV_DEBUG(iov, "PF updated GGTT for %d PTE(s) from VF%u\n", n_ptes, vfid);
-	return n_ptes;
+	err = n_ptes;
+unlock:
+	mutex_unlock(pf_provisioning_mutex(iov));
+	return err;
 }
 
 void intel_iov_ggtt_vf_init_early(struct intel_iov *iov)

@@ -2026,7 +2026,8 @@ void intel_engines_reset_default_submission(struct intel_gt *gt)
 		if (engine->sanitize)
 			engine->sanitize(engine);
 
-		engine->set_default_submission(engine);
+		if (engine->set_default_submission)
+			engine->set_default_submission(engine);
 	}
 }
 

@@ -92,12 +92,12 @@ xe_dep_scheduler_create(struct xe_device *xe,
 	if (!dep_scheduler)
 		return ERR_PTR(-ENOMEM);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+	err = drm_sched_init(&dep_scheduler->sched, &args);
+#else
 	err = drm_sched_init(&dep_scheduler->sched, &sched_ops, submit_wq, 1, job_limit,
 			      0, MAX_SCHEDULE_TIMEOUT, NULL, NULL, name,
 			      xe->drm.dev);
-#else
-	err = drm_sched_init(&dep_scheduler->sched, &args);
 #endif
 	if (err)
 		goto err_free;

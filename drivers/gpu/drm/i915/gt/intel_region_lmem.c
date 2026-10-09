@@ -37,7 +37,11 @@ _resize_bar(struct drm_i915_private *i915, int resno, resource_size_t size)
 
 	_release_bars(pdev);
 
+#ifdef IDB_PCI_RESIZE_RESOURCE_4ARGS
+	ret = pci_resize_resource(pdev, resno, bar_size, 0);
+#else
 	ret = pci_resize_resource(pdev, resno, bar_size);
+#endif
 	if (ret) {
 		drm_info(&i915->drm, "Failed to resize BAR%d to %dM (%pe)\n",
 			 resno, 1 << bar_size, ERR_PTR(ret));

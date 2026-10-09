@@ -362,16 +362,16 @@ static void intel_plane_clear_hw_state(struct intel_plane_state *plane_state)
 	memset(&plane_state->hw, 0, sizeof(plane_state->hw));
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-static void
-intel_plane_copy_uapi_plane_damage(struct intel_plane_state *new_plane_state,
-				   const struct intel_plane_state *old_uapi_plane_state,
-				   struct intel_plane_state *new_uapi_plane_state)
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 static void
 intel_plane_copy_uapi_plane_damage(struct intel_plane_state *new_plane_state,
 				   const struct intel_plane_state *old_uapi_plane_state,
 				   const struct intel_plane_state *new_uapi_plane_state)
+#else
+static void
+intel_plane_copy_uapi_plane_damage(struct intel_plane_state *new_plane_state,
+				   const struct intel_plane_state *old_uapi_plane_state,
+				   struct intel_plane_state *new_uapi_plane_state)
 #endif
 {
 	struct intel_display *display = to_intel_display(new_plane_state);
@@ -430,10 +430,15 @@ void intel_plane_copy_hw_state(struct intel_plane_state *plane_state,
 		drm_framebuffer_get(plane_state->hw.fb);
 }
 
+static void unlink_nv12_plane(struct intel_crtc_state *crtc_state,
+			      struct intel_plane_state *plane_state);
+
 void intel_plane_set_invisible(struct intel_crtc_state *crtc_state,
 			       struct intel_plane_state *plane_state)
 {
 	struct intel_plane *plane = to_intel_plane(plane_state->uapi.plane);
+
+	unlink_nv12_plane(crtc_state, plane_state);
 
 	crtc_state->active_planes &= ~BIT(plane->id);
 	crtc_state->scaled_planes &= ~BIT(plane->id);
@@ -756,10 +761,10 @@ static int plane_atomic_check(struct intel_atomic_state *state,
 		intel_atomic_get_new_plane_state(state, plane);
 	const struct intel_plane_state *old_plane_state =
 		intel_atomic_get_old_plane_state(state, plane);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
-	struct intel_plane_state *new_primary_crtc_plane_state;
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
 	const struct intel_plane_state *new_primary_crtc_plane_state;
+#else
+	struct intel_plane_state *new_primary_crtc_plane_state;
 #endif
 	const struct intel_plane_state *old_primary_crtc_plane_state;
 	struct intel_crtc *crtc = intel_crtc_for_pipe(display, plane->pipe);
@@ -1454,18 +1459,18 @@ static const struct drm_plane_helper_funcs intel_primary_plane_helper_funcs = {
 };
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-void intel_plane_helper_add(struct intel_plane *plane)
-{
-	drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
-}
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 void intel_plane_helper_add(struct intel_plane *plane)
 {
 	if (plane->base.type == DRM_PLANE_TYPE_PRIMARY)
 		drm_plane_helper_add(&plane->base, &intel_primary_plane_helper_funcs);
 	else
 		drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
+}
+#else
+void intel_plane_helper_add(struct intel_plane *plane)
+{
+	drm_plane_helper_add(&plane->base, &intel_plane_helper_funcs);
 }
 #endif
 
@@ -1523,6 +1528,9 @@ static void unlink_nv12_plane(struct intel_crtc_state *crtc_state,
 	struct intel_display *display = to_intel_display(plane_state);
 	struct intel_plane *plane = to_intel_plane(plane_state->uapi.plane);
 
+	if (!plane_state->planar_linked_plane)
+		return;
+
 	plane_state->planar_linked_plane = NULL;
 
 	if (!plane_state->is_y_plane)
@@ -1560,8 +1568,7 @@ static int icl_check_nv12_planes(struct intel_atomic_state *state,
 		if (plane->pipe != crtc->pipe)
 			continue;
 
-		if (plane_state->planar_linked_plane)
-			unlink_nv12_plane(crtc_state, plane_state);
+		unlink_nv12_plane(crtc_state, plane_state);
 	}
 
 	if (!crtc_state->nv12_planes)

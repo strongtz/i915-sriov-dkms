@@ -361,14 +361,14 @@ static int execlist_exec_queue_init(struct xe_exec_queue *q)
 
 	exl->q = q;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+	err = drm_sched_init(&exl->sched, &args);
+#else
 	err = drm_sched_init(&exl->sched, &drm_sched_ops, NULL, 1,
 			     q->lrc[0]->ring.size / MAX_JOB_SIZE_BYTES,
 			     XE_SCHED_HANG_LIMIT, XE_SCHED_JOB_TIMEOUT,
 			     NULL, NULL, q->hwe->name,
 			     gt_to_xe(q->gt)->drm.dev);
-#else
-	err = drm_sched_init(&exl->sched, &args);
 #endif
 	if (err)
 		goto err_free;

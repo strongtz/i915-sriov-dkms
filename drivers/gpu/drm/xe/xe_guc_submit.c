@@ -670,6 +670,24 @@ static u32 wq_space_until_wrap(struct xe_exec_queue *q)
 	return (WQ_SIZE - q->guc->wqi_tail);
 }
 
+static inline void relaxed_ms_sleep(unsigned int delay_ms)
+{
+	unsigned long min_us, max_us;
+
+	if (!delay_ms)
+		return;
+
+	if (delay_ms > 20) {
+		msleep(delay_ms);
+		return;
+	}
+
+	min_us = mul_u32_u32(delay_ms, 1000);
+	max_us = min_us + 500;
+
+	usleep_range(min_us, max_us);
+}
+
 static int wq_wait_for_space(struct xe_exec_queue *q, u32 wqi_size)
 {
 	struct xe_guc *guc = exec_queue_to_guc(q);
@@ -1236,16 +1254,16 @@ guc_exec_queue_timedout_job(struct drm_sched_job *drm_job)
 	 * list so job can be freed and kick scheduler ensuring free job is not
 	 * lost.
 	 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &job->fence->flags))
+		return DRM_GPU_SCHED_STAT_NO_HANG;
+#else
 	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &job->fence->flags)) {
 		xe_sched_add_pending_job(sched, job);
 		xe_sched_submission_start(sched);
 
 		return DRM_GPU_SCHED_STAT_NOMINAL;
 	}
-#else
-	if (test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &job->fence->flags))
-		return DRM_GPU_SCHED_STAT_NO_HANG;
 #endif
 
 	/* Kill the run_job entry point */
@@ -1289,7 +1307,7 @@ guc_exec_queue_timedout_job(struct drm_sched_job *drm_job)
 		if (exec_queue_reset(q))
 			err = -EIO;
 
-		if (!exec_queue_destroyed(q)) {
+		if (!exec_queue_destroyed(q) && xe_uc_fw_is_running(&guc->fw)) {
 			/*
 			 * Wait for any pending G2H to flush out before
 			 * modifying state
@@ -1321,6 +1339,7 @@ guc_exec_queue_timedout_job(struct drm_sched_job *drm_job)
 		 */
 		smp_rmb();
 		ret = wait_event_timeout(guc->ct.wq,
+					 !xe_uc_fw_is_running(&guc->fw) ||
 					 !exec_queue_pending_disable(q) ||
 					 xe_guc_read_stopped(guc), HZ * 5);
 		if (!ret || xe_guc_read_stopped(guc)) {
@@ -1415,10 +1434,10 @@ trigger_reset:
 	/* Start fence signaling */
 	xe_hw_fence_irq_start(q->fence_irq);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
-	return DRM_GPU_SCHED_STAT_NOMINAL;
-#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 	return DRM_GPU_SCHED_STAT_RESET;
+#else
+	return DRM_GPU_SCHED_STAT_NOMINAL;
 #endif
 
 sched_enable:
@@ -1429,14 +1448,14 @@ rearm:
 	 * but there is not currently an easy way to do in DRM scheduler. With
 	 * some thought, do this in a follow up.
 	 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+	xe_sched_submission_start(sched);
+	return DRM_GPU_SCHED_STAT_NO_HANG;
+#else
 	xe_sched_add_pending_job(sched, job);
 	xe_sched_submission_start(sched);
 
 	return DRM_GPU_SCHED_STAT_NOMINAL;
-#else
-	xe_sched_submission_start(sched);
-	return DRM_GPU_SCHED_STAT_NO_HANG;
 #endif
 }
 
@@ -1579,7 +1598,7 @@ static void __guc_exec_queue_process_msg_suspend(struct xe_sched_msg *msg)
 				since_resume_ms;
 
 			if (wait_ms > 0 && q->guc->resume_time)
-				msleep(wait_ms);
+				relaxed_ms_sleep(wait_ms);
 
 			set_exec_queue_suspended(q);
 			disable_scheduling(q, false);
@@ -2180,8 +2199,8 @@ static void handle_sched_done(struct xe_guc *guc, struct xe_exec_queue *q,
 		xe_gt_assert(guc_to_gt(guc), exec_queue_pending_disable(q));
 
 		if (q->guc->suspend_pending) {
-			suspend_fence_signal(q);
 			clear_exec_queue_pending_disable(q);
+			suspend_fence_signal(q);
 		} else {
 			if (exec_queue_banned(q) || check_timeout) {
 				smp_wmb();
