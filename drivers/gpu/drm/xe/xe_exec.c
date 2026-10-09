@@ -313,17 +313,15 @@ retry:
 			if (err)
 				goto err_put_job;
 		}
-	}
 #else
-	drm_exec_for_each_locked_object(exec, index, obj) {
+		drm_exec_for_each_locked_object(exec, index, obj) {
 			err = xe_sched_job_add_deps(job, obj->resv,
 						    DMA_RESV_USAGE_KERNEL);
 			if (err)
 				goto err_put_job;
 		}
-	}
 #endif
-
+	}
 	for (i = 0; i < num_syncs && !err; i++)
 		err = xe_sync_entry_add_deps(&syncs[i], job);
 	if (err)
