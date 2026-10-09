@@ -17,14 +17,5 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 
-override_dh_install:
-	mkdir -p $(CURDIR)/debian/i915-sriov-dkms/usr/src/i915-sriov-dkms-$(DEB_VERSION_UPSTREAM)
-	cp -r $(CURDIR)/compat $(CURDIR)/debian/i915-sriov-dkms/usr/src/i915-sriov-dkms-$(DEB_VERSION_UPSTREAM)
-	cp -r $(CURDIR)/drivers $(CURDIR)/debian/i915-sriov-dkms/usr/src/i915-sriov-dkms-$(DEB_VERSION_UPSTREAM)
-	cp -r $(CURDIR)/include $(CURDIR)/debian/i915-sriov-dkms/usr/src/i915-sriov-dkms-$(DEB_VERSION_UPSTREAM)
-	install -Dm755 $(CURDIR)/conftest.sh $(CURDIR)/debian/i915-sriov-dkms/usr/src/i915-sriov-dkms-$(DEB_VERSION_UPSTREAM)/conftest.sh
-	cp $(CURDIR)/Makefile $(CURDIR)/debian/i915-sriov-dkms/usr/src/i915-sriov-dkms-$(DEB_VERSION_UPSTREAM)
-	dh_install
-
 override_dh_dkms:
 	dh_dkms -V $(DEB_VERSION_UPSTREAM) -- $(CURDIR)/dkms.conf
