@@ -3,6 +3,7 @@
  * Copyright © 2023 Intel Corporation
  */
 
+#include <linux/delay.h>
 #include <linux/hwmon-sysfs.h>
 #include <linux/hwmon.h>
 #include <linux/jiffies.h>
@@ -14,6 +15,7 @@
 #include "regs/xe_mchbar_regs.h"
 #include "regs/xe_pcode_regs.h"
 #include "xe_device.h"
+#include "xe_force_wake.h"
 #include "xe_hwmon.h"
 #include "xe_mmio.h"
 #include "xe_pcode.h"
@@ -933,14 +935,41 @@ static void xe_hwmon_get_voltage(struct xe_hwmon *hwmon, int channel, long *valu
 	*value = DIV_ROUND_CLOSEST(REG_FIELD_GET(VOLTAGE_MASK, reg_val) * 2500, SF_VOLTAGE);
 }
 
-static inline bool is_vram_ch_available(struct xe_hwmon *hwmon, int channel)
+static int xe_hwmon_temp_mmio_read(struct xe_hwmon *hwmon, struct xe_reg reg, u32 *reg_val)
 {
 	struct xe_mmio *mmio = xe_root_tile_mmio(hwmon->xe);
+	struct xe_gt *gt = NULL;
+	unsigned int fw_ref = 0;
+
+	if (hwmon->xe->info.platform == XE_BATTLEMAGE) {
+		gt = xe_root_mmio_gt(hwmon->xe);
+		fw_ref = xe_force_wake_get(gt_to_fw(gt), XE_FW_GT);
+		if (!xe_force_wake_ref_has_domain(fw_ref, XE_FW_GT)) {
+			xe_force_wake_put(gt_to_fw(gt), fw_ref);
+			return -ETIMEDOUT;
+		}
+
+		/* Allow thermal telemetry to refresh after leaving RC6. */
+		usleep_range(1000, 2000);
+	}
+
+	*reg_val = xe_mmio_read32(mmio, reg);
+
+	if (fw_ref)
+		xe_force_wake_put(gt_to_fw(gt), fw_ref);
+
+	return 0;
+}
+
+static inline bool is_vram_ch_available(struct xe_hwmon *hwmon, int channel)
+{
 	int vram_id = channel - CHANNEL_VRAM_N;
 	struct xe_reg vram_reg;
+	u32 reg_val;
 
 	vram_reg = xe_hwmon_get_reg(hwmon, REG_TEMP, channel);
-	if (!xe_reg_is_valid(vram_reg) || !xe_mmio_read32(mmio, vram_reg))
+	if (!xe_reg_is_valid(vram_reg) ||
+	    xe_hwmon_temp_mmio_read(hwmon, vram_reg, &reg_val) || !reg_val)
 		return false;
 
 	/* Create label only for available vram channel */
@@ -1012,15 +1041,18 @@ xe_hwmon_temp_is_visible(struct xe_hwmon *hwmon, u32 attr, int channel)
 static int
 xe_hwmon_temp_read(struct xe_hwmon *hwmon, u32 attr, int channel, long *val)
 {
-	struct xe_mmio *mmio = xe_root_tile_mmio(hwmon->xe);
-	u64 reg_val;
+	u32 reg_val;
+	int ret;
 
 	switch (attr) {
 	case hwmon_temp_input:
 		switch (channel) {
 		case CHANNEL_PKG:
 		case CHANNEL_VRAM:
-			reg_val = xe_mmio_read32(mmio, xe_hwmon_get_reg(hwmon, REG_TEMP, channel));
+			ret = xe_hwmon_temp_mmio_read(hwmon, xe_hwmon_get_reg(hwmon, REG_TEMP, channel),
+						      &reg_val);
+			if (ret)
+				return ret;
 
 			/* HW register value is in degrees Celsius, convert to millidegrees. */
 			*val = REG_FIELD_GET(TEMP_MASK, reg_val) * MILLIDEGREE_PER_DEGREE;
@@ -1030,7 +1062,10 @@ xe_hwmon_temp_read(struct xe_hwmon *hwmon, u32 attr, int channel, long *val)
 		case CHANNEL_PCIE:
 			return get_pcie_temp(hwmon, val);
 		case CHANNEL_VRAM_N...CHANNEL_VRAM_N_MAX:
-			reg_val = xe_mmio_read32(mmio, xe_hwmon_get_reg(hwmon, REG_TEMP, channel));
+			ret = xe_hwmon_temp_mmio_read(hwmon, xe_hwmon_get_reg(hwmon, REG_TEMP, channel),
+						      &reg_val);
+			if (ret)
+				return ret;
 			/*
 			 * This temperature format is 24 bit [31:8] signed integer and 8 bit
 			 * [7:0] fraction.
