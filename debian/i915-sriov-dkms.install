@@ -1,0 +1,5 @@
+compat usr/src/i915-sriov-dkms-${env:DEB_VERSION_UPSTREAM}/
+drivers usr/src/i915-sriov-dkms-${env:DEB_VERSION_UPSTREAM}/
+include usr/src/i915-sriov-dkms-${env:DEB_VERSION_UPSTREAM}/
+conftest.sh usr/src/i915-sriov-dkms-${env:DEB_VERSION_UPSTREAM}/
+Makefile usr/src/i915-sriov-dkms-${env:DEB_VERSION_UPSTREAM}/
