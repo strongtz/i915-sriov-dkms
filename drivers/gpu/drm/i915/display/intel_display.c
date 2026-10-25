@@ -4571,8 +4571,12 @@ intel_crtc_copy_uapi_to_hw_state_nomodeset(struct intel_atomic_state *state,
 				  crtc_state->uapi.gamma_lut);
 	drm_property_replace_blob(&crtc_state->hw.ctm,
 				  crtc_state->uapi.ctm);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
 	crtc_state->hw.background_color =
 		intel_color_background_color_drm_to_hw(crtc_state->uapi.background_color);
+#else
+	crtc_state->hw.background_color = 0;
+#endif
 }
 
 static void
@@ -4591,7 +4595,11 @@ intel_crtc_copy_uapi_to_hw_state_modeset(struct intel_atomic_state *state,
 	drm_mode_copy(&crtc_state->hw.adjusted_mode,
 		      &crtc_state->uapi.adjusted_mode);
 	crtc_state->hw.scaling_filter = crtc_state->uapi.scaling_filter;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 	crtc_state->hw.sharpness_strength = crtc_state->uapi.sharpness_strength;
+#else
+	crtc_state->hw.sharpness_strength = 0;
+#endif
 
 	intel_crtc_copy_uapi_to_hw_state_nomodeset(state, crtc);
 }
@@ -4950,7 +4958,7 @@ static bool
 intel_compare_dp_as_sdp(const struct drm_dp_as_sdp *a,
 			const struct drm_dp_as_sdp *b)
 {
-	return a->sdp_type == b->sdp_type &&
+	bool equal = a->sdp_type == b->sdp_type &&
 		a->revision == b->revision &&
 		a->length == b->length &&
 		a->vtotal == b->vtotal &&
@@ -4958,8 +4966,13 @@ intel_compare_dp_as_sdp(const struct drm_dp_as_sdp *a,
 		a->duration_incr_ms == b->duration_incr_ms &&
 		a->duration_decr_ms == b->duration_decr_ms &&
 		a->target_rr_divider == b->target_rr_divider &&
-		a->mode == b->mode &&
-		a->coasting_vtotal == b->coasting_vtotal;
+		a->mode == b->mode;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0)
+	equal = equal && a->coasting_vtotal == b->coasting_vtotal;
+#endif
+
+	return equal;
 }
 
 static bool
@@ -5726,7 +5739,7 @@ int intel_modeset_commit_pipes_for_atomic_state(struct intel_atomic_state *state
 		crtc_state->uapi.connectors_changed = true;
 	}
 
-	return drm_atomic_commit(&state->base);
+	return __idb_shim_drm_atomic_commit(&state->base);
 }
 
 int intel_modeset_commit_pipes(struct intel_display *display,
@@ -6484,9 +6497,11 @@ int intel_atomic_check(struct drm_device *dev,
 		    old_crtc_state->uapi.scaling_filter)
 			new_crtc_state->uapi.mode_changed = true;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 19, 0)
 		if (new_crtc_state->uapi.sharpness_strength !=
 		    old_crtc_state->uapi.sharpness_strength)
 			new_crtc_state->uapi.mode_changed = true;
+#endif
 	}
 
 	intel_vrr_check_modeset(state);
@@ -8405,7 +8420,7 @@ retry:
 		}
 	}
 
-	ret = drm_atomic_commit(state);
+	ret = __idb_shim_drm_atomic_commit(state);
 
 out:
 	if (ret == -EDEADLK) {
