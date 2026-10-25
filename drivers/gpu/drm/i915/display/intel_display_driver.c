@@ -743,7 +743,11 @@ static int __intel_display_driver_pm_suspend(struct intel_display *display, bool
 	 */
 	intel_display_power_disable(display);
 
+#ifdef IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG
 	drm_client_dev_suspend(display->drm);
+#else
+	drm_client_dev_suspend(display->drm, false);
+#endif
 
 	drm_kms_helper_poll_disable(display->drm);
 	intel_display_driver_disable_user_access(display);
@@ -890,7 +894,11 @@ void intel_display_driver_pm_resume(struct intel_display *display)
 
 	intel_opregion_resume(display);
 
+#ifdef IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG
 	drm_client_dev_resume(display->drm);
+#else
+	drm_client_dev_resume(display->drm, false);
+#endif
 
 	intel_display_power_enable(display);
 }
