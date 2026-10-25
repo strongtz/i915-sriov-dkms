@@ -282,7 +282,11 @@ static vm_fault_t barrier_fault(struct vm_fault *vmf)
 	pgprot_t prot;
 	int idx;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	prot = vma_get_page_prot(vma);
+#else
+	prot = vm_get_page_prot(vma->vm_flags);
+#endif
 
 	if (drm_dev_enter(dev, &idx)) {
 		unsigned long pfn;
@@ -331,7 +335,11 @@ static int xe_pci_barrier_mmap(struct file *filp,
 	if (vma->vm_end - vma->vm_start > SZ_4K)
 		return -EINVAL;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	if (vma_is_cow_mapping(vma))
+#else
+	if (is_cow_mapping(vma->vm_flags))
+#endif
 		return -EINVAL;
 
 	if (vma->vm_flags & (VM_READ | VM_EXEC))
@@ -393,11 +401,19 @@ bool xe_is_xe_file(const struct file *file)
 }
 
 static const struct drm_driver regular_driver = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 3, 0)
+	.driver_features =
+	    XE_DISPLAY_DRIVER_FEATURES |
+	    DRIVER_GEM |
+	    DRIVER_RENDER | DRIVER_SYNCOBJ |
+	    DRIVER_SYNCOBJ_TIMELINE | DRIVER_GEM_GPUVA,
+#else
 	.driver_features =
 	    XE_DISPLAY_DRIVER_FEATURES |
 	    DRIVER_GEM |
 	    DRIVER_RENDER | DRIVER_SYNCOBJ |
 	    DRIVER_SYNCOBJ_TIMELINE,
+#endif
 	.open = xe_file_open,
 	.postclose = xe_file_close,
 
@@ -426,8 +442,13 @@ static const struct drm_ioctl_desc xe_ioctls_admin_only[] = {
 };
 
 static const struct drm_driver admin_only_driver = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 3, 0)
+	.driver_features =
+	    DRIVER_GEM | DRIVER_RENDER | DRIVER_GEM_GPUVA,
+#else
 	.driver_features =
 	    DRIVER_GEM | DRIVER_RENDER,
+#endif
 	.open = xe_file_open,
 	.postclose = xe_file_close,
 	.ioctls = xe_ioctls_admin_only,

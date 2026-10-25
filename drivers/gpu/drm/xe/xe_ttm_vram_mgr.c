@@ -277,6 +277,7 @@ static const struct ttm_resource_manager_func xe_ttm_vram_mgr_func = {
 	.debug	= xe_ttm_vram_mgr_debug
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 static const struct dmem_cgroup_ops xe_ttm_vram_mgr_dmem_ops;
 
 static int xe_ttm_vram_mgr_dmem_reclaim(struct dmem_cgroup_pool_state *pool,
@@ -304,13 +305,16 @@ static int xe_ttm_vram_mgr_dmem_reclaim(struct dmem_cgroup_pool_state *pool,
 static const struct dmem_cgroup_ops xe_ttm_vram_mgr_dmem_ops = {
 	.reclaim = xe_ttm_vram_mgr_dmem_reclaim,
 };
+#endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 static void xe_ttm_vram_mgr_set_unused(struct drm_device *dev, void *arg)
 {
 	struct ttm_resource_manager *man = arg;
 
 	ttm_resource_manager_set_used(man, false);
 }
+#endif
 
 static void xe_ttm_vram_mgr_fini(struct drm_device *dev, void *arg)
 {
@@ -318,8 +322,14 @@ static void xe_ttm_vram_mgr_fini(struct drm_device *dev, void *arg)
 	struct xe_ttm_vram_mgr *mgr = arg;
 	struct ttm_resource_manager *man = &mgr->manager;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	if (ttm_resource_manager_evict_all(&xe->ttm, man))
 		return;
+#else
+	ttm_resource_manager_set_used(man, false);
+	if (ttm_resource_manager_evict_all(&xe->ttm, man))
+		return;
+#endif
 
 	WARN_ON_ONCE(mgr->visible_avail != mgr->visible_size);
 
@@ -335,12 +345,24 @@ int __xe_ttm_vram_mgr_init(struct xe_device *xe, struct xe_ttm_vram_mgr *mgr,
 			   u64 default_page_size)
 {
 	struct ttm_resource_manager *man = &mgr->manager;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	struct dmem_cgroup_region *cg;
+#endif
 	const char *name;
 	int err;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	man->func = &xe_ttm_vram_mgr_func;
 	mgr->mem_type = mem_type;
+#else
+	name = mem_type == XE_PL_VRAM0 ? "vram0" : "vram1";
+	man->cg = drmm_cgroup_register_region(&xe->drm, name, size);
+	if (IS_ERR(man->cg))
+		return PTR_ERR(man->cg);
+
+	man->func = &xe_ttm_vram_mgr_func;
+	mgr->mem_type = mem_type;
+#endif
 	err = drmm_mutex_init(&xe->drm, &mgr->lock);
 	if (err)
 		return err;
@@ -356,6 +378,7 @@ int __xe_ttm_vram_mgr_init(struct xe_device *xe, struct xe_ttm_vram_mgr *mgr,
 	gpu_buddy_driver_set_lock(&mgr->mm, &mgr->lock);
 	ttm_set_driver_manager(&xe->ttm, mem_type, &mgr->manager);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	/*
 	 * Register the fini action before the cgroup region so that devres
 	 * LIFO teardown runs unregister_region before manager teardown
@@ -379,6 +402,11 @@ int __xe_ttm_vram_mgr_init(struct xe_device *xe, struct xe_ttm_vram_mgr *mgr,
 	ttm_resource_manager_set_used(man, true);
 
 	return drmm_add_action_or_reset(&xe->drm, xe_ttm_vram_mgr_set_unused, man);
+#else
+	ttm_resource_manager_set_used(man, true);
+
+	return drmm_add_action_or_reset(&xe->drm, xe_ttm_vram_mgr_fini, mgr);
+#endif
 }
 
 /**

@@ -20,9 +20,9 @@ static struct ctl_table_header *sysctl_header;
  * xe_observation_paranoid_check - Gate access to xe observation streams.
  *
  * When the xe-specific observation_paranoid sysctl is enabled (the
- * default), defer to perf_allow_cpu() so that access is governed by the
- * same policy as system-wide perf CPU events: kernel.perf_event_paranoid
- * plus the security_perf_event_open() LSM hook. When the sysctl has been
+ * default), apply the kernel's perf CPU permission check. Linux 7.3 and
+ * later use perf_allow_cpu(); older kernels retain the capability check
+ * used by the original Xe implementation. When the sysctl has been
  * cleared by a privileged user, observation is open to all callers.
  *
  * Return: 0 if access is permitted, a negative errno otherwise.
@@ -32,7 +32,11 @@ int xe_observation_paranoid_check(void)
 	if (!xe_observation_paranoid)
 		return 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	return perf_allow_cpu();
+#else
+	return perfmon_capable() ? 0 : -EACCES;
+#endif
 }
 
 static int xe_oa_ioctl(struct drm_device *dev, struct drm_xe_observation_param *arg,

@@ -6,6 +6,7 @@
 #include "xe_mmio_gem.h"
 
 #include <linux/dma-resv.h>
+
 #include <drm/drm_drv.h>
 #include <drm/drm_gem.h>
 
@@ -177,7 +178,11 @@ static int xe_mmio_gem_mmap(struct drm_gem_object *base, struct vm_area_struct *
 	if ((vma->vm_flags & VM_SHARED) == 0)
 		return -EINVAL;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	vma->vm_page_prot = pgprot_noncached(vma_get_page_prot(vma));
+#else
+	vma->vm_page_prot = pgprot_noncached(vm_get_page_prot(vma->vm_flags));
+#endif
 	vm_flags_set(vma, VM_IO | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP |
 		     VM_DONTCOPY | VM_NORESERVE);
 

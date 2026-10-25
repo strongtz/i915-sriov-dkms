@@ -861,12 +861,16 @@ bool intel_dp_tunnel_uhbr_lanes_wa_setup(struct intel_dp *intel_dp)
 {
 	u8 old_mask = intel_dp->disabled_uhbr_lane_mask;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	if (!intel_dp_tunnel_bw_alloc_is_enabled(intel_dp) ||
 	    drm_dp_tunnel_128b132b_lane0_mapping_supported(intel_dp->tunnel))
 		intel_dp->disabled_uhbr_lane_mask = 0;
 	else
 		/* TODO: Add support for keeping 2 lanes enabled as well. */
 		intel_dp->disabled_uhbr_lane_mask = lane_count_mask(1) | lane_count_mask(2);
+#else
+	intel_dp->disabled_uhbr_lane_mask = 0;
+#endif
 
 	return intel_dp->disabled_uhbr_lane_mask != old_mask;
 }

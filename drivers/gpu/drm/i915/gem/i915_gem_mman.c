@@ -110,11 +110,17 @@ i915_gem_mmap_ioctl(struct drm_device *dev, void *data,
 			goto err;
 		}
 		vma = find_vma(mm, addr);
-		if (vma && __vma_matches(vma, obj->base.filp, addr, args->size))
+		if (vma && __vma_matches(vma, obj->base.filp, addr, args->size)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 			vma->vm_page_prot =
 				pgprot_writecombine(vma_get_page_prot(vma));
-		else
+#else
+			vma->vm_page_prot =
+				pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
+#endif
+		} else {
 			addr = -ENOMEM;
+		}
 		mmap_write_unlock(mm);
 		if (IS_ERR_VALUE(addr))
 			goto err;
@@ -1024,7 +1030,11 @@ i915_gem_object_mmap(struct drm_i915_gem_object *obj,
 	fput(anon);
 
 	if (obj->ops->mmap_ops) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 		vma->vm_page_prot = pgprot_decrypted(vma_get_page_prot(vma));
+#else
+		vma->vm_page_prot = pgprot_decrypted(vm_get_page_prot(vma->vm_flags));
+#endif
 		vma->vm_ops = obj->ops->mmap_ops;
 		vma->vm_private_data = obj->base.vma_node.driver_private;
 		return 0;
@@ -1034,8 +1044,13 @@ i915_gem_object_mmap(struct drm_i915_gem_object *obj,
 
 	switch (mmo->mmap_type) {
 	case I915_MMAP_TYPE_WC:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 		vma->vm_page_prot =
 			pgprot_writecombine(vma_get_page_prot(vma));
+#else
+		vma->vm_page_prot =
+			pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
+#endif
 		vma->vm_ops = &vm_ops_cpu;
 		break;
 
@@ -1043,19 +1058,33 @@ i915_gem_object_mmap(struct drm_i915_gem_object *obj,
 		GEM_WARN_ON(1);
 		fallthrough;
 	case I915_MMAP_TYPE_WB:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 		vma->vm_page_prot = vma_get_page_prot(vma);
+#else
+		vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
+#endif
 		vma->vm_ops = &vm_ops_cpu;
 		break;
 
 	case I915_MMAP_TYPE_UC:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 		vma->vm_page_prot =
 			pgprot_noncached(vma_get_page_prot(vma));
+#else
+		vma->vm_page_prot =
+			pgprot_noncached(vm_get_page_prot(vma->vm_flags));
+#endif
 		vma->vm_ops = &vm_ops_cpu;
 		break;
 
 	case I915_MMAP_TYPE_GTT:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 		vma->vm_page_prot =
 			pgprot_writecombine(vma_get_page_prot(vma));
+#else
+		vma->vm_page_prot =
+			pgprot_writecombine(vm_get_page_prot(vma->vm_flags));
+#endif
 		vma->vm_ops = &vm_ops_gtt;
 		break;
 	}

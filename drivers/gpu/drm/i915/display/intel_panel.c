@@ -75,11 +75,40 @@ static bool is_best_fixed_mode(struct intel_connector *connector,
 static bool is_vrr_compatible(const struct drm_display_mode *mode1,
 			      const struct drm_display_mode *mode2)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	return drm_mode_match(mode1, mode2,
 			      DRM_MODE_MATCH_CLOCK |
 			      DRM_MODE_MATCH_TIMINGS_VRR |
 			      DRM_MODE_MATCH_FLAGS |
 			      DRM_MODE_MATCH_3D_FLAGS);
+#else
+	int mode1_vsync_start_offset, mode1_vsync_end_offset;
+	int mode2_vsync_start_offset, mode2_vsync_end_offset;
+
+	if (!mode1 || !mode2)
+		return mode1 == mode2;
+
+	if (!drm_mode_match(mode1, mode2,
+			    DRM_MODE_MATCH_CLOCK |
+			    DRM_MODE_MATCH_FLAGS |
+			    DRM_MODE_MATCH_3D_FLAGS))
+		return false;
+
+	mode1_vsync_start_offset = mode1->vtotal - mode1->vsync_start;
+	mode1_vsync_end_offset = mode1->vtotal - mode1->vsync_end;
+	mode2_vsync_start_offset = mode2->vtotal - mode2->vsync_start;
+	mode2_vsync_end_offset = mode2->vtotal - mode2->vsync_end;
+
+	return mode1->hdisplay == mode2->hdisplay &&
+		mode1->hsync_start == mode2->hsync_start &&
+		mode1->hsync_end == mode2->hsync_end &&
+		mode1->htotal == mode2->htotal &&
+		mode1->hskew == mode2->hskew &&
+		mode1->vdisplay == mode2->vdisplay &&
+		mode1_vsync_start_offset == mode2_vsync_start_offset &&
+		mode1_vsync_end_offset == mode2_vsync_end_offset &&
+		mode1->vscan == mode2->vscan;
+#endif
 }
 
 static const struct drm_display_mode *

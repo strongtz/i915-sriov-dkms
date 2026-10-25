@@ -182,7 +182,11 @@ void intel_crtc_state_reset(struct intel_crtc_state *crtc_state,
 {
 	memset(crtc_state, 0, sizeof(*crtc_state));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	__drm_atomic_helper_crtc_state_init(&crtc_state->uapi, &crtc->base);
+#else
+	__drm_atomic_helper_crtc_state_reset(&crtc_state->uapi, &crtc->base);
+#endif
 
 	crtc_state->cpu_transcoder = INVALID_TRANSCODER;
 	crtc_state->master_transcoder = INVALID_TRANSCODER;

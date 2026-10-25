@@ -2,7 +2,6 @@
 #ifndef __BACKPORT_DMA_FENCE_H__
 #define __BACKPORT_DMA_FENCE_H__
 
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
 #define dma_fence_check_and_signal LINUX_BACKPORT(dma_fence_check_and_signal)
 bool dma_fence_check_and_signal(struct dma_fence *fence);
@@ -28,5 +27,9 @@ dma_fence_test_signaled_flag(struct dma_fence *fence)
 {
 	return test_bit(DMA_FENCE_FLAG_SIGNALED_BIT, &fence->flags);
 }
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 3, 0)
+#define dma_fence_enable_signaling dma_fence_enable_sw_signaling
 #endif
 #endif

@@ -852,7 +852,12 @@ enum drm_gpusvm_scan_result drm_gpusvm_scan_mm(struct drm_gpusvm_range *range,
 		.end = end,
 		.dev_private_owner = dev_private_owner,
 	};
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	unsigned long timeout = msecs_to_jiffies(HMM_RANGE_DEFAULT_TIMEOUT);
+#else
+	unsigned long timeout =
+		jiffies + msecs_to_jiffies(HMM_RANGE_DEFAULT_TIMEOUT);
+#endif
 	enum drm_gpusvm_scan_result state = DRM_GPUSVM_SCAN_UNPOPULATED, new_state;
 	unsigned long *pfns;
 	unsigned long npages = npages_in_range(start, end);
@@ -866,7 +871,22 @@ enum drm_gpusvm_scan_result drm_gpusvm_scan_mm(struct drm_gpusvm_range *range,
 	hmm_range.hmm_pfns = pfns;
 
 retry:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	err = hmm_range_fault_unlocked_timeout(&hmm_range, timeout);
+#else
+	hmm_range.notifier_seq = mmu_interval_read_begin(notifier);
+	mmap_read_lock(range->gpusvm->mm);
+	while (true) {
+		err = hmm_range_fault(&hmm_range);
+		if (err != -EBUSY)
+			break;
+		if (time_after(jiffies, timeout))
+			break;
+
+		hmm_range.notifier_seq = mmu_interval_read_begin(notifier);
+	}
+	mmap_read_unlock(range->gpusvm->mm);
+#endif
 	if (err)
 		goto err_free;
 
@@ -1474,7 +1494,9 @@ int drm_gpusvm_get_pages(struct drm_gpusvm *gpusvm,
 	void *zdd;
 	unsigned long timeout =
 		jiffies + msecs_to_jiffies(HMM_RANGE_DEFAULT_TIMEOUT);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	unsigned long remaining;
+#endif
 	unsigned long i, j;
 	unsigned long npages = npages_in_range(pages_start, pages_end);
 	unsigned long num_dma_mapped;
@@ -1492,7 +1514,9 @@ int drm_gpusvm_get_pages(struct drm_gpusvm *gpusvm,
 		return -EINVAL;
 
 retry:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	remaining = timeout - jiffies;
+#endif
 
 	if (time_after_eq(jiffies, timeout))
 		return -EBUSY;
@@ -1511,7 +1535,22 @@ retry:
 	}
 
 	hmm_range.hmm_pfns = pfns;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	err = hmm_range_fault_unlocked_timeout(&hmm_range, remaining);
+#else
+	while (true) {
+		mmap_read_lock(mm);
+		err = hmm_range_fault(&hmm_range);
+		mmap_read_unlock(mm);
+
+		if (err != -EBUSY)
+			break;
+		if (time_after(jiffies, timeout))
+			break;
+
+		hmm_range.notifier_seq = mmu_interval_read_begin(notifier);
+	}
+#endif
 	mmput(mm);
 	if (err)
 		goto err_free;
@@ -1739,7 +1778,12 @@ int drm_gpusvm_range_evict(struct drm_gpusvm *gpusvm,
 		.end = drm_gpusvm_range_end(range),
 		.dev_private_owner = NULL,
 	};
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	unsigned long timeout = msecs_to_jiffies(HMM_RANGE_DEFAULT_TIMEOUT);
+#else
+	unsigned long timeout =
+		jiffies + msecs_to_jiffies(HMM_RANGE_DEFAULT_TIMEOUT);
+#endif
 	unsigned long *pfns;
 	unsigned long npages = npages_in_range(drm_gpusvm_range_start(range),
 					       drm_gpusvm_range_end(range));
@@ -1756,7 +1800,23 @@ int drm_gpusvm_range_evict(struct drm_gpusvm *gpusvm,
 	}
 
 	hmm_range.hmm_pfns = pfns;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	err = hmm_range_fault_unlocked_timeout(&hmm_range, timeout);
+#else
+	while (!time_after(jiffies, timeout)) {
+		hmm_range.notifier_seq = mmu_interval_read_begin(notifier);
+		if (time_after(jiffies, timeout)) {
+			err = -ETIME;
+			break;
+		}
+
+		mmap_read_lock(mm);
+		err = hmm_range_fault(&hmm_range);
+		mmap_read_unlock(mm);
+		if (err != -EBUSY)
+			break;
+	}
+#endif
 
 	kvfree(pfns);
 	mmput(mm);

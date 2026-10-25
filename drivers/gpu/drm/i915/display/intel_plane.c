@@ -34,6 +34,7 @@
 #include <linux/dma-fence-chain.h>
 #include <linux/dma-resv.h>
 #include <linux/iosys-map.h>
+#include <linux/version.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_blend.h>
@@ -67,7 +68,11 @@ static void intel_plane_state_reset(struct intel_plane_state *plane_state,
 {
 	memset(plane_state, 0, sizeof(*plane_state));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
 	__drm_atomic_helper_plane_state_init(&plane_state->uapi, &plane->base);
+#else
+	__drm_atomic_helper_plane_state_reset(&plane_state->uapi, &plane->base);
+#endif
 
 	plane_state->scaler_id = -1;
 	plane_state->fence_id = -1;
