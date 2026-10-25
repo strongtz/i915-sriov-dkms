@@ -117,7 +117,6 @@ typedef u64 gen8_pte_t;
 #define MTL_GGTT_PTE_PAT0		BIT_ULL(52)
 #define MTL_GGTT_PTE_PAT1		BIT_ULL(53)
 #define TGL_GGTT_PTE_VFID_MASK		GENMASK_ULL(4, 2)
-#define XEHPSDV_GGTT_PTE_VFID_MASK      GENMASK_ULL(11, 2)
 #define GEN12_GGTT_PTE_ADDR_MASK	GENMASK_ULL(45, 12)
 #define MTL_GGTT_PTE_PAT_MASK		GENMASK_ULL(53, 52)
 
@@ -194,11 +193,6 @@ struct intel_gt;
 
 #define for_each_sgt_daddr_next(__dp, __iter) \
 	__for_each_daddr_next(__dp, __iter, I915_GTT_PAGE_SIZE)
-
-/* iterate through those GTs which contain a unique GGTT reference */
-#define for_each_ggtt(gt__, i915__, __id__) \
-	for_each_gt(gt__, i915__, __id__) \
-	for_each_if((gt__)->type != GT_MEDIA)
 
 struct i915_page_table {
 	struct drm_i915_gem_object *base;
@@ -433,13 +427,6 @@ struct i915_ggtt {
 
 	/** List of GTs mapping this GGTT */
 	struct list_head gt_list;
-
-	/* Sleepable RCU for blocking on address computations. */
-	struct srcu_struct blocked_srcu;
-	unsigned long flags;
-#define GGTT_ADDRESS_COMPUTE_BLOCKED	0
-	/** Waitqueue to signal when the blocking has completed. */
-	wait_queue_head_t queue;
 };
 
 struct i915_ppgtt {
@@ -645,8 +632,6 @@ int i915_ggtt_balloon(struct i915_ggtt *ggtt, u64 start, u64 end,
 		      struct drm_mm_node *node);
 void i915_ggtt_deballoon(struct i915_ggtt *ggtt, struct drm_mm_node *node);
 
-bool i915_ggtt_has_xehpsdv_pte_vfid_mask(struct i915_ggtt *ggtt);
-
 int i915_ggtt_sgtable_update_ptes(struct i915_ggtt *ggtt, unsigned int vfid, u64 ggtt_addr,
 				  struct sg_table *st, u32 num_entries,
 				  const gen8_pte_t pte_pattern);
@@ -724,15 +709,6 @@ release_pd_entry(struct i915_page_directory * const pd,
 		 struct i915_page_table * const pt,
 		 const struct drm_i915_gem_object * const scratch);
 void gen6_ggtt_invalidate(struct i915_ggtt *ggtt);
-
-void i915_ggtt_address_lock_init(struct i915_ggtt *ggtt);
-void i915_ggtt_address_lock_fini(struct i915_ggtt *ggtt);
-int gt_ggtt_address_read_lock_sync(struct intel_gt *gt, int *srcu);
-int gt_ggtt_address_read_lock_interruptible(struct intel_gt *gt, int *srcu);
-void gt_ggtt_address_read_lock(struct intel_gt *gt, int *srcu);
-void gt_ggtt_address_read_unlock(struct intel_gt *gt, int srcu);
-void i915_ggtt_address_write_lock(struct drm_i915_private *i915);
-void i915_ggtt_address_write_unlock(struct drm_i915_private *i915);
 
 void ppgtt_bind_vma(struct i915_address_space *vm,
 		    struct i915_vm_pt_stash *stash,

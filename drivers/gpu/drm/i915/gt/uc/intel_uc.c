@@ -216,15 +216,11 @@ static void guc_handle_mmio_msg(struct intel_guc *guc)
 static int guc_enable_communication(struct intel_guc *guc)
 {
 	struct intel_gt *gt = guc_to_gt(guc);
-	int srcu, ret;
+	int ret;
 
 	GEM_BUG_ON(intel_guc_ct_enabled(&guc->ct));
 
-	ret = gt_ggtt_address_read_lock_sync(gt, &srcu);
-	if (unlikely(ret))
-		return ret;
 	ret = intel_guc_ct_enable(&guc->ct);
-	gt_ggtt_address_read_unlock(gt, srcu);
 	if (ret)
 		return ret;
 
@@ -903,3 +899,5 @@ static const struct intel_uc_ops uc_ops_vf = {
 	.init_hw = __vf_uc_init_hw,
 	.fini_hw = __vf_uc_fini_hw,
 };
+
+

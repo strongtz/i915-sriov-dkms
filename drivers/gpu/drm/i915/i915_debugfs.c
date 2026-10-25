@@ -462,8 +462,10 @@ static int i915_engine_info(struct seq_file *m, void *unused)
 		   to_gt(i915)->clock_period_ns);
 
 	p = drm_seq_file_printer(m);
+	mutex_lock(&i915->uabi_engines_mutex);
 	for_each_uabi_engine(engine, i915)
 		intel_engine_dump(engine, &p, "%s\n", engine->name);
+	mutex_unlock(&i915->uabi_engines_mutex);
 
 	intel_gt_show_timelines(to_gt(i915), &p, i915_request_show_with_schedule);
 
@@ -477,6 +479,7 @@ static int i915_wa_registers(struct seq_file *m, void *unused)
 	struct drm_i915_private *i915 = node_to_i915(m->private);
 	struct intel_engine_cs *engine;
 
+	mutex_lock(&i915->uabi_engines_mutex);
 	for_each_uabi_engine(engine, i915) {
 		const struct i915_wa_list *wal = &engine->ctx_wa_list;
 		const struct i915_wa *wa;
@@ -496,6 +499,7 @@ static int i915_wa_registers(struct seq_file *m, void *unused)
 
 		seq_printf(m, "\n");
 	}
+	mutex_unlock(&i915->uabi_engines_mutex);
 
 	return 0;
 }

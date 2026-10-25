@@ -556,4 +556,3 @@ void gen5_gt_irq_postinstall(struct intel_gt *gt)
 		gen2_irq_init(uncore, GEN6_PM_IRQ_REGS, gt->pm_imr, pm_irqs);
 	}
 }
-

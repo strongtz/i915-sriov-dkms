@@ -64,7 +64,7 @@ void xe_pci_rebar_resize(struct xe_device *xe)
 		if (!pci_rebar_size_supported(pdev, LMEM_BAR, rebar_size)) {
 			xe_info(xe, "Requested size %lluMiB is not supported by rebar sizes: 0x%llx. Leaving default: %lluMiB\n",
 				(u64)pci_rebar_size_to_bytes(rebar_size) >> ilog2(SZ_1M),
-				(u64)pci_rebar_get_possible_sizes(pdev, LMEM_BAR),
+				pci_rebar_get_possible_sizes(pdev, LMEM_BAR),
 				(u64)current_size >> ilog2(SZ_1M));
 			return;
 		}

@@ -60,6 +60,8 @@ struct cec_notifier;
 struct drm_printer;
 struct intel_connector;
 struct intel_ddi_buf_trans;
+struct intel_dp_link_caps;
+struct intel_dp_link_training;
 struct intel_fbc;
 struct intel_global_objs_state;
 struct intel_hdcp_shim;
@@ -152,7 +154,6 @@ struct intel_framebuffer {
 	unsigned int min_alignment;
 	unsigned int vtd_guard;
 
-	unsigned int (*panic_tiling)(unsigned int x, unsigned int y, unsigned int width);
 	struct intel_panic *panic;
 };
 
@@ -179,10 +180,12 @@ struct intel_encoder {
 	enum intel_output_type (*compute_output_type)(struct intel_encoder *,
 						      struct intel_crtc_state *,
 						      struct drm_connector_state *);
-	int (*compute_config)(struct intel_encoder *,
+	int (*compute_config)(struct intel_atomic_state *,
+			      struct intel_encoder *,
 			      struct intel_crtc_state *,
 			      struct drm_connector_state *);
-	int (*compute_config_late)(struct intel_encoder *,
+	int (*compute_config_late)(struct intel_atomic_state *,
+				   struct intel_encoder *,
 				   struct intel_crtc_state *,
 				   struct drm_connector_state *);
 	void (*pre_pll_enable)(struct intel_atomic_state *,
@@ -1082,6 +1085,13 @@ struct intel_crtc_state {
 	 */
 	unsigned int pixel_rate;
 
+	/*
+	 * Pipe pixel rate for CDCLK, adjusted for
+	 * panel fitter/pipe scaler downscaling.
+	 * CDCLK use cases need further adjustment.
+	 */
+	unsigned int pixel_rate_cdclk;
+
 	/* Whether to set up the PCH/FDI. Note that we never allow sharing
 	 * between pch encoders and cpu encoders. */
 	bool has_pch_encoder;
@@ -1179,6 +1189,8 @@ struct intel_crtc_state {
 	bool has_sel_update;
 	bool enable_psr2_sel_fetch;
 	bool enable_psr2_su_region_et;
+	/* Drop the stale selective fetch enable bits as selective fetch is turned off */
+	bool clear_psr2_sel_fetch;
 	bool req_psr2_sdp_prior_scanline;
 	bool has_panel_replay;
 	bool link_off_after_as_sdp_when_pr_active;
@@ -1187,7 +1199,6 @@ struct intel_crtc_state {
 	bool pkg_c_latency_used;
 	/* Only used for state verification. */
 	enum intel_panel_replay_dsc_support panel_replay_dsc_support;
-	u32 dc3co_exitline;
 	u16 su_y_granularity;
 	u8 active_non_psr_pipes;
 	u8 entry_setup_frames;
@@ -1372,7 +1383,7 @@ struct intel_crtc_state {
 	enum transcoder master_transcoder;
 
 	/* Bitmask to indicate slaves attached */
-	u8 sync_mode_slaves_mask;
+	u16 sync_mode_slaves_mask;
 
 	/* Only valid on TGL+ */
 	enum transcoder mst_master_transcoder;
@@ -1575,6 +1586,10 @@ struct intel_crtc {
 #endif
 
 	bool vblank_psr_notify;
+
+	struct {
+		bool enabled;
+	} cmtg;
 };
 
 struct intel_plane_error {
@@ -1774,14 +1789,16 @@ struct intel_psr {
 	ktime_t last_exit;
 	bool sink_not_reliable;
 	bool irq_aux_error;
+	/* DC3CO allowed used to control PSR configuration */
+	bool dc3co_allowed;
+	/* DC3CO disable work */
+	struct delayed_work dc3co_work;
 	u16 su_w_granularity;
 	u16 su_y_granularity;
 	bool source_panel_replay_support;
 	bool sink_panel_replay_support;
 	bool panel_replay_enabled;
-	u32 dc3co_exitline;
 	u32 dc3co_exit_delay;
-	struct delayed_work dc3co_work;
 	u8 entry_setup_frames;
 
 	u8 io_wake_lines;
@@ -1796,6 +1813,14 @@ struct intel_psr {
 
 	struct ref_tracker *vblank_wakeref;
 };
+
+struct intel_dp_link_config {
+	int rate;
+	int lane_count;
+};
+
+#define INTEL_DP_LINK_CONFIG_NULL \
+	((struct intel_dp_link_config){})
 
 struct intel_dp {
 	intel_reg_t output_reg;
@@ -1822,29 +1847,9 @@ struct intel_dp {
 	bool use_rate_select;
 	/* Max sink lane count as reported by DP_MAX_LANE_COUNT */
 	int max_sink_lane_count;
-	/* intersection of source and sink rates */
-	int num_common_rates;
-	int common_rates[DP_MAX_SUPPORTED_RATES];
-	int max_common_lane_count;
 	struct {
 		/* TODO: move the rest of link specific fields to here */
 		bool active;
-		/* common rate,lane_count configs in bw order */
-		int num_configs;
-#define INTEL_DP_MAX_LANE_COUNT			4
-#define INTEL_DP_MAX_SUPPORTED_LANE_CONFIGS	(ilog2(INTEL_DP_MAX_LANE_COUNT) + 1)
-#define INTEL_DP_LANE_COUNT_EXP_BITS		order_base_2(INTEL_DP_MAX_SUPPORTED_LANE_CONFIGS)
-#define INTEL_DP_LINK_RATE_IDX_BITS		(BITS_PER_TYPE(u8) - INTEL_DP_LANE_COUNT_EXP_BITS)
-#define INTEL_DP_MAX_LINK_CONFIGS		(DP_MAX_SUPPORTED_RATES * \
-						 INTEL_DP_MAX_SUPPORTED_LANE_CONFIGS)
-		struct intel_dp_link_config {
-			u8 link_rate_idx:INTEL_DP_LINK_RATE_IDX_BITS;
-			u8 lane_count_exp:INTEL_DP_LANE_COUNT_EXP_BITS;
-		} configs[INTEL_DP_MAX_LINK_CONFIGS];
-		/* Max lane count for the current link */
-		int max_lane_count;
-		/* Max rate for the current link */
-		int max_rate;
 		/*
 		 * Link parameters for which the MST topology was probed.
 		 * Tracking these ensures that the MST path resources are
@@ -1853,13 +1858,8 @@ struct intel_dp {
 		 */
 		int mst_probed_lane_count;
 		int mst_probed_rate;
-		int force_lane_count;
-		int force_rate;
-		bool retrain_disabled;
-		/* Sequential link training failures after a passing LT */
-		int seq_train_failures;
-		int force_train_failure;
-		bool force_retrain;
+		struct intel_dp_link_training *training;
+		struct intel_dp_link_caps *caps;
 	} link;
 	bool reset_link_params;
 	int mso_link_count;
@@ -1882,6 +1882,7 @@ struct intel_dp {
 
 	struct drm_dp_tunnel *tunnel;
 	bool tunnel_suspended:1;
+	u8 disabled_uhbr_lane_mask;
 
 	struct {
 		struct intel_dp_mst_encoder *stream_encoders[I915_MAX_PIPES];

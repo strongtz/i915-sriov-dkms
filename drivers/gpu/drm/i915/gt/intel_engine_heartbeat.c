@@ -285,45 +285,6 @@ void intel_engine_init_heartbeat(struct intel_engine_cs *engine)
 	INIT_DELAYED_WORK(&engine->heartbeat.work, heartbeat);
 }
 
-static void intel_gt_pm_get_all_engines(struct intel_gt *gt)
-{
-	struct intel_engine_cs *engine;
-	unsigned int eid;
-
-	for_each_engine(engine, gt, eid) {
-		intel_engine_pm_get(engine);
-	}
-}
-
-static void intel_gt_pm_put_all_engines(struct intel_gt *gt)
-{
-	struct intel_engine_cs *engine;
-	unsigned int eid;
-
-	for_each_engine(engine, gt, eid) {
-		intel_engine_pm_put(engine);
-	}
-}
-
-void intel_gt_heartbeats_disable(struct intel_gt *gt)
-{
-	/*
-	 * Heartbeat re-enables automatically when an engine is being unparked.
-	 * So to disable the heartbeat and make sure it stays disabled, we
-	 * need to bump PM wakeref for every engine, so that unpark will
-	 * not be called due to changes in PM states.
-	*/
-	intel_gt_pm_get_all_engines(gt);
-	intel_gt_park_heartbeats(gt);
-}
-
-void intel_gt_heartbeats_restore(struct intel_gt *gt, bool unpark)
-{
-	intel_gt_pm_put_all_engines(gt);
-	if (unpark)
-		intel_gt_unpark_heartbeats(gt);
-}
-
 static int __intel_engine_pulse(struct intel_engine_cs *engine)
 {
 	struct i915_sched_attr attr = { .priority = I915_PRIORITY_BARRIER };

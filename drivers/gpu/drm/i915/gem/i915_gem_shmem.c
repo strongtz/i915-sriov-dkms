@@ -4,6 +4,12 @@
  */
 
 #include <linux/folio_batch.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
+#include <linux/fs.h>
+#include <linux/fs_context.h>
+#include <linux/mount.h>
+#endif
 #include <linux/shmem_fs.h>
 #include <linux/swap.h>
 #include <linux/uio.h>
@@ -16,9 +22,6 @@
 #include "i915_drv.h"
 #include "i915_gem_object.h"
 #include "i915_gem_tiling.h"
-#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
-#include "i915_gemfs.h"
-#endif
 #include "i915_scatterlist.h"
 #include "i915_trace.h"
 #include "i915_utils.h"
@@ -327,9 +330,13 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 	while ((folio = writeback_iter(mapping, &wbc, folio, &error))) {
 		if (folio_mapped(folio))
 			folio_redirty_for_writepage(&wbc, folio);
-		else
+		else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+			error = shmem_write_folio(folio);
+#else
 			error = shmem_writeout(folio, NULL, NULL);
-
+#endif
+		}
 	}
 }
 
@@ -513,7 +520,7 @@ static int __create_shmem(struct drm_i915_private *i915,
 	const vma_flags_t shmem_flags = mk_vma_flags(VMA_NORESERVE_BIT);
 	struct vfsmount *huge_mnt;
 #else
-	unsigned long shmem_flags = VM_NORESERVE;
+	const unsigned long shmem_flags = VM_NORESERVE;
 #endif
 	struct file *filp;
 
@@ -532,6 +539,7 @@ static int __create_shmem(struct drm_i915_private *i915,
 	 */
 	if (BITS_PER_LONG == 64 && size > MAX_LFS_FILESIZE)
 		return -E2BIG;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
 	huge_mnt = drm_gem_get_huge_mnt(&i915->drm);
 	if (!(flags & I915_BO_ALLOC_NOTHP) && huge_mnt)
@@ -540,7 +548,8 @@ static int __create_shmem(struct drm_i915_private *i915,
 	else
 		filp = shmem_file_setup("i915", size, shmem_flags);
 #else
-	if (!(flags & I915_BO_ALLOC_NOTHP) && i915->mm.gemfs)
+	if (!(flags & I915_BO_ALLOC_NOTHP) &&
+	    !IS_ERR_OR_NULL(i915->mm.gemfs))
 		filp = shmem_file_setup_with_mnt(i915->mm.gemfs, "i915", size,
 						 shmem_flags);
 	else
@@ -668,22 +677,22 @@ fail:
 	return ERR_PTR(err);
 }
 
+/*
+ * By creating our own shmemfs mountpoint, we can pass in
+ * mount flags that better match our usecase.
+ *
+ * One example, although it is probably better with a per-file
+ * control, is selecting huge page allocations ("huge=within_size").
+ * However, we only do so on platforms which benefit from it, or to
+ * offset the overhead of iommu lookups, where with latter it is a net
+ * win even on platforms which would otherwise see some performance
+ * regressions such a slow reads issue on Broadwell and Skylake.
+ */
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
 static int init_shmem(struct intel_memory_region *mem)
 {
 	struct drm_i915_private *i915 = mem->i915;
-
-	/*
-	 * By creating our own shmemfs mountpoint, we can pass in
-	 * mount flags that better match our usecase.
-	 *
-	 * One example, although it is probably better with a per-file
-	 * control, is selecting huge page allocations ("huge=within_size").
-	 * However, we only do so on platforms which benefit from it, or to
-	 * offset the overhead of iommu lookups, where with latter it is a net
-	 * win even on platforms which would otherwise see some performance
-	 * regressions such a slow reads issue on Broadwell and Skylake.
-	 */
 
 	if (GRAPHICS_VER(i915) < 11 && !i915_vtd_active(i915))
 		goto no_thp;
@@ -696,8 +705,7 @@ static int init_shmem(struct intel_memory_region *mem)
 			   "Transparent Hugepage support is recommended for optimal performance%s\n",
 			   GRAPHICS_VER(i915) >= 11 ? " on this platform!" :
 						      " when IOMMU is enabled!");
-
- no_thp:
+no_thp:
 	intel_memory_region_set_name(mem, "system");
 
 	return 0; /* We have fallback to the kernel mnt if huge mnt failed. */
@@ -705,15 +713,66 @@ static int init_shmem(struct intel_memory_region *mem)
 #else
 static int init_shmem(struct intel_memory_region *mem)
 {
-	i915_gemfs_init(mem->i915);
+	struct drm_i915_private *i915 = mem->i915;
+	struct file_system_type *type;
+	struct fs_context *fc;
+	struct vfsmount *gemfs;
+	int ret;
+
+	if (GRAPHICS_VER(i915) < 11 && !i915_vtd_active(i915))
+		goto no_thp;
+
+	if (!IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE))
+		goto err;
+
+	type = get_fs_type("tmpfs");
+	if (!type)
+		goto err;
+
+	fc = fs_context_for_mount(type, SB_KERNMOUNT);
+	if (IS_ERR(fc))
+		goto err;
+
+	ret = vfs_parse_fs_string(fc, "source", "tmpfs");
+	if (!ret)
+		ret = vfs_parse_fs_string(fc, "huge", "within_size");
+	if (!ret) {
+		gemfs = fc_mount_longterm(fc);
+		if (IS_ERR(gemfs)) {
+			ret = PTR_ERR(gemfs);
+			gemfs = NULL;
+		}
+	}
+	put_fs_context(fc);
+	if (ret)
+		goto err;
+
+	i915->mm.gemfs = gemfs;
+	drm_info(&i915->drm, "Using Transparent Hugepages\n");
+	goto no_thp;
+
+err:
+	drm_notice(&i915->drm,
+		   "Transparent Hugepage support is recommended for optimal performance%s\n",
+		   GRAPHICS_VER(i915) >= 11 ? " on this platform!" :
+					      " when IOMMU is enabled!");
+
+no_thp:
 	intel_memory_region_set_name(mem, "system");
 
-	return 0; /* We have fallback to the kernel mnt if gemfs init failed. */
+	return 0; /* We have fallback to the kernel mnt if huge mnt failed. */
 }
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 0, 0)
 static int release_shmem(struct intel_memory_region *mem)
 {
-	i915_gemfs_fini(mem->i915);
+	struct vfsmount *gemfs = mem->i915->mm.gemfs;
+
+	if (!IS_ERR_OR_NULL(gemfs)) {
+		kern_unmount(gemfs);
+		mem->i915->mm.gemfs = NULL;
+	}
 	return 0;
 }
 #endif

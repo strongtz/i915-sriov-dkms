@@ -142,6 +142,7 @@ query_engine_info(struct drm_i915_private *i915,
 	if (query_item->flags)
 		return -EINVAL;
 
+	mutex_lock(&i915->uabi_engines_mutex);
 	for_each_uabi_engine(engine, i915)
 		num_uabi_engines++;
 
@@ -149,11 +150,13 @@ query_engine_info(struct drm_i915_private *i915,
 
 	ret = copy_query_item(&query, sizeof(query), len, query_item);
 	if (ret != 0)
-		return ret;
+		goto err;
 
 	if (query.num_engines || query.rsvd[0] || query.rsvd[1] ||
-	    query.rsvd[2])
-		return -EINVAL;
+	    query.rsvd[2]) {
+		ret = -EINVAL;
+		goto err;
+	}
 
 	info_ptr = &query_ptr->engines[0];
 
@@ -164,17 +167,25 @@ query_engine_info(struct drm_i915_private *i915,
 		info.capabilities = engine->uabi_capabilities;
 		info.logical_instance = ilog2(engine->logical_mask);
 
-		if (copy_to_user(info_ptr, &info, sizeof(info)))
-			return -EFAULT;
+		if (copy_to_user(info_ptr, &info, sizeof(info))) {
+			ret = -EFAULT;
+			goto err;
+		}
 
 		query.num_engines++;
 		info_ptr++;
 	}
+	mutex_unlock(&i915->uabi_engines_mutex);
 
 	if (copy_to_user(query_ptr, &query, sizeof(query)))
 		return -EFAULT;
 
 	return len;
+
+err:
+	mutex_unlock(&i915->uabi_engines_mutex);
+
+	return ret;
 }
 
 static int can_copy_perf_config_registers_or_number(u32 user_n_regs,

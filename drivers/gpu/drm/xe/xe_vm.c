@@ -206,7 +206,23 @@ static void resume_and_reinstall_preempt_fences(struct xe_vm *vm,
 	xe_vm_assert_held(vm);
 
 	list_for_each_entry(q, &vm->preempt.exec_queues, lr.link) {
-		q->ops->resume(q);
+		/*
+		 * Only resume queues whose suspend() actually succeeded. A
+		 * failed suspend() (e.g. killed/banned/wedged) leaves the queue
+		 * un-suspended, so it must not be resumed.
+		 *
+		 * Also skip queues that have since been reset/killed/banned/
+		 * wedged: their suspend may not have completed (suspend_pending
+		 * can still be set, e.g. a preempt fence signalled with -ENOENT
+		 * without waiting), so resuming would trip the !suspend_pending
+		 * assert in the backend. Such queues are being torn down anyway,
+		 * so leave them marked suspended and let teardown resolve their
+		 * state.
+		 */
+		if (READ_ONCE(q->lr.suspended) && !q->ops->reset_status(q)) {
+			WRITE_ONCE(q->lr.suspended, false);
+			q->ops->resume(q);
+		}
 
 		drm_gpuvm_resv_add_fence(&vm->gpuvm, exec, q->lr.pfence,
 					 DMA_RESV_USAGE_BOOKKEEP, DMA_RESV_USAGE_BOOKKEEP);
@@ -256,7 +272,7 @@ int xe_vm_add_compute_exec_queue(struct xe_vm *vm, struct xe_exec_queue *q)
 	 */
 	wait = __xe_vm_userptr_needs_repin(vm) || preempt_fences_waiting(vm);
 	if (wait)
-		dma_fence_enable_sw_signaling(pfence);
+		dma_fence_enable_signaling(pfence);
 
 	xe_svm_notifier_unlock(vm);
 
@@ -287,7 +303,7 @@ void xe_vm_remove_compute_exec_queue(struct xe_vm *vm, struct xe_exec_queue *q)
 		--vm->preempt.num_exec_queues;
 	}
 	if (q->lr.pfence) {
-		dma_fence_enable_sw_signaling(q->lr.pfence);
+		dma_fence_enable_signaling(q->lr.pfence);
 		dma_fence_put(q->lr.pfence);
 		q->lr.pfence = NULL;
 	}
@@ -403,6 +419,33 @@ int xe_vm_validate_rebind(struct xe_vm *vm, struct drm_exec *exec,
 #endif
 
 	return 0;
+}
+
+/**
+ * xe_vm_bump_lru() - Bump the LRU position of BOs used by a submission
+ * @vm: The vm for which we are bumping LRUs.
+ * @exec: The struct drm_exec with the locked GEM objects.
+ *
+ * Move the VM's private BOs, and all external objects locked by @exec,
+ * to the LRU tail. Private BOs are moved in bulk using @vm's
+ * &xe_vm.lru_bulk_move. External objects, which may be shared with other
+ * VMs, are not part of that bulk move and are bumped individually.
+ */
+void xe_vm_bump_lru(struct xe_vm *vm, struct drm_exec *exec)
+{
+	spinlock_t *lru_lock = &vm->xe->ttm.lru_lock;
+	struct drm_gem_object *obj;
+
+	spin_lock(lru_lock);
+	ttm_lru_bulk_move_tail(&vm->lru_bulk_move);
+	drm_exec_for_each_locked_object(exec, obj) {
+		if (!drm_gpuvm_is_extobj(&vm->gpuvm, obj))
+			continue;
+
+		ttm_bo_move_to_lru_tail(&gem_to_xe_bo(obj)->ttm);
+		cond_resched_lock(lru_lock);
+	}
+	spin_unlock(lru_lock);
 }
 
 static int xe_preempt_work_begin(struct drm_exec *exec, struct xe_vm *vm,
@@ -555,9 +598,7 @@ retry:
 
 #undef retry_required
 
-	spin_lock(&vm->xe->ttm.lru_lock);
-	ttm_lru_bulk_move_tail(&vm->lru_bulk_move);
-	spin_unlock(&vm->xe->ttm.lru_lock);
+	xe_vm_bump_lru(vm, &exec);
 
 	/* Point of no return. */
 	arm_preempt_fences(vm, &preempt_fences);
@@ -1640,7 +1681,7 @@ struct xe_vm *xe_vm_create(struct xe_device *xe, u32 flags, struct xe_file *xef)
 
 	if (xef)
 		vm->xef = xe_file_get(xef);
-	/**
+	/*
 	 * GSC VMs are kernel-owned, only used for PXP ops and can sometimes be
 	 * manipulated under the PXP mutex. However, the PXP mutex can be taken
 	 * under a user-VM lock when the PXP session is started at exec_queue
@@ -1760,10 +1801,8 @@ struct xe_vm *xe_vm_create(struct xe_device *xe, u32 flags, struct xe_file *xef)
 			vm->batch_invalidate_tlb = true;
 		}
 
-		if (vm->flags & XE_VM_FLAG_LR_MODE) {
-			INIT_WORK(&vm->preempt.rebind_work, preempt_rebind_work_func);
+		if (vm->flags & XE_VM_FLAG_LR_MODE)
 			vm->batch_invalidate_tlb = false;
-		}
 
 		/* Fill pt_root after allocating scratch tables */
 		for_each_tile(tile, xe, id) {
@@ -1944,27 +1983,24 @@ void xe_vm_close_and_put(struct xe_vm *vm)
 		vma->gpuva.flags |= XE_VMA_DESTROYED;
 	}
 
-	/*
-	 * All vm operations will add shared fences to resv.
-	 * The only exception is eviction for a shared object,
-	 * but even so, the unbind when evicted would still
-	 * install a fence to resv. Hence it's safe to
-	 * destroy the pagetables immediately.
-	 */
-	xe_vm_free_scratch(vm);
-	xe_vm_pt_destroy(vm);
 	xe_vm_unlock(vm);
 
 	/*
-	 * VM is now dead, cannot re-add nodes to vm->vmas if it's NULL
-	 * Since we hold a refcount to the bo, we can remove and free
-	 * the members safely without locking.
+	 * Unlink and destroy all contested external-BO VMAs before destroying
+	 * the page tables. Otherwise, concurrent eviction holding only bo->resv
+	 * can walk the BO's VMAs and attempt to invalidate/zap page tables that
+	 * have already been freed.
 	 */
 	list_for_each_entry_safe(vma, next_vma, &contested,
 				 combined_links.destroy) {
 		list_del_init(&vma->combined_links.destroy);
 		xe_vma_destroy_unlocked(vma);
 	}
+
+	xe_vm_lock(vm, false);
+	xe_vm_free_scratch(vm);
+	xe_vm_pt_destroy(vm);
+	xe_vm_unlock(vm);
 
 	xe_svm_fini(vm);
 
@@ -3858,7 +3894,7 @@ static int xe_vm_bind_ioctl_validate_bo(struct xe_device *xe, struct xe_bo *bo,
 		 * how it was mapped on the CPU. Just assume is it
 		 * potentially cached on CPU side.
 		 */
-		return -EINVAL;
+		return 0;
 	}
 
 	/*
@@ -4151,7 +4187,7 @@ static int fill_faults(struct xe_vm *vm,
 	entry_size = sizeof(struct xe_vm_fault);
 	count = args->size / entry_size;
 
-	fault_list = kcalloc(count, sizeof(struct xe_vm_fault), GFP_KERNEL);
+	fault_list = kzalloc_objs(struct xe_vm_fault, count);
 	if (!fault_list)
 		return -ENOMEM;
 

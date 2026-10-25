@@ -15,6 +15,7 @@ int drm_dp_dsc_branch_max_line_width(const u8 dsc_branch_dpcd[DP_DSC_BRANCH_CAP_
 
 #define DP_DPCD_QUIRK_DSC_THROUGHPUT_BPP_LIMIT ((enum drm_dp_quirk)(DP_DPCD_QUIRK_HBLANK_EXPANSION_REQUIRES_DSC + 1))
 
+#define drm_dp_post_lt_adj_req_in_progress LINUX_BACKPORT(drm_dp_post_lt_adj_req_in_progress)
 bool drm_dp_post_lt_adj_req_in_progress(const u8 link_status[DP_LINK_STATUS_SIZE]);
 
 static inline bool

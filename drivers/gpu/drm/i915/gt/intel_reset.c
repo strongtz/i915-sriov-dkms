@@ -810,7 +810,7 @@ wa_14015076503_end(struct intel_gt *gt, intel_engine_mask_t engine_mask)
 			 HECI_H_GS1_ER_PREP, 0);
 }
 
-int __intel_gt_reset(struct intel_gt *gt, intel_engine_mask_t engine_mask)
+static int __intel_gt_reset(struct intel_gt *gt, intel_engine_mask_t engine_mask)
 {
 	const int retries = engine_mask == ALL_ENGINES ? RESET_MAX_RETRIES : 1;
 	reset_func reset;
@@ -844,7 +844,7 @@ int __intel_gt_reset(struct intel_gt *gt, intel_engine_mask_t engine_mask)
 bool intel_has_gpu_reset(const struct intel_gt *gt)
 {
 	if (!gt->i915->params.reset)
-		return NULL;
+		return false;
 
 	return intel_get_gpu_reset(gt);
 }
@@ -1620,37 +1620,6 @@ void intel_gt_handle_error(struct intel_gt *gt,
 
 out:
 	intel_runtime_pm_put(gt->uncore->rpm, wakeref);
-}
-
-/**
- * intel_gt_reset_backoff_raise - make any reset calls to back off and resign
- * @gt: #intel_gt to mark for reset backoff
- *
- * In some driver states, we want reset procedure to not be called. It does
- * not mean the reset should be just blocked until later, but that it should
- * be skipped completely. This function waits for any previous backoff to
- * release, and then sets the backoff flag.
- *
- * The BACKOFF flag has an associated Sleepable RCU, so the blocking is a two
- * point procedure. After setting the flag by this call, gt->reset.backoff_srcu
- * should be synchronized, to make sure all other uses have truly ended.
- */
-void intel_gt_reset_backoff_raise(struct intel_gt *gt)
-{
-	while (test_and_set_bit(I915_RESET_BACKOFF, &gt->reset.flags))
-		wait_event(gt->reset.queue,
-			   !test_bit(I915_RESET_BACKOFF, &gt->reset.flags));
-}
-
-/**
- * intel_gt_reset_backoff_clear - unset the previously raised back off flag
- * @gt: #intel_gt to clear reset backoff
- */
-void intel_gt_reset_backoff_clear(struct intel_gt *gt)
-{
-	clear_bit_unlock(I915_RESET_BACKOFF, &gt->reset.flags);
-	smp_mb__after_atomic();
-	wake_up_all(&gt->reset.queue);
 }
 
 static int _intel_gt_reset_lock(struct intel_gt *gt, int *srcu, bool retry)

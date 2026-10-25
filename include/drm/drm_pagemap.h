@@ -8,6 +8,11 @@
 #include <linux/memremap.h>
 #include <linux/types.h>
 
+#define drm_pagemap_init LINUX_BACKPORT(drm_pagemap_init)
+#define drm_pagemap_create LINUX_BACKPORT(drm_pagemap_create)
+#define drm_pagemap_reinit LINUX_BACKPORT(drm_pagemap_reinit)
+#define drm_pagemap_put LINUX_BACKPORT(drm_pagemap_put)
+#define drm_pagemap_destroy LINUX_BACKPORT(drm_pagemap_destroy)
 #define drm_pagemap_migrate_to_devmem LINUX_BACKPORT(drm_pagemap_migrate_to_devmem)
 #define drm_pagemap_evict_to_ram LINUX_BACKPORT(drm_pagemap_evict_to_ram)
 #define drm_pagemap_pagemap_ops_get LINUX_BACKPORT(drm_pagemap_pagemap_ops_get)

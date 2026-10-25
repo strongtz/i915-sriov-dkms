@@ -101,6 +101,7 @@ xe-y += xe_bb.o \
 	xe_page_reclaim.o \
 	xe_pat.o \
 	xe_pci.o \
+	xe_pci_error.o \
 	xe_pci_rebar.o \
 	xe_pcode.o \
 	xe_pm.o \
@@ -217,7 +218,7 @@ $(obj)/i915-display/%.o: $(KBUILD_EXTMOD)/drivers/gpu/drm/i915/display/%.c FORCE
 	$(call if_changed_rule,cc_o_c)
 
 # Display code specific to xe
-xe-$(CONFIG_DRM_XE_DISPLAY) += \
+xe-y += \
 	display/xe_display.o \
 	display/xe_display_bo.o \
 	display/xe_display_pcode.o \
@@ -280,6 +281,7 @@ xe-y += \
 	i915-display/intel_dp_aux.o \
 	i915-display/intel_dp_aux_backlight.o \
 	i915-display/intel_dp_hdcp.o \
+	i915-display/intel_dp_link_caps.o \
 	i915-display/intel_dp_link_training.o \
 	i915-display/intel_dp_mst.o \
 	i915-display/intel_dp_test.o \
@@ -373,6 +375,26 @@ xe-y += \
 	i915-display/intel_dp_tunnel.o
 
 obj-m += xe.o
+obj-n += tests/
+ifeq ($(CONFIG_DRM_XE_DISPLAY),y)
+	obj-n += display/tests/
+endif
+
+# header test
+hdrtest_find_args := -not -path xe_rtp_helpers.h
+ifneq ($(CONFIG_DRM_XE_DISPLAY),y)
+	hdrtest_find_args += -not -path display/\* -not -path compat-i915-headers/\* -not -path xe_display.h
+endif
+
+always-$(CONFIG_DRM_XE_WERROR) += \
+	$(patsubst %.h,%.hdrtest, $(shell cd $(src) && find * -name '*.h' $(hdrtest_find_args)))
+
+quiet_cmd_hdrtest = HDRTEST $(patsubst %.hdrtest,%.h,$@)
+      cmd_hdrtest = $(CC) $(filter-out $(CFLAGS_GCOV), $(c_flags)) -S -o /dev/null -x c /dev/null -include $< -include $<; \
+		$(srctree)/scripts/kernel-doc -none -Werror $<; touch $@
+
+$(obj)/%.hdrtest: $(src)/%.h FORCE
+	$(call if_changed_dep,hdrtest)
 
 uses_generated_oob := $(addprefix $(obj)/, $(xe-y))
 $(uses_generated_oob): $(obj)/generated/xe_wa_oob.h $(obj)/generated/xe_device_wa_oob.h

@@ -9,6 +9,18 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 
+#define drm_pagemap_shrinker_add LINUX_BACKPORT(drm_pagemap_shrinker_add)
+#define drm_pagemap_cache_lock_lookup LINUX_BACKPORT(drm_pagemap_cache_lock_lookup)
+#define drm_pagemap_cache_unlock_lookup LINUX_BACKPORT(drm_pagemap_cache_unlock_lookup)
+#define drm_pagemap_shrinker_create_devm LINUX_BACKPORT(drm_pagemap_shrinker_create_devm)
+#define drm_pagemap_cache_create_devm LINUX_BACKPORT(drm_pagemap_cache_create_devm)
+#define drm_pagemap_get_from_cache LINUX_BACKPORT(drm_pagemap_get_from_cache)
+#define drm_pagemap_cache_set_pagemap LINUX_BACKPORT(drm_pagemap_cache_set_pagemap)
+#define drm_pagemap_get_from_cache_if_active LINUX_BACKPORT(drm_pagemap_get_from_cache_if_active)
+#define drm_pagemap_shrinker_might_lock LINUX_BACKPORT(drm_pagemap_shrinker_might_lock)
+#define drm_pagemap_release_owner LINUX_BACKPORT(drm_pagemap_release_owner)
+#define drm_pagemap_acquire_owner LINUX_BACKPORT(drm_pagemap_acquire_owner)
+
 struct drm_device;
 struct drm_pagemap;
 struct drm_pagemap_cache;

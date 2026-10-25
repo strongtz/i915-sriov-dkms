@@ -189,6 +189,18 @@ int intel_gt_tiles_init(struct drm_i915_private *i915);
 	     (id__)++) \
 		for_each_if ((engine__) = (gt__)->engine[(id__)])
 
+/*
+ * Iterator over all initialized and enabled engines. Some engines, like CCS,
+ * may be "disabled" (i.e., not exposed to the user). Disabling is indicated
+ * by marking the rb_node as empty.
+ */
+#define for_each_enabled_engine(engine__, gt__, id__) \
+	for ((id__) = 0; \
+	     (id__) < I915_NUM_ENGINES; \
+	     (id__)++) \
+		for_each_if (((engine__) = (gt__)->engine[(id__)]) && \
+			     (!RB_EMPTY_NODE(&(engine__)->uabi_node)))
+
 /* Iterator over subset of engines selected by mask */
 #define for_each_engine_masked(engine__, gt__, mask__, tmp__) \
 	for ((tmp__) = (mask__) & (gt__)->info.engine_mask; \

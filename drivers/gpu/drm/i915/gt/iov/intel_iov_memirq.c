@@ -297,21 +297,6 @@ static void __guc_mem_irq_handler(struct intel_guc *guc, u8 *status)
 	}
 
 	intel_guc_to_host_event_handler(guc);
-
-	/*
-	 * This is a software interrupt that must be cleared after it's consumed
-	 * to avoid race conditions where the migration recovery is skipped.
-	 */
-	value = READ_ONCE(status[ilog2(GUC_INTR_SW_INT_0)]);
-	if (value) {
-		if (value != 0xff)
-			gt_err_ratelimited(gt,
-					   "Unexpected memirq value %#x from %s at %u\n",
-					   value, "GUC", ilog2(GUC_INTR_SW_INT_0));
-
-		intel_sriov_vf_migrated_event_handler(guc);
-		WRITE_ONCE(status[ilog2(GUC_INTR_SW_INT_0)], 0x00);
-	}
 }
 
 /**

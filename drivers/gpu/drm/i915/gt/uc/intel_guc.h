@@ -362,17 +362,6 @@ intel_guc_send_and_receive(struct intel_guc *guc, const u32 *action, u32 len,
 				 response_buf, response_buf_size, 0);
 }
 
-static inline void intel_guc_send_wait(unsigned int *sleep_period_us,
-					   bool not_atomic)
-{
-	if (likely(not_atomic)) {
-		usleep_range(*sleep_period_us, 2 * *sleep_period_us);
-		*sleep_period_us = min(*sleep_period_us << 1, 1000u);
-	} else {
-		cpu_relax();
-	}
-}
-
 static inline int intel_guc_send_busy_loop(struct intel_guc *guc,
 					   const u32 *action,
 					   u32 len,

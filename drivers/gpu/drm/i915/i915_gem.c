@@ -1266,7 +1266,11 @@ void i915_gem_driver_remove(struct drm_i915_private *dev_priv)
 	i915_gem_suspend_late(dev_priv);
 	for_each_gt(gt, dev_priv, i)
 		intel_gt_driver_remove(gt);
+
+	/* Let's make sure no one is using the uabi_engines list */
+	mutex_lock(&dev_priv->uabi_engines_mutex);
 	dev_priv->uabi_engines = RB_ROOT;
+	mutex_unlock(&dev_priv->uabi_engines_mutex);
 
 	/* Flush any outstanding unpin_work. */
 	i915_gem_drain_workqueue(dev_priv);

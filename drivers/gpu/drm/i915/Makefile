@@ -87,8 +87,7 @@ i915-y += \
 	i915_fb_pin.o \
 	i915_hdcp_gsc.o \
 	i915_initial_plane.o \
-	i915_overlay.o \
-	i915_panic.o
+	i915_overlay.o
 
 # "Graphics Technology" (aka we talk to the gpu)
 gt-y += \
@@ -171,6 +170,7 @@ gem-y += \
 	gem/i915_gem_object.o \
 	gem/i915_gem_object_frontbuffer.o \
 	gem/i915_gem_pages.o \
+	gem/i915_gem_panic.o \
 	gem/i915_gem_phys.o \
 	gem/i915_gem_pm.o \
 	gem/i915_gem_region.o \
@@ -183,8 +183,7 @@ gem-y += \
 	gem/i915_gem_ttm_move.o \
 	gem/i915_gem_ttm_pm.o \
 	gem/i915_gem_userptr.o \
-	gem/i915_gem_wait.o \
-	gem/i915_gemfs.o
+	gem/i915_gem_wait.o
 i915-y += \
 	$(gem-y) \
 	i915_active.o \
@@ -234,20 +233,19 @@ i915-y += \
 
 # Virtualization support
 iov-y += \
-	i915_sriov.o \
-	i915_sriov_sysfs.o \
-	gt/iov/intel_iov.o \
-	gt/iov/intel_iov_debugfs.o \
-	gt/iov/intel_iov_event.o \
-	gt/iov/intel_iov_migration.o \
-	gt/iov/intel_iov_ggtt.o \
-	gt/iov/intel_iov_memirq.o \
-	gt/iov/intel_iov_provisioning.o \
-	gt/iov/intel_iov_query.o \
-	gt/iov/intel_iov_relay.o \
-	gt/iov/intel_iov_service.o \
-	gt/iov/intel_iov_state.o \
-	gt/iov/intel_iov_sysfs.o
+       i915_sriov.o \
+       i915_sriov_sysfs.o \
+       gt/iov/intel_iov.o \
+       gt/iov/intel_iov_debugfs.o \
+       gt/iov/intel_iov_event.o \
+       gt/iov/intel_iov_ggtt.o \
+       gt/iov/intel_iov_memirq.o \
+       gt/iov/intel_iov_provisioning.o \
+       gt/iov/intel_iov_query.o \
+       gt/iov/intel_iov_relay.o \
+       gt/iov/intel_iov_service.o \
+       gt/iov/intel_iov_state.o \
+       gt/iov/intel_iov_sysfs.o
 i915-y += $(iov-y)
 
 # graphics hardware monitoring (HWMON) support
@@ -379,6 +377,7 @@ i915-y += \
 	display/intel_dp_aux.o \
 	display/intel_dp_aux_backlight.o \
 	display/intel_dp_hdcp.o \
+	display/intel_dp_link_caps.o \
 	display/intel_dp_link_training.o \
 	display/intel_dp_mst.o \
 	display/intel_dp_test.o \
@@ -408,7 +407,9 @@ i915-y += \
 i915-y += \
 	display/intel_dp_tunnel.o
 
-i915-$(CONFIG_DRM_I915_GVT) += \
+obj-n += display/tests/
+
+i915-y += \
 	display/intel_gvt_api.o
 
 i915-y += \
@@ -441,10 +442,29 @@ i915-y += \
 	intel_gvt_mmio_table.o
 include $(src)/gvt/Makefile
 
+obj-m += i915.o
+obj-m += kvmgt.o
+
+# kernel-doc test
+#
 # Enable locally for CONFIG_DRM_I915_WERROR=y. See also scripts/Makefile.build
 ifdef CONFIG_DRM_I915_WERROR
     cmd_checkdoc = PYTHONDONTWRITEBYTECODE=1 $(PYTHON3) $(KERNELDOC) -none -Werror $<
 endif
 
-obj-m += i915.o
-obj-m += kvmgt.o
+# header test
+
+# exclude some broken headers from the test coverage
+no-header-test := \
+	display/intel_vbt_defs.h
+
+always-$(CONFIG_DRM_I915_WERROR) += \
+	$(patsubst %.h,%.hdrtest, $(filter-out $(no-header-test), \
+		$(shell cd $(src) && find * -name '*.h')))
+
+quiet_cmd_hdrtest = HDRTEST $(patsubst %.hdrtest,%.h,$@)
+      cmd_hdrtest = $(CC) $(filter-out $(CFLAGS_GCOV), $(c_flags)) -S -o /dev/null -x c /dev/null -include $<; \
+		$(KERNELDOC) -none -Werror $<; touch $@
+
+$(obj)/%.hdrtest: $(src)/%.h FORCE
+	$(call if_changed_dep,hdrtest)
