@@ -371,9 +371,15 @@ int xe_get_pcode_version(struct xe_device *xe, struct xe_pcode_version *version)
 
 	guard(xe_pm_runtime)(xe);
 
+#ifdef IDB_XE_PMT_TELEM_READ_USE_KERNEL_DEV
 	ret = xe_pmt_telem_read(xe->drm.dev,
 				xe_mmio_read32(xe_root_tile_mmio(xe), PUNIT_TELEMETRY_GUID),
 				(u64 *)version, PUNIT_VERSION_OFFSET, sizeof(*version));
+#else
+	ret = xe_pmt_telem_read(to_pci_dev(xe->drm.dev),
+				xe_mmio_read32(xe_root_tile_mmio(xe), PUNIT_TELEMETRY_GUID),
+				(u64 *)version, PUNIT_VERSION_OFFSET, sizeof(*version));
+#endif
 	if (ret != sizeof(*version)) {
 		xe_warn(xe, "pcode version read from PMT failed, ret %pe\n", ERR_PTR(ret));
 		return ret;

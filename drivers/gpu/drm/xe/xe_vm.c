@@ -435,9 +435,11 @@ void xe_vm_bump_lru(struct xe_vm *vm, struct drm_exec *exec)
 {
 	spinlock_t *lru_lock = &vm->xe->ttm.lru_lock;
 	struct drm_gem_object *obj;
+	unsigned long index __maybe_unused;
 
 	spin_lock(lru_lock);
 	ttm_lru_bulk_move_tail(&vm->lru_bulk_move);
+#ifdef IDB_DRM_EXEC_FOR_EACH_LOCKED_OBJECT_NO_INDEX
 	drm_exec_for_each_locked_object(exec, obj) {
 		if (!drm_gpuvm_is_extobj(&vm->gpuvm, obj))
 			continue;
@@ -445,6 +447,15 @@ void xe_vm_bump_lru(struct xe_vm *vm, struct drm_exec *exec)
 		ttm_bo_move_to_lru_tail(&gem_to_xe_bo(obj)->ttm);
 		cond_resched_lock(lru_lock);
 	}
+#else
+	drm_exec_for_each_locked_object(exec, index, obj) {
+		if (!drm_gpuvm_is_extobj(&vm->gpuvm, obj))
+			continue;
+
+		ttm_bo_move_to_lru_tail(&gem_to_xe_bo(obj)->ttm);
+		cond_resched_lock(lru_lock);
+	}
+#endif
 	spin_unlock(lru_lock);
 }
 
