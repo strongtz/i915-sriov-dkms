@@ -186,14 +186,6 @@ enum {
  *      :0: no contexts (default)
  *      :1-65535: number of contexts (Gen12)
  *
- * _`GUC_KLV_VF_CFG_TILE_MASK` : 0x0005
- *      For multi-tiled products, this field contains the bitwise-OR of tiles
- *      assigned to the VF. Bit-0-set means VF has access to Tile-0,
- *      Bit-31-set means VF has access to Tile-31, and etc.
- *      At least one tile will always be allocated.
- *      If all bits are zero, VF KMD should treat this as a fatal error.
- *      For, single-tile products this KLV config is ignored.
- *
  * _`GUC_KLV_VF_CFG_NUM_DOORBELLS` : 0x0006
  *      Refers to the number of doorbells allocated to this VF.
  *
@@ -292,9 +284,6 @@ enum {
 
 #define GUC_KLV_VF_CFG_NUM_CONTEXTS_KEY		0x0004
 #define GUC_KLV_VF_CFG_NUM_CONTEXTS_LEN		1u
-
-#define GUC_KLV_VF_CFG_TILE_MASK_KEY		0x0005
-#define GUC_KLV_VF_CFG_TILE_MASK_LEN		1u
 
 #define GUC_KLV_VF_CFG_NUM_DOORBELLS_KEY	0x0006
 #define GUC_KLV_VF_CFG_NUM_DOORBELLS_LEN	1u

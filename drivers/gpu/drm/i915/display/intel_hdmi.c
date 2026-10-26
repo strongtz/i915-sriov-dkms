@@ -1284,12 +1284,10 @@ static void hsw_set_infoframes(struct intel_encoder *encoder,
 void intel_dp_dual_mode_set_tmds_output(struct intel_hdmi *hdmi, bool enable)
 {
 	struct intel_display *display = to_intel_display(hdmi);
-	struct i2c_adapter *ddc;
+	struct i2c_adapter *ddc = hdmi->attached_connector->base.ddc;
 
 	if (hdmi->dp_dual_mode.type < DRM_DP_DUAL_MODE_TYPE2_DVI)
 		return;
-
-	ddc = hdmi->attached_connector->base.ddc;
 
 	drm_dbg_kms(display->drm, "%s DP dual mode adaptor TMDS output\n",
 		    enable ? "Enabling" : "Disabling");

@@ -8,12 +8,12 @@
 
 #include <linux/list.h>
 #include <linux/types.h>
+#include <linux/gpu_buddy.h>
 
 #include <drm/ttm/ttm_resource.h>
 
 struct ttm_device;
 struct ttm_resource_manager;
-struct gpu_buddy;
 
 /**
  * struct i915_ttm_buddy_resource

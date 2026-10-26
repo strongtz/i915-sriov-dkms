@@ -3604,7 +3604,7 @@ static int xe_vm_bind_ioctl_validate_bo(struct xe_device *xe, struct xe_bo *bo,
 		 * how it was mapped on the CPU. Just assume is it
 		 * potentially cached on CPU side.
 		 */
-		return -EINVAL;
+		return 0;
 	}
 
 	/* If a BO is protected it can only be mapped if the key is still valid */

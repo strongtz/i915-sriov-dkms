@@ -852,8 +852,7 @@ static void guc_waklv_init(struct intel_guc *guc)
 	remain = guc_ads_waklv_size(guc);
 
 	/* Wa_14019159160 */
-	if (gt->i915->params.enable_mtl_rcs_ccs_wa &&
-	    IS_GFX_GT_IP_RANGE(gt, IP_VER(12, 70), IP_VER(12, 74))) {
+	if (IS_GFX_GT_IP_RANGE(gt, IP_VER(12, 70), IP_VER(12, 74))) {
 		guc_waklv_enable_simple(guc, &offset, &remain,
 					GUC_WORKAROUND_KLV_SERIALIZED_RA_MODE);
 		guc_waklv_enable_simple(guc, &offset, &remain,

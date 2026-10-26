@@ -93,6 +93,22 @@ ct_drm_client_dev_suspend_one_arg() {
 	compile_check "$CODE" "IDB_DRM_CLIENT_DEV_SUSPEND_ONE_ARG" 1
 }
 
+ct_drm_client_funcs_restore_one_arg() {
+	CODE="
+	#include <drm/drm_client.h>
+	static int conftest_restore(struct drm_client_dev *client)
+	{
+		(void)client;
+		return 0;
+	}
+	static const struct drm_client_funcs conftest_client_funcs = {
+		.restore = conftest_restore,
+	};
+	"
+
+	compile_check "$CODE" "IDB_DRM_CLIENT_FUNCS_RESTORE_ONE_ARG" 1
+}
+
 ct_drm_exec_for_each_locked_object_no_index() {
 	CODE="
 	#include <drm/drm_exec.h>
@@ -122,6 +138,48 @@ ct_drm_fb_helper_alloc_info() {
 	compile_check "$CODE" "IDB_HAVE_DRM_FB_HELPER_ALLOC_INFO" 1
 }
 
+ct_drm_fb_helper_restore_fbdev_mode_unlocked_one_arg() {
+	CODE="
+	#include <drm/drm_fb_helper.h>
+	static int conftest_restore_fbdev_mode(void)
+	{
+		return drm_fb_helper_restore_fbdev_mode_unlocked(
+			(struct drm_fb_helper *)NULL);
+	}
+	"
+
+	compile_check "$CODE" "IDB_DRM_FB_HELPER_RESTORE_FBDEV_MODE_ONE_ARG" 1
+}
+
+ct_drm_sched_init_args() {
+	CODE="
+	#include <drm/gpu_scheduler.h>
+	static int conftest_drm_sched_init_args(struct drm_gpu_scheduler *sched,
+						const struct drm_sched_backend_ops *ops,
+						struct workqueue_struct *submit_wq,
+						struct workqueue_struct *timeout_wq,
+						atomic_t *score, struct device *dev)
+	{
+		const struct drm_sched_init_args args = {
+			.ops = ops,
+			.submit_wq = submit_wq,
+			.num_rqs = 1,
+			.credit_limit = 1,
+			.hang_limit = 0,
+			.timeout = 0,
+			.timeout_wq = timeout_wq,
+			.score = score,
+			.name = NULL,
+			.dev = dev,
+		};
+
+		return drm_sched_init(sched, &args);
+	}
+	"
+
+	compile_check "$CODE" "IDB_DRM_SCHED_INIT_ARGS" 1
+}
+
 ct_drm_sched_job_init_5args() {
 	CODE="
 	#include <drm/gpu_scheduler.h>
@@ -146,6 +204,28 @@ ct_pci_resize_resource_4args() {
 	"
 
 	compile_check "$CODE" "IDB_PCI_RESIZE_RESOURCE_4ARGS" 1
+}
+
+ct_xe_pmt_telem_read_4args() {
+	CODE="
+	#include <linux/pci.h>
+	#include <linux/intel_vsec.h>
+	static int conftest_pmt_read_telem(struct pci_dev *pdev, u32 guid,
+					   u64 *data, u32 count)
+	{
+		(void)pdev;
+		(void)guid;
+		(void)data;
+		(void)count;
+		return 0;
+	}
+
+	static struct pmt_callbacks conftest_pmt_cb = {
+		.read_telem = conftest_pmt_read_telem,
+	};
+	"
+
+	compile_check "$CODE" "IDB_XE_PMT_TELEM_READ_4ARGS" 1
 }
 
 ct_xe_pmt_telem_read_kernel_device() {

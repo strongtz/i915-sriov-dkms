@@ -551,8 +551,6 @@ static bool fatal_error(int error)
 
 void __i915_request_skip(struct i915_request *rq)
 {
-	int srcu;
-
 	GEM_BUG_ON(!fatal_error(rq->fence.error));
 
 	if (rq->infix == rq->postfix)
@@ -560,7 +558,6 @@ void __i915_request_skip(struct i915_request *rq)
 
 	RQ_TRACE(rq, "error: %d\n", rq->fence.error);
 
-	gt_ggtt_address_read_lock(rq->engine->gt, &srcu);
 	/*
 	 * As this request likely depends on state from the lost
 	 * context, clear out all the user operations leaving the
@@ -568,8 +565,6 @@ void __i915_request_skip(struct i915_request *rq)
 	 */
 	__i915_request_fill(rq, 0);
 	rq->infix = rq->postfix;
-	set_bit(I915_FENCE_FLAG_GGTT_EMITTED, &rq->fence.flags);
-	gt_ggtt_address_read_unlock(rq->engine->gt, srcu);
 }
 
 bool i915_request_set_error_once(struct i915_request *rq, int error)
@@ -889,18 +884,6 @@ static void __i915_request_ctor(void *arg)
 	init_llist_head(&rq->execute_cb);
 }
 
-static int wait_for_space(struct i915_request *rq)
-{
-	void *ptr;
-
-	ptr = intel_ring_begin(rq, 0);
-	if (IS_ERR(ptr))
-		return PTR_ERR(ptr);
-	intel_ring_advance(rq, ptr);
-
-	return 0;
-}
-
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
 #define clear_batch_ptr(_rq) ((_rq)->batch = NULL)
 #else
@@ -1007,10 +990,6 @@ __i915_request_create(struct intel_context *ce, gfp_t gfp)
 	 */
 	rq->reserved_space =
 		2 * rq->engine->emit_fini_breadcrumb_dw * sizeof(u32);
-
-	ret = wait_for_space(rq);
-	if (unlikely(ret))
-		goto err_free;
 
 	/*
 	 * Record the position of the start of the request so that
@@ -1172,7 +1151,6 @@ __emit_semaphore_wait(struct i915_request *to,
 
 	GEM_BUG_ON(GRAPHICS_VER(to->engine->i915) < 8);
 	GEM_BUG_ON(i915_request_has_initial_breadcrumb(to));
-	GEM_BUG_ON(IS_SRIOV_VF(to->i915));
 
 	/* We need to pin the signaler's HWSP until we are finished reading. */
 	err = intel_timeline_read_hwsp(from, to, &hwsp_offset);
@@ -1831,8 +1809,6 @@ struct i915_request *__i915_request_commit(struct i915_request *rq)
 	cs = intel_ring_begin(rq, engine->emit_fini_breadcrumb_dw);
 	GEM_BUG_ON(IS_ERR(cs));
 	rq->postfix = intel_ring_offset(rq, cs);
-	/* postfix commands are not emitted yet, but the space is reserved */
-	intel_ring_advance(rq, cs + engine->emit_fini_breadcrumb_dw);
 
 	return __i915_request_add_to_timeline(rq);
 }

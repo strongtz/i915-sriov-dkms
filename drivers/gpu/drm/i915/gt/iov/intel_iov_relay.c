@@ -474,7 +474,6 @@ int intel_iov_relay_send_to_pf(struct intel_iov_relay *relay,
 	GEM_BUG_ON(relay_type != GUC_HXG_TYPE_REQUEST);
 	return relay_send_and_wait(relay, 0, relay_id, msg, len, buf, buf_size);
 }
-ALLOW_ERROR_INJECTION(intel_iov_relay_send_to_pf, ERRNO);
 
 static int relay_handle_reply(struct intel_iov_relay *relay, u32 origin,
 			      u32 relay_id, int reply, const u32 *msg, u32 len)

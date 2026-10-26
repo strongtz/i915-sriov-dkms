@@ -1765,6 +1765,7 @@ static int eb_reinit_userptr(struct i915_execbuffer *eb)
 
 static noinline int eb_relocate_parse_slow(struct i915_execbuffer *eb)
 {
+	const unsigned int count = eb->buffer_count;
 	bool have_copy = false;
 	struct eb_vma *ev;
 	int err = 0;
@@ -1867,7 +1868,6 @@ err:
 
 out:
 	if (have_copy) {
-		const unsigned int count = eb->buffer_count;
 		unsigned int i;
 
 		for (i = 0; i < count; i++) {
@@ -2665,6 +2665,22 @@ eb_select_legacy_ring(struct i915_execbuffer *eb)
 	return user_ring_map[user_ring_id];
 }
 
+static bool engine_valid(struct intel_context *ce)
+{
+	if (!intel_engine_is_virtual(ce->engine))
+		return !RB_EMPTY_NODE(&ce->engine->uabi_node);
+
+	/*
+	 * TODO: check virtual sibilings; we need to walk through all the
+	 * virtual engines and ask whether the physical engine where it is based
+	 * is still valid. For each of them we need to check with
+	 * RB_EMPTY_NODE(...)
+	 *
+	 * This can be a placed in a new ce_ops.
+	 */
+	return true;
+}
+
 static int
 eb_select_engine(struct i915_execbuffer *eb)
 {
@@ -2695,8 +2711,6 @@ eb_select_engine(struct i915_execbuffer *eb)
 	eb->num_batches = ce->parallel.number_children + 1;
 	gt = ce->engine->gt;
 
-	for_each_child(ce, child)
-		intel_context_get(child);
 	eb->wakeref = intel_gt_pm_get(ce->engine->gt);
 	/*
 	 * Keep GT0 active on MTL so that i915_vma_parked() doesn't
@@ -2704,6 +2718,16 @@ eb_select_engine(struct i915_execbuffer *eb)
 	 */
 	if (gt->info.id)
 		eb->wakeref_gt0 = intel_gt_pm_get(to_gt(gt->i915));
+
+	/* We need to hold the wakeref to stabilize i915->uabi_engines */
+	if (!engine_valid(ce)) {
+		intel_context_put(ce);
+		err = -ENODEV;
+		goto err;
+	}
+
+	for_each_child(ce, child)
+		intel_context_get(child);
 
 	if (!test_bit(CONTEXT_ALLOC_BIT, &ce->flags)) {
 		err = intel_context_alloc_state(ce);

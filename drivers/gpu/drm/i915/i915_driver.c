@@ -1337,11 +1337,6 @@ static int i915_drm_resume(struct drm_device *dev)
 
 	intel_gvt_resume(dev_priv);
 
-	for_each_gt(gt, dev_priv, i) {
-		intel_guc_invalidate_tlb_engines(&gt->uc.guc);
-		intel_guc_invalidate_tlb_guc(&gt->uc.guc);
-	}
-
 	enable_rpm_wakeref_asserts(&dev_priv->runtime_pm);
 
 	return 0;

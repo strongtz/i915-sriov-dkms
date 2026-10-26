@@ -1,5 +1,5 @@
 DKMS_MODULE_VERSION := "2025.12.10.1-sriov"
-DKMS_MODULE_ORIGIN_KERNEL := "6.18.55"
+DKMS_MODULE_ORIGIN_KERNEL := "6.18.58"
 
 LINUXINCLUDE := \
 	-I$(src)/include \
@@ -24,10 +24,14 @@ CONFTEST_H := $(obj)/$(CONFTEST_DIR)/results.h
 CONFTEST_COMPILE_TESTS := \
 	copy_from_user_inatomic_nontemporal \
 	drm_client_dev_suspend_one_arg \
+	drm_client_funcs_restore_one_arg \
 	drm_exec_for_each_locked_object_no_index \
 	drm_fb_helper_alloc_info \
+	drm_fb_helper_restore_fbdev_mode_unlocked_one_arg \
+	drm_sched_init_args \
 	drm_sched_job_init_5args \
 	pci_resize_resource_4args \
+	xe_pmt_telem_read_4args \
 	xe_pmt_telem_read_kernel_device
 
 ifneq ($(filter 1 y,$(KBUILD_MODULES)),)

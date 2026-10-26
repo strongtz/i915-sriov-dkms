@@ -336,7 +336,7 @@ static const struct drm_sched_backend_ops drm_sched_ops = {
 static int execlist_exec_queue_init(struct xe_exec_queue *q)
 {
 	struct drm_gpu_scheduler *sched;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#ifdef IDB_DRM_SCHED_INIT_ARGS
 	const struct drm_sched_init_args args = {
 		.ops = &drm_sched_ops,
 		.num_rqs = 1,
@@ -361,7 +361,7 @@ static int execlist_exec_queue_init(struct xe_exec_queue *q)
 
 	exl->q = q;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#ifdef IDB_DRM_SCHED_INIT_ARGS
 	err = drm_sched_init(&exl->sched, &args);
 #else
 	err = drm_sched_init(&exl->sched, &drm_sched_ops, NULL, 1,

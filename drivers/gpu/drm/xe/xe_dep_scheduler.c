@@ -75,7 +75,7 @@ xe_dep_scheduler_create(struct xe_device *xe,
 {
 	struct xe_dep_scheduler *dep_scheduler;
 	struct drm_gpu_scheduler *sched;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#ifdef IDB_DRM_SCHED_INIT_ARGS
 	const struct drm_sched_init_args args = {
 		.ops = &sched_ops,
 		.submit_wq = submit_wq,
@@ -92,7 +92,7 @@ xe_dep_scheduler_create(struct xe_device *xe,
 	if (!dep_scheduler)
 		return ERR_PTR(-ENOMEM);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#ifdef IDB_DRM_SCHED_INIT_ARGS
 	err = drm_sched_init(&dep_scheduler->sched, &args);
 #else
 	err = drm_sched_init(&dep_scheduler->sched, &sched_ops, submit_wq, 1, job_limit,

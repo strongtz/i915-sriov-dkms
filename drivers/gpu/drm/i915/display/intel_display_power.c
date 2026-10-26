@@ -2271,14 +2271,9 @@ void intel_display_power_suspend_late(struct intel_display *display, bool s2idle
 		hsw_enable_pc8(display);
 	}
 
-	/* Tweaked Wa_14010685332:cnp,icp,jsp,mcc,tgp */
-	if (INTEL_PCH_TYPE(display) >= PCH_CNP && INTEL_PCH_TYPE(display) < PCH_DG1) {
+	/* Tweaked Wa_14010685332:cnp,icp,jsp,mcc,tgp,adp */
+	if (INTEL_PCH_TYPE(display) >= PCH_CNP && INTEL_PCH_TYPE(display) < PCH_DG1)
 		intel_de_rmw(display, SOUTH_CHICKEN1, SBCLK_RUN_REFCLK_DIS, SBCLK_RUN_REFCLK_DIS);
-
-		/* Original Wa_14010685332: adp */
-		if (INTEL_PCH_TYPE(display) == PCH_ADP)
-			intel_de_rmw(display, SOUTH_CHICKEN1, SBCLK_RUN_REFCLK_DIS, 0);
-	}
 }
 
 void intel_display_power_resume_early(struct intel_display *display)
@@ -2291,9 +2286,8 @@ void intel_display_power_resume_early(struct intel_display *display)
 		hsw_disable_pc8(display);
 	}
 
-	/* Tweaked Wa_14010685332:cnp,icp,jsp,mcc,tgp */
-	if ((INTEL_PCH_TYPE(display) >= PCH_CNP && INTEL_PCH_TYPE(display) < PCH_DG1) &&
-	    INTEL_PCH_TYPE(display) != PCH_ADP)
+	/* Tweaked Wa_14010685332:cnp,icp,jsp,mcc,tgp,adp */
+	if (INTEL_PCH_TYPE(display) >= PCH_CNP && INTEL_PCH_TYPE(display) < PCH_DG1)
 		intel_de_rmw(display, SOUTH_CHICKEN1, SBCLK_RUN_REFCLK_DIS, 0);
 
 	intel_power_domains_resume(display);

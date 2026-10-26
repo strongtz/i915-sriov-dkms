@@ -487,72 +487,9 @@ static umode_t vf_attr_is_visible(struct kobject *kobj,
 	return attr->mode;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-static ssize_t bin_attr_state_read(struct file *filp, struct kobject *kobj,
-				   const struct bin_attribute *bin_attr, char *buf,
-				   loff_t off, size_t count)
-#else
-static ssize_t bin_attr_state_read(struct file *filp, struct kobject *kobj,
-				   struct bin_attribute *bin_attr, char *buf,
-				   loff_t off, size_t count)
-#endif
-{
-	struct intel_iov *iov = kobj_to_iov(kobj);
-	unsigned int id = kobj_to_id(kobj);
-	int err;
-
-	if (off > 0)
-		return -EINVAL;
-
-	err = intel_iov_state_save_vf(iov, id, buf, count);
-	if (unlikely(err))
-		return err;
-
-	return SZ_4K;
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-static ssize_t bin_attr_state_write(struct file *filp, struct kobject *kobj,
-				    const struct bin_attribute *bin_attr, char *buf,
-				    loff_t off, size_t count)
-#else
-static ssize_t bin_attr_state_write(struct file *filp, struct kobject *kobj,
-				    struct bin_attribute *bin_attr, char *buf,
-				    loff_t off, size_t count)
-#endif
-{
-	struct intel_iov *iov = kobj_to_iov(kobj);
-	unsigned int id = kobj_to_id(kobj);
-	int err;
-
-	if (off > 0)
-		return -EINVAL;
-
-	err = intel_iov_state_restore_vf(iov, id, buf, count);
-	if (unlikely(err))
-		return err;
-
-	return count;
-}
-
-static BIN_ATTR(state, 0600, bin_attr_state_read, bin_attr_state_write, SZ_4K);
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
-static const struct bin_attribute *vf_bin_attrs[] = {
-	&bin_attr_state,
-	NULL
-};
-#else
-static struct bin_attribute *vf_bin_attrs[] = {
-	&bin_attr_state,
-	NULL
-};
-#endif
-
 static const struct attribute_group vf_attr_group = {
 	.attrs = vf_attrs,
 	.is_visible = vf_attr_is_visible,
-	.bin_attrs = vf_bin_attrs,
 };
 
 static const struct attribute_group vf_threshold_attr_group = {

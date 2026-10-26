@@ -224,7 +224,7 @@ int intel_pcode_init(struct intel_uncore *uncore)
 {
 	int err;
 
-	if (!IS_DGFX(uncore->i915) || IS_SRIOV_VF(uncore->i915))
+	if (!IS_DGFX(uncore->i915))
 		return 0;
 
 	/*

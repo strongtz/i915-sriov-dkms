@@ -141,11 +141,9 @@ static int xe_guid_decode(u32 guid, int *index, u32 *offset)
 	return 0;
 }
 
-#ifdef IDB_XE_PMT_TELEM_READ_USE_KERNEL_DEV
-int xe_pmt_telem_read(struct device *dev, u32 guid, u64 *data, loff_t user_offset,
-		      u32 count)
+static int xe_pmt_telem_read_common(struct xe_device *xe, u32 guid, u64 *data,
+				    loff_t user_offset, u32 count)
 {
-	struct xe_device *xe = kdev_to_xe_device(dev);
 	void __iomem *telem_addr = xe->mmio.regs + BMG_TELEMETRY_OFFSET;
 	u32 mem_region;
 	u32 offset;
@@ -172,36 +170,31 @@ int xe_pmt_telem_read(struct device *dev, u32 guid, u64 *data, loff_t user_offse
 
 	return count;
 }
+
+int xe_pmt_telem_read_offset(struct xe_device *xe, u32 guid, u64 *data,
+			     loff_t user_offset, u32 count)
+{
+	return xe_pmt_telem_read_common(xe, guid, data, user_offset, count);
+}
+
+#ifdef IDB_XE_PMT_TELEM_READ_USE_KERNEL_DEV
+int xe_pmt_telem_read(struct device *dev, u32 guid, u64 *data, loff_t user_offset,
+		      u32 count)
+{
+	return xe_pmt_telem_read_common(kdev_to_xe_device(dev), guid, data,
+					user_offset, count);
+}
+#elif defined(IDB_XE_PMT_TELEM_READ_4ARGS)
+int xe_pmt_telem_read(struct pci_dev *pdev, u32 guid, u64 *data, u32 count)
+{
+	return xe_pmt_telem_read_common(pdev_to_xe_device(pdev), guid, data, 0, count);
+}
 #else
 int xe_pmt_telem_read(struct pci_dev *pdev, u32 guid, u64 *data, loff_t user_offset,
 		      u32 count)
 {
-	struct xe_device *xe = pdev_to_xe_device(pdev);
-	void __iomem *telem_addr = xe->mmio.regs + BMG_TELEMETRY_OFFSET;
-	u32 mem_region;
-	u32 offset;
-	int ret;
-
-	ret = xe_guid_decode(guid, &mem_region, &offset);
-	if (ret)
-		return ret;
-
-	telem_addr += offset + user_offset;
-
-	guard(mutex)(&xe->pmt.lock);
-
-	/* indicate that we are not at an appropriate power level */
-	if (!xe_pm_runtime_get_if_active(xe))
-		return -ENODATA;
-
-	/* set SoC re-mapper index register based on GUID memory region */
-	xe_mmio_rmw32(xe_root_tile_mmio(xe), SG_REMAP_INDEX1, SG_REMAP_BITS,
-		      REG_FIELD_PREP(SG_REMAP_BITS, mem_region));
-
-	memcpy_fromio(data, telem_addr, count);
-	xe_pm_runtime_put(xe);
-
-	return count;
+	return xe_pmt_telem_read_common(pdev_to_xe_device(pdev), guid, data,
+					user_offset, count);
 }
 #endif
 

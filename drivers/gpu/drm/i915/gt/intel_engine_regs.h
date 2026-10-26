@@ -116,6 +116,13 @@
 #define RING_BBADDR(base)			_MMIO((base) + 0x140)
 #define RING_BB_OFFSET(base)			_MMIO((base) + 0x158)
 #define RING_BBADDR_UDW(base)			_MMIO((base) + 0x168) /* gen8+ */
+#define PR_CTR_CTRL(base)			_MMIO((base) + 0x178)
+#define   CTR_COUNT_SELECT_FF			REG_BIT(31)
+#define   CTR_LOGIC_OP_MASK			REG_GENMASK(30, 0)
+#define     CTR_START				0
+#define     CTR_STOP				1
+#define   CTR_LOGIC_OP(OP)			REG_FIELD_PREP(CTR_LOGIC_OP_MASK, CTR_##OP)
+#define PR_CTR_THRSH(base)			_MMIO((base) + 0x17c)
 #define CCID(base)				_MMIO((base) + 0x180)
 #define   CCID_EN				BIT(0)
 #define   CCID_EXTENDED_STATE_RESTORE		BIT(2)

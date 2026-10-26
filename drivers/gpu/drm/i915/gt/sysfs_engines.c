@@ -10,6 +10,7 @@
 #include "i915_timer_util.h"
 #include "intel_engine.h"
 #include "intel_engine_heartbeat.h"
+#include "intel_gt_print.h"
 #include "sysfs_engines.h"
 
 struct kobj_engine {
@@ -482,7 +483,7 @@ static void add_defaults(struct kobj_engine *parent)
 		return;
 }
 
-void intel_engines_add_sysfs(struct drm_i915_private *i915)
+int intel_engine_add_single_sysfs(struct intel_engine_cs *engine)
 {
 	static const struct attribute * const files[] = {
 		&name_attr.attr,
@@ -498,7 +499,48 @@ void intel_engines_add_sysfs(struct drm_i915_private *i915)
 #endif
 		NULL
 	};
+	struct kobject *dir = engine->i915->sysfs_engine;
+	struct kobject *kobj = engine->kobj;
+	int err;
 
+	kobj = kobj_engine(dir, engine);
+	if (!kobj) {
+		err = -EFAULT;
+		goto err_engine;
+	}
+
+	err = sysfs_create_files(kobj, files);
+	if (err)
+		goto err_object;
+
+	if (intel_engine_has_timeslices(engine)) {
+		err = sysfs_create_file(kobj, &timeslice_duration_attr.attr);
+		if (err)
+			goto err_object;
+	}
+
+	if (intel_engine_has_preempt_reset(engine)) {
+		err = sysfs_create_file(kobj, &preempt_timeout_attr.attr);
+		if (err)
+			goto err_object;
+	}
+
+	add_defaults(container_of(kobj, struct kobj_engine, base));
+
+	engine->kobj = kobj;
+
+	return 0;
+
+err_object:
+	kobject_put(kobj);
+err_engine:
+	gt_warn(engine->gt, "Failed to add sysfs engine '%s'\n", engine->name);
+
+	return err;
+}
+
+void intel_engines_add_sysfs(struct drm_i915_private *i915)
+{
 	struct device *kdev = i915->drm.primary->kdev;
 	struct intel_engine_cs *engine;
 	struct kobject *dir;
@@ -507,32 +549,18 @@ void intel_engines_add_sysfs(struct drm_i915_private *i915)
 	if (!dir)
 		return;
 
+	i915->sysfs_engine = dir;
+
+	/*
+	 * We are still booting i915 and we are sure we are running
+	 * single-threaded. We don't need at this point to protect the
+	 * uabi_engines access list with the mutex.
+	 */
 	for_each_uabi_engine(engine, i915) {
-		struct kobject *kobj;
+		int err;
 
-		kobj = kobj_engine(dir, engine);
-		if (!kobj)
-			goto err_engine;
-
-		if (sysfs_create_files(kobj, files))
-			goto err_object;
-
-		if (intel_engine_has_timeslices(engine) &&
-		    sysfs_create_file(kobj, &timeslice_duration_attr.attr))
-			goto err_engine;
-
-		if (intel_engine_has_preempt_reset(engine) &&
-		    sysfs_create_file(kobj, &preempt_timeout_attr.attr))
-			goto err_engine;
-
-		add_defaults(container_of(kobj, struct kobj_engine, base));
-
-		if (0) {
-err_object:
-			kobject_put(kobj);
-err_engine:
-			dev_warn(kdev, "Failed to add sysfs engine '%s'\n",
-				 engine->name);
-		}
+		err = intel_engine_add_single_sysfs(engine);
+		if (err)
+			break;
 	}
 }

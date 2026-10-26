@@ -76,7 +76,6 @@ int intel_iov_ggtt_pf_update_vf_ptes(struct intel_iov *iov, u32 vfid, u32 pte_of
 		err = -ERANGE;
 		goto unlock;
 	}
-
 	ggtt_addr = node->start + (u64)pte_offset * I915_GTT_PAGE_SIZE_4K;
 	pte_pattern = prepare_pattern_pte(*ptes, vfid);
 	for (i = 1; i < count; i++) {
@@ -85,7 +84,6 @@ int intel_iov_ggtt_pf_update_vf_ptes(struct intel_iov *iov, u32 vfid, u32 pte_of
 			goto unlock;
 		}
 	}
-
 	st = kmalloc(sizeof(*st), GFP_KERNEL);
 	if (!st) {
 		err = -ENOMEM;

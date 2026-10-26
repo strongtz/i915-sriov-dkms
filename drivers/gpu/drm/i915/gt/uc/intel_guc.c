@@ -321,8 +321,7 @@ static u32 guc_ctl_wa_flags(struct intel_guc *guc)
 
 	/* Wa_16019325821 */
 	/* Wa_14019159160 */
-	if (gt->i915->params.enable_mtl_rcs_ccs_wa &&
-	    IS_GFX_GT_IP_RANGE(gt, IP_VER(12, 70), IP_VER(12, 74)))
+	if (IS_GFX_GT_IP_RANGE(gt, IP_VER(12, 70), IP_VER(12, 74)))
 		flags |= GUC_WA_RCS_CCS_SWITCHOUT;
 
 	/*
@@ -650,13 +649,6 @@ busy_loop:
 		u32 hint = FIELD_GET(GUC_HXG_FAILURE_MSG_0_HINT, header);
 		u32 error = FIELD_GET(GUC_HXG_FAILURE_MSG_0_ERROR, header);
 
-		if (error == INTEL_GUC_RESPONSE_VF_MIGRATED) {
-			ret = intel_sriov_vf_migrated_event_handler(guc);
-			if (ret == -EAGAIN)
-				goto retry;
-			goto out;
-		}
-
 		guc_err(guc, "mmio request %#x: failure %x/%u\n",
 			request[0], error, hint);
 		ret = -ENXIO;
@@ -698,7 +690,6 @@ out:
 
 	return ret;
 }
-ALLOW_ERROR_INJECTION(intel_guc_send_mmio, ERRNO);
 
 int intel_guc_crash_process_msg(struct intel_guc *guc, u32 action)
 {

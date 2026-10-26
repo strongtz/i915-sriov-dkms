@@ -3,7 +3,6 @@
  * Copyright © 2023-2024 Intel Corporation
  */
 
-#include <linux/kernel.h>
 #include <drm/drm_managed.h>
 
 #include "abi/guc_actions_sriov_abi.h"

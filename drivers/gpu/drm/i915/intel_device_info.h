@@ -159,7 +159,6 @@ enum intel_ppgtt_type {
 	func(has_heci_gscfi); \
 	func(has_guc_deprivilege); \
 	func(has_guc_tlb_invalidation); \
-	func(has_iov_memirq); \
 	func(has_l3_ccs_read); \
 	func(has_l3_dpf); \
 	func(has_llc); \
@@ -182,8 +181,7 @@ enum intel_ppgtt_type {
 	func(has_coherent_ggtt); \
 	func(tuning_thread_rr_after_dep); \
 	func(unfenced_needs_alignment); \
-	func(hws_needs_physical); \
-	func(has_remote_tiles);
+	func(hws_needs_physical);
 
 struct intel_ip_version {
 	u8 ver;

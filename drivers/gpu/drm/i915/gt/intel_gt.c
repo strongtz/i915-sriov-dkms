@@ -17,8 +17,10 @@
 #include "intel_engine_pm.h"
 #include "intel_engine_regs.h"
 #include "intel_ggtt_gmch.h"
+#include "intel_gpu_commands.h"
 #include "intel_gt.h"
 #include "intel_gt_buffer_pool.h"
+#include "intel_gt_ccs_mode.h"
 #include "intel_gt_clock_utils.h"
 #include "intel_gt_debugfs.h"
 #include "intel_gt_mcr.h"
@@ -32,6 +34,7 @@
 #include "intel_rc6.h"
 #include "intel_renderstate.h"
 #include "intel_rps.h"
+#include "intel_ring.h"
 #include "intel_sa_media.h"
 #include "intel_gt_sysfs.h"
 #include "intel_tlb.h"
@@ -144,6 +147,8 @@ int intel_gt_init_mmio(struct intel_gt *gt)
 
 	intel_sseu_info_init(gt);
 	intel_gt_mcr_init(gt);
+
+	intel_gt_ccs_mode_init(gt);
 
 	return intel_engines_init_mmio(gt);
 }
@@ -534,6 +539,62 @@ static struct i915_address_space *kernel_vm(struct intel_gt *gt)
 		return i915_vm_get(&gt->ggtt->vm);
 }
 
+/*
+ * Emit a "fake watchdog" with an impossible wait condition into @rq so that
+ * the engine's preemption watchdog counter overflows and forces the GuC to
+ * reset the engine.
+ *
+ * On a SR-IOV VF this is used while recording the engine default state: the
+ * VF cannot reset the shared physical engine itself, but by stalling on a
+ * semaphore that never completes we let the watchdog trip and have the GuC
+ * (owned by the PF) reset the engine for us. That reset hands the VF a clean
+ * engine, so the recorded default context does not inherit stale HW register
+ * state left behind by a previously running VF (cross-VF contamination).
+ *
+ * Note: the forced reset will complete @rq with an error - that is expected
+ * and must be tolerated by the caller.
+ */
+static int emit_fake_watchdog(struct i915_request *rq)
+{
+	// TKS
+	struct intel_engine_cs *engine = rq->engine;
+	u32 ggtt_addr = i915_ggtt_offset(engine->status_page.vma) +
+			I915_GEM_HWS_SCRATCH * sizeof(u32);
+	u32 *cs;
+
+	drm_info(&engine->i915->drm,
+		 "i915: fake watchdog armed on %s (sem ggtt 0x%08x)\n",
+		 engine->name, ggtt_addr);
+
+	cs = intel_ring_begin(rq, 12);
+	if (IS_ERR(cs))
+		return PTR_ERR(cs);
+
+	/* Arm the watchdog counter with an impossibly small threshold. */
+	*cs++ = MI_LOAD_REGISTER_IMM(2) | MI_LRI_LRM_CS_MMIO;
+	*cs++ = i915_mmio_reg_offset(PR_CTR_THRSH(0));
+	*cs++ = 2; /* small threshold */
+	*cs++ = i915_mmio_reg_offset(PR_CTR_CTRL(0));
+	*cs++ = CTR_LOGIC_OP(START);
+
+	/* Wait on a condition that can never be satisfied. */
+	*cs++ = MI_SEMAPHORE_WAIT |
+		MI_SEMAPHORE_GLOBAL_GTT |
+		MI_SEMAPHORE_POLL |
+		MI_SEMAPHORE_SAD_EQ_SDD;
+	*cs++ = 0xdead; /* this should never be seen */
+	*cs++ = ggtt_addr;
+	*cs++ = 0;
+
+	/* Stop the counter (only reached if the wait ever completes). */
+	*cs++ = MI_LOAD_REGISTER_IMM(1) | MI_LRI_LRM_CS_MMIO;
+	*cs++ = i915_mmio_reg_offset(PR_CTR_CTRL(0));
+	*cs++ = CTR_LOGIC_OP(STOP);
+
+	intel_ring_advance(rq, cs);
+	return 0;
+}
+
 static int __engines_record_defaults(struct intel_gt *gt)
 {
 	struct i915_request *requests[I915_NUM_ENGINES] = {};
@@ -574,6 +635,18 @@ static int __engines_record_defaults(struct intel_gt *gt)
 			goto err_fini;
 		}
 
+		/*
+		 * VFs cannot reset the shared physical engine themselves, so
+		 * force the GuC to do it via a fake watchdog before recording
+		 * the defaults. This guarantees a clean engine and avoids
+		 * inheriting stale state left behind by a previous VF.
+		 */
+		if (IS_SRIOV_VF(gt->i915)) {
+			err = emit_fake_watchdog(rq);
+			if (err)
+				goto err_rq;
+		}
+
 		err = intel_engine_emit_ctx_wa(rq);
 		if (err)
 			goto err_rq;
@@ -608,7 +681,13 @@ err:
 		if (!rq)
 			continue;
 
-		if (rq->fence.error) {
+		/*
+		 * On a VF the fake watchdog deliberately forces a GuC engine
+		 * reset, which completes the request with an error. That reset
+		 * is exactly what provides the clean engine state we want to
+		 * record, so treat it as expected rather than fatal.
+		 */
+		if (rq->fence.error && !IS_SRIOV_VF(gt->i915)) {
 			err = -EIO;
 			goto out;
 		}
@@ -1033,12 +1112,6 @@ int intel_gt_tiles_init(struct drm_i915_private *i915)
 	int ret;
 
 	for_each_gt(gt, i915, id) {
-		 if (!i915->gt[id])
-			  break;
-
-		if (GRAPHICS_VER(i915) >= 8)
-			setup_private_pat(gt);
-
 		ret = intel_gt_probe_lmem(gt);
 		if (ret)
 			return ret;

@@ -1592,12 +1592,14 @@ int i915_cmd_parser_get_version(struct drm_i915_private *dev_priv)
 	bool active = false;
 
 	/* If the command parser is not enabled, report 0 - unsupported */
+	mutex_lock(&dev_priv->uabi_engines_mutex);
 	for_each_uabi_engine(engine, dev_priv) {
 		if (intel_engine_using_cmd_parser(engine)) {
 			active = true;
 			break;
 		}
 	}
+	mutex_unlock(&dev_priv->uabi_engines_mutex);
 	if (!active)
 		return 0;
 

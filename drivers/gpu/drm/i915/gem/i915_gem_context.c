@@ -1130,6 +1130,7 @@ static struct i915_gem_engines *default_engines(struct i915_gem_context *ctx,
 	if (!e)
 		return ERR_PTR(-ENOMEM);
 
+	mutex_lock(&ctx->i915->uabi_engines_mutex);
 	for_each_uabi_engine(engine, ctx->i915) {
 		struct intel_context *ce;
 		struct intel_sseu sseu = {};
@@ -1161,9 +1162,11 @@ static struct i915_gem_engines *default_engines(struct i915_gem_context *ctx,
 
 	}
 
+	mutex_unlock(&ctx->i915->uabi_engines_mutex);
 	return e;
 
 free_engines:
+	mutex_unlock(&ctx->i915->uabi_engines_mutex);
 	free_engines(e);
 	return err;
 }

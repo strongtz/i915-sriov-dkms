@@ -476,7 +476,7 @@ static unsigned int get_mocs_settings(struct drm_i915_private *i915,
 		table->n_entries = GEN9_NUM_MOCS_ENTRIES;
 		table->uc_index = 1;
 		table->unused_entries_index = 5;
-	} else if (IS_TIGERLAKE(i915) || IS_ALDERLAKE_S(i915) || IS_ROCKETLAKE(i915)) {
+	} else if (IS_TIGERLAKE(i915) || IS_ROCKETLAKE(i915)) {
 		/* For TGL/RKL, Can't be changed now for ABI reasons */
 		table->size  = ARRAY_SIZE(tgl_mocs_table);
 		table->table = tgl_mocs_table;
