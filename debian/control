@@ -5,7 +5,7 @@ Maintainer: bbaa <bbaa@bbaa.me>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13), dh-sequence-dkms
-Standards-Version: ###LATEST_VERSION###
+Standards-Version: 4.7.4
 Homepage: https://github.com/strongtz/i915-sriov-dkms
 
 Package: i915-sriov-dkms
@@ -13,3 +13,4 @@ Architecture: amd64
 Depends:
   ${misc:Depends}, build-essential
 Description: Linux i915 driver (dkms module) with SR-IOV support
+ 

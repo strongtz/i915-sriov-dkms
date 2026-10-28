@@ -15,9 +15,9 @@ You need to install this dkms module in **both host and guest!**
 
 **Required kernel**: 6.18.x ~ 7.2.x
 
-**Latest release**: [2026.09.16](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.09.16)
+**Latest release**: [2026.10.28](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.10.28)
 
-For older kernel (v6.12 ~ v6.18), please use the [2025.12.10.1](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.12.10.1) release.
+For older kernel (v6.12 ~ v6.18), please use the [2025.12.10.2](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.12.10.2) release.
 
 For v6.8 ~ v6.12, please use the [2025.07.22](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.07.22) release.
 
@@ -60,7 +60,11 @@ If you encounter issues running **Windows guest VMs**, please append the appropr
 * **For i915 driver:** `i915.xelp_enable_ccs=1`
 * **For xe driver:** `xe.xelp_enable_ccs=1`
 
+**Compatibility Note**: All guest drivers prior to 2026.09.16/2025.12.10.1 implicitly rely on CCS on Xe_LP platforms. If your guest VM still runs an older driver, **ensure CCS enabled on the host**.
+
+
 **For more information regarding this update, please refer to** #498.
+
 
 ## Manually create Virtual Functions (VFs)
 
