@@ -20,7 +20,8 @@ jobs:
         working-directory: i915-sriov-dkms
         run: |
           LATEST_VERSION=$(grep "^PACKAGE_VERSION" "dkms.conf" | sed 's/.*\?"\([^"]*\)".*/\1/')
-          sed -i "s/###LATEST_VERSION###/$LATEST_VERSION/g" debian/control debian/changelog
+          sed -i "s/###LATEST_VERSION###/$LATEST_VERSION/g" debian/changelog
+          sed -i "s/###PACKAGING_DATE###/$(TZ=Asia/Shanghai date -R)/g" debian/changelog
           dpkg-buildpackage -b -tc -us -uc
       - name: Upload artifact
         uses: actions/upload-artifact@v7

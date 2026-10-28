@@ -2,4 +2,4 @@ i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
   * See https://github.com/strongtz/i915-sriov-dkms/releases/tag/###LATEST_VERSION###
 
- -- bbaa <bbaa@bbaa.me>  Fri, 09 Oct 2026 21:45:30 +0800
+ -- bbaa <bbaa@bbaa.me>  ###PACKAGING_DATE###
