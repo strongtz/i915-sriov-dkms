@@ -16,10 +16,21 @@
       ) "unknown" pkgbuildLines;
       version = lib.strings.removePrefix "pkgver=" versionDefinition;
 
+      # nixpkgs 26.11+ requires a .ko.cer file next to every external module.
+      # Older nixpkgs has no kmodigest, so signing is skipped there.
+      # Use this in postFixup: installPhase does not run hooks, and signing must follow stripping.
+      # The store path in the script makes kmodigest a build dependency.
+      signModules =
+        buildPackages:
+        lib.optionalString (buildPackages ? kmodigest) ''
+          find $out/lib/modules -name '*.ko' -exec ${lib.getExe buildPackages.kmodigest} {} \;
+        '';
+
       i915Module =
         {
           stdenv,
           nix-gitignore,
+          buildPackages,
           kernel,
         }:
         stdenv.mkDerivation rec {
@@ -53,6 +64,8 @@
               $out/lib/modules/${kernel.modDirVersion}/updates/compat/gpu/drm/i915/intel_sriov_compat.ko
           '';
 
+          postFixup = signModules buildPackages;
+
           meta = {
             platforms = [ "x86_64-linux" ];
             description = "Intel i915 driver patched with SR-IOV vGPU functionality";
@@ -64,6 +77,7 @@
         {
           stdenv,
           nix-gitignore,
+          buildPackages,
           kernel,
         }:
         stdenv.mkDerivation rec {
@@ -96,6 +110,8 @@
             install -D compat/intel_sriov_compat.ko \
               $out/lib/modules/${kernel.modDirVersion}/updates/compat/gpu/drm/xe/intel_sriov_compat.ko
           '';
+
+          postFixup = signModules buildPackages;
 
           meta = {
             platforms = [ "x86_64-linux" ];
