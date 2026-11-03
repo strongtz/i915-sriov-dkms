@@ -167,15 +167,21 @@ static int vf_balloon_ggtt(struct intel_iov *iov)
 
 	start = 0;
 	end = iov->vf.config.ggtt_base;
-	err = i915_ggtt_balloon(ggtt, start, end, &iov->vf.ggtt_balloon[0]);
-	if (unlikely(err))
-		return err;
+	if (start < end) {
+		err = i915_ggtt_balloon(ggtt, start, end, &iov->vf.ggtt_balloon[0]);
+		if (unlikely(err))
+			return err;
+	}
 
 	start = iov->vf.config.ggtt_base + iov->vf.config.ggtt_size;
 	end = GUC_GGTT_TOP;
-	err = i915_ggtt_balloon(ggtt, start, end, &iov->vf.ggtt_balloon[1]);
+	if (start < end) {
+		err = i915_ggtt_balloon(ggtt, start, end, &iov->vf.ggtt_balloon[1]);
+		if (unlikely(err))
+			return err;
+	}
 
-	return err;
+	return 0;
 }
 
 static void vf_deballoon_ggtt(struct intel_iov *iov)

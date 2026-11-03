@@ -1869,10 +1869,15 @@ void i915_ggtt_resume(struct i915_ggtt *ggtt)
 int i915_ggtt_balloon(struct i915_ggtt *ggtt, u64 start, u64 end,
 		      struct drm_mm_node *node)
 {
-	u64 size = end - start;
+	u64 size;
 	int err;
 
-	GEM_BUG_ON(start >= end);
+	if (unlikely(start > end))
+		return -EINVAL;
+	if (start == end)
+		return 0;
+
+	size = end - start;
 	gt_dbg(ggtt->vm.gt, "ballooning GGTT [%#llx-%#llx] %lluK\n",
 	       start, end, size / SZ_1K);
 

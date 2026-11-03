@@ -150,6 +150,7 @@ void intel_iov_ggtt_vf_init_early(struct intel_iov *iov)
 {
 	GEM_BUG_ON(!intel_iov_is_vf(iov));
 
+	memset(iov->vf.ggtt_balloon, 0, sizeof(iov->vf.ggtt_balloon));
 	mutex_init(&iov->vf.ptes_buffer.lock);
 }
 
