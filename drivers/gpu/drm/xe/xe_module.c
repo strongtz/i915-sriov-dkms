@@ -31,7 +31,7 @@ struct xe_modparam xe_modparam = {
 	.wedged_mode =		XE_DEFAULT_WEDGED_MODE,
 	.svm_notifier_size =	XE_DEFAULT_SVM_NOTIFIER_SIZE,
 	/* the rest are 0 by default */
-	.xelp_enable_ccs = false,
+	.xelp_enable_ccs = -1,
 };
 
 module_param_named(svm_notifier_size, xe_modparam.svm_notifier_size, uint, 0600);
@@ -82,8 +82,8 @@ MODULE_PARM_DESC(wedged_mode,
 		 "Module's default policy for the wedged mode (0=never, 1=upon-critical-error, 2=upon-any-hang-no-reset "
 		 "[default=" XE_DEFAULT_WEDGED_MODE_STR "])");
 
-module_param_named_unsafe(xelp_enable_ccs, xe_modparam.xelp_enable_ccs, bool, 0400);
-MODULE_PARM_DESC(xelp_enable_ccs, "Enable experimental CCS on Xe_LP platforms (default: false)");
+module_param_named_unsafe(xelp_enable_ccs, xe_modparam.xelp_enable_ccs, int, 0400);
+MODULE_PARM_DESC(xelp_enable_ccs, "Control experimental CCS on Xe_LP platforms");
 
 static int xe_check_nomodeset(void)
 {

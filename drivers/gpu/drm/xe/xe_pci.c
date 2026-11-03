@@ -915,7 +915,7 @@ static struct xe_gt *alloc_primary_gt(struct xe_tile *tile,
 		gt->info.engine_mask |= media_desc->hw_engine_mask;
 
 	if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE &&
-	    xe_modparam.xelp_enable_ccs) {
+	    xe_modparam.xelp_enable_ccs > 0) {
 		gt->info.engine_mask |= BIT(XE_HW_ENGINE_CCS0);
 		xe_info(xe, "Enabling experimental CCS0 on Xe_LP\n");
 	}
@@ -1038,10 +1038,22 @@ static int xe_info_init(struct xe_device *xe,
 	xe->info.graphics_name = graphics_ip->name;
 	graphics_desc = graphics_ip->desc;
 
-	if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE &&
-	    xe_modparam.xelp_enable_ccs) {
-		xe->info.va_bits = 47;
-		xe_info(xe, "Restricting VA bits to 47 on Xe_LP\n");
+	if (graphics_desc == &graphics_xelp && xe->info.platform != XE_ROCKETLAKE) {
+		if (xe_modparam.xelp_enable_ccs > 0) {
+			xe->info.va_bits = 47;
+			xe_info(xe, "Restricting VA bits to 47 on Xe_LP\n");
+		} else if (xe_modparam.xelp_enable_ccs == 0) {
+			xe->info.va_bits = 48;
+		} else {
+			/*
+			 * Workaround: when PF enables CCS, va_bits=48 can lead to
+			 * hangs on some workloads. Because there is no reliable and stable
+			 * way under virtualization to determine whether PF has enabled CCS,
+			 * unconditionally restrict va_bits to 47 on VFs.
+			 */
+			if (IS_SRIOV_VF(xe))
+				xe->info.va_bits = 47;
+		}
 	}
 
 	if (media_ip) {

@@ -1031,10 +1031,24 @@ int intel_gt_probe_all(struct drm_i915_private *i915)
 	gt->name = "Primary GT";
 	gt->info.engine_mask = INTEL_INFO(i915)->platform_engine_mask;
 
-	if (i915->params.xelp_enable_ccs && i915_pci_is_xelp_ccs(INTEL_INFO(i915))) {
-		gt->info.engine_mask |= BIT(CCS0);
-		RUNTIME_INFO(i915)->ppgtt_size = 47;
-		drm_info(&i915->drm, "Enabling experimental CCS0 on Xe_LP\n");
+	if (i915_pci_is_xelp_ccs(INTEL_INFO(i915))) {
+		if (i915->params.xelp_enable_ccs > 0) {
+			gt->info.engine_mask |= BIT(CCS0);
+			RUNTIME_INFO(i915)->ppgtt_size = 47;
+			drm_info(&i915->drm, "Enabling experimental CCS0 on Xe_LP\n");
+		} else if (i915->params.xelp_enable_ccs == 0) {
+			if (!IS_DG1(i915))
+				RUNTIME_INFO(i915)->ppgtt_size = 48;
+		} else {
+			/*
+			 * Workaround: when PF enables CCS, ppgtt_size=48 can lead to
+			 * hangs on some workloads. Because there is no reliable and stable
+			 * way under virtualization to determine whether PF has enabled CCS,
+			 * unconditionally restrict ppgtt_size to 47 on VFs.
+			 */
+			if (IS_SRIOV_VF(i915))
+				RUNTIME_INFO(i915)->ppgtt_size = 47;
+		}
 	}
 
 	gt_dbg(gt, "Setting up %s\n", gt->name);
