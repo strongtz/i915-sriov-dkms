@@ -5,6 +5,7 @@
 
 #include <drm/drm_managed.h>
 
+#include "abi/guc_actions_sriov_abi.h"
 #include "abi/guc_relay_actions_abi.h"
 
 #include "regs/xe_gt_regs.h"
@@ -18,6 +19,7 @@
 #include "xe_guc_ct.h"
 #include "xe_guc_hxg_helpers.h"
 #include "xe_sriov.h"
+#include "xe_sriov_pf_helpers.h"
 #include "xe_sriov_pf_service.h"
 
 static const struct xe_reg tgl_runtime_regs[] = {
@@ -28,7 +30,9 @@ static const struct xe_reg tgl_runtime_regs[] = {
 	XELP_GT_GEOMETRY_DSS_ENABLE,	/* _MMIO(0x913c) */
 	GT_VEBOX_VDBOX_DISABLE,		/* _MMIO(0x9140) */
 	XEHP_GT_COMPUTE_DSS_ENABLE,	/* _MMIO(0x9144) */
+	CTC_MODE,			/* _MMIO(0xa26c), for legacy i915 interop */
 	HUC_KERNEL_LOAD_INFO,		/* _MMIO(0xc1dc) */
+	TIMESTAMP_OVERRIDE,		/* _MMIO(0x44074), for legacy i915 interop */
 };
 
 static const struct xe_reg ats_m_runtime_regs[] = {
@@ -39,7 +43,9 @@ static const struct xe_reg ats_m_runtime_regs[] = {
 	XELP_GT_GEOMETRY_DSS_ENABLE,	/* _MMIO(0x913c) */
 	GT_VEBOX_VDBOX_DISABLE,		/* _MMIO(0x9140) */
 	XEHP_GT_COMPUTE_DSS_ENABLE,	/* _MMIO(0x9144) */
+	CTC_MODE,			/* _MMIO(0xa26c), for legacy i915 interop */
 	HUC_KERNEL_LOAD_INFO,		/* _MMIO(0xc1dc) */
+	TIMESTAMP_OVERRIDE,		/* _MMIO(0x44074), for legacy i915 interop */
 };
 
 static const struct xe_reg pvc_runtime_regs[] = {
@@ -50,7 +56,9 @@ static const struct xe_reg pvc_runtime_regs[] = {
 	GT_VEBOX_VDBOX_DISABLE,		/* _MMIO(0x9140) */
 	XEHP_GT_COMPUTE_DSS_ENABLE,	/* _MMIO(0x9144) */
 	XEHPC_GT_COMPUTE_DSS_ENABLE_EXT,/* _MMIO(0x9148) */
+	CTC_MODE,			/* _MMIO(0xa26c), for legacy i915 interop */
 	HUC_KERNEL_LOAD_INFO,		/* _MMIO(0xc1dc) */
+	TIMESTAMP_OVERRIDE,		/* _MMIO(0x44074), for legacy i915 interop */
 };
 
 static const struct xe_reg ver_1270_runtime_regs[] = {
@@ -63,7 +71,9 @@ static const struct xe_reg ver_1270_runtime_regs[] = {
 	GT_VEBOX_VDBOX_DISABLE,		/* _MMIO(0x9140) */
 	XEHP_GT_COMPUTE_DSS_ENABLE,	/* _MMIO(0x9144) */
 	XEHPC_GT_COMPUTE_DSS_ENABLE_EXT,/* _MMIO(0x9148) */
+	CTC_MODE,			/* _MMIO(0xa26c), for legacy i915 interop */
 	HUC_KERNEL_LOAD_INFO,		/* _MMIO(0xc1dc) */
+	TIMESTAMP_OVERRIDE,		/* _MMIO(0x44074), for legacy i915 interop */
 };
 
 static const struct xe_reg ver_2000_runtime_regs[] = {
@@ -424,4 +434,177 @@ int xe_gt_sriov_pf_service_print_runtime(struct xe_gt *gt, struct drm_printer *p
 	}
 
 	return 0;
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Legacy i915 MMIO Relay Compatibility Shim Helpers Begin
+ * -----------------------------------------------------------------------------
+ */
+
+static int pf_lookup_runtime_reg_val(struct xe_gt *gt, u32 offset, u32 *val)
+{
+	struct xe_gt_sriov_pf_service_runtime_regs *runtime = &gt->sriov.pf.service.runtime;
+	unsigned int i;
+
+	for (i = 0; i < runtime->size; i++) {
+		if (xe_mmio_adjusted_addr(&gt->mmio, runtime->regs[i].addr) == offset) {
+			*val = runtime->values[i];
+			return 0;
+		}
+	}
+
+	return -ENOENT;
+}
+
+static int pf_send_mmio_relay_reply(struct xe_gt *gt, u32 vfid, u32 magic, const u32 data[4])
+{
+	u32 request[PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_LEN] = {
+		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_ACTION_PF2GUC_MMIO_RELAY_SUCCESS),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_1_VFID, vfid),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_2_MAGIC, magic) |
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_2_DATA0, data[0]),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_n_DATAx, data[1]),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_n_DATAx, data[2]),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_SUCCESS_REQUEST_MSG_n_DATAx, data[3]),
+	};
+
+	return xe_guc_ct_send_g2h_handler(&gt->uc.guc.ct, request, ARRAY_SIZE(request));
+}
+
+static int pf_send_mmio_relay_error(struct xe_gt *gt, u32 vfid, u32 magic, u8 fault)
+{
+	u32 request[PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_LEN] = {
+		FIELD_PREP(GUC_HXG_MSG_0_ORIGIN, GUC_HXG_ORIGIN_HOST) |
+		FIELD_PREP(GUC_HXG_MSG_0_TYPE, GUC_HXG_TYPE_REQUEST) |
+		FIELD_PREP(GUC_HXG_REQUEST_MSG_0_ACTION, GUC_ACTION_PF2GUC_MMIO_RELAY_FAILURE),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_1_VFID, vfid),
+		FIELD_PREP(PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_2_MAGIC, magic) |
+		FIELD_PREP(PF2GUC_MMIO_RELAY_FAILURE_REQUEST_MSG_2_FAULT, fault),
+	};
+
+	return xe_guc_ct_send_g2h_handler(&gt->uc.guc.ct, request, ARRAY_SIZE(request));
+}
+
+static int pf_reply_mmio_relay_handshake(struct xe_gt *gt, u32 vfid, u32 magic, const u32 *payload)
+{
+	u32 data[4] = { };
+	u32 wanted_major = FIELD_GET(VF2PF_MMIO_HANDSHAKE_REQUEST_MSG_1_MAJOR, payload[1]);
+	u32 wanted_minor = FIELD_GET(VF2PF_MMIO_HANDSHAKE_REQUEST_MSG_1_MINOR, payload[1]);
+	u32 major = 0, minor = 0;
+	int err;
+
+	xe_gt_sriov_dbg_verbose(gt, "VF%u MMIO handshake wanted ABI %u.%u\n",
+				vfid, wanted_major, wanted_minor);
+
+	if (unlikely(!payload[0] || payload[2] || payload[3]))
+		return pf_send_mmio_relay_error(gt, vfid, magic, EPROTO);
+
+	err = xe_sriov_pf_service_handshake_vf(gt_to_xe(gt), vfid, wanted_major, wanted_minor,
+					       &major, &minor);
+	if (err < 0) {
+		int fault = -err;
+
+		return pf_send_mmio_relay_error(gt, vfid, magic,
+						fault > 0 && fault < 256 ? fault : EPROTO);
+	}
+
+	data[1] = FIELD_PREP(VF2PF_MMIO_HANDSHAKE_RESPONSE_MSG_1_MAJOR, major) |
+		  FIELD_PREP(VF2PF_MMIO_HANDSHAKE_RESPONSE_MSG_1_MINOR, minor);
+
+	return pf_send_mmio_relay_reply(gt, vfid, magic, data);
+}
+
+static int pf_reply_mmio_relay_get_runtime(struct xe_gt *gt, u32 vfid, u32 magic, const u32 *payload)
+{
+	u32 data[4] = { };
+	unsigned int i;
+
+	if (unlikely(!payload[0]))
+		return pf_send_mmio_relay_error(gt, vfid, magic, EPROTO);
+	if (unlikely(!payload[1]))
+		return pf_send_mmio_relay_error(gt, vfid, magic, EINVAL);
+
+	for (i = 0; i < VF2PF_MMIO_GET_RUNTIME_REQUEST_MSG_NUM_OFFSET; i++) {
+		u32 offset = payload[i + 1];
+		u32 val;
+		int ret;
+
+		if (!offset)
+			continue;
+
+		ret = pf_lookup_runtime_reg_val(gt, offset, &val);
+		if (ret < 0) {
+			xe_gt_sriov_notice(gt, "VF%u queried disallowed MMIO runtime reg %#x\n",
+					   vfid, offset);
+			return pf_send_mmio_relay_error(gt, vfid, magic, EACCES);
+		}
+		data[i + 1] = val;
+	}
+
+	return pf_send_mmio_relay_reply(gt, vfid, magic, data);
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Legacy i915 MMIO Relay Compatibility Shim Helpers End
+ * -----------------------------------------------------------------------------
+ */
+
+/**
+ * xe_gt_sriov_pf_service_process_mmio_relay - Process early MMIO relay request from VF.
+ * @gt: the &xe_gt that provides the service
+ * @msg: the G2H HXG message received from GuC
+ * @len: length of the G2H message in dwords
+ *
+ * This function processes early MMIO-based relay service requests forwarded
+ * by GuC via GUC_ACTION_GUC2PF_MMIO_RELAY_SERVICE.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int xe_gt_sriov_pf_service_process_mmio_relay(struct xe_gt *gt, const u32 *msg, u32 len)
+{
+	u32 vfid, magic, opcode;
+	int ret;
+
+	xe_gt_assert(gt, len);
+	xe_gt_assert(gt, FIELD_GET(GUC_HXG_MSG_0_ORIGIN, msg[0]) == GUC_HXG_ORIGIN_GUC);
+	xe_gt_assert(gt, FIELD_GET(GUC_HXG_MSG_0_TYPE, msg[0]) == GUC_HXG_TYPE_EVENT);
+	xe_gt_assert(gt, FIELD_GET(GUC_HXG_EVENT_MSG_0_ACTION, msg[0]) ==
+		     GUC_ACTION_GUC2PF_MMIO_RELAY_SERVICE);
+
+	if (unlikely(!IS_SRIOV_PF(gt_to_xe(gt))))
+		return -EPERM;
+
+	if (unlikely(len != GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_LEN))
+		return -EPROTO;
+
+	vfid = FIELD_GET(GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_1_VFID, msg[1]);
+	magic = FIELD_GET(GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_2_MAGIC, msg[2]);
+	opcode = FIELD_GET(GUC2PF_MMIO_RELAY_SERVICE_EVENT_MSG_2_OPCODE, msg[2]);
+
+	if (unlikely(!vfid || vfid > xe_sriov_pf_get_totalvfs(gt_to_xe(gt))))
+		return -ENOENT;
+
+	xe_gt_sriov_dbg_verbose(gt, "MMIO relay opcode %#x from VF%u (magic %#x)\n",
+				opcode, vfid, magic);
+
+	/* Legacy i915 MMIO Relay request dispatcher */
+	switch (opcode) {
+	case IOV_OPCODE_VF2PF_MMIO_HANDSHAKE:
+		ret = pf_reply_mmio_relay_handshake(gt, vfid, magic, msg + 2);
+		break;
+	case IOV_OPCODE_VF2PF_MMIO_GET_RUNTIME:
+		ret = pf_reply_mmio_relay_get_runtime(gt, vfid, magic, msg + 2);
+		break;
+	default:
+		xe_gt_sriov_notice(gt, "unsupported MMIO relay opcode %#x from VF%u\n",
+				   opcode, vfid);
+		ret = pf_send_mmio_relay_error(gt, vfid, magic, EOPNOTSUPP);
+		break;
+	}
+
+	return ret;
 }

@@ -381,6 +381,8 @@
 #define   VDN_HCP_POWERGATE_ENABLE(n)		REG_BIT(3 + 2 * (n))
 #define   VDN_MFXVDENC_POWERGATE_ENABLE(n)	REG_BIT(4 + 2 * (n))
 
+#define CTC_MODE				XE_REG(0xa26c) /* for legacy i915 interop */
+#define TIMESTAMP_OVERRIDE			XE_REG(0x44074) /* for legacy i915 interop */
 #define FORCEWAKE_RENDER			XE_REG(0xa278)
 
 #define POWERGATE_DOMAIN_STATUS			XE_REG(0xa2a0)

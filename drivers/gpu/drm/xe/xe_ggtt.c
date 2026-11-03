@@ -393,7 +393,7 @@ int xe_ggtt_init_early(struct xe_ggtt *ggtt)
 	struct xe_device *xe = tile_to_xe(ggtt->tile);
 	struct pci_dev *pdev = to_pci_dev(xe->drm.dev);
 	unsigned int gsm_size;
-	u64 ggtt_start, wopcm = xe_wopcm_size(xe), ggtt_size;
+	u64 ggtt_start, wopcm = xe_wopcm_size(xe), ggtt_size, top = GUC_GGTT_TOP;
 	int err;
 
 	if (!IS_SRIOV_VF(xe)) {
@@ -423,8 +423,16 @@ int xe_ggtt_init_early(struct xe_ggtt *ggtt)
 	if (IS_DGFX(xe) && xe->info.vram_flags & XE_VRAM_FLAGS_NEED64K)
 		ggtt->flags |= XE_GGTT_FLAGS_64K;
 
-	if (ggtt_size + ggtt_start > GUC_GGTT_TOP)
-		ggtt_size = GUC_GGTT_TOP - ggtt_start;
+	/*
+	 * Reserve 2MB at the top of GGTT on SR-IOV PF for compatibility with
+	 * legacy i915 VFs, which balloon [base + size, GUC_GGTT_TOP) and fail
+	 * with -ENOSPC if the top VF's GGTT allocation touches GUC_GGTT_TOP directly.
+	 */
+	if (IS_SRIOV_PF(xe))
+		top -= SZ_2M;
+
+	if (ggtt_size + ggtt_start > top)
+		ggtt_size = top - ggtt_start;
 
 	if (GRAPHICS_VERx100(xe) >= 1270)
 		ggtt->pt_ops =

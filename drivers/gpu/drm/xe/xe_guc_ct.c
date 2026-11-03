@@ -24,6 +24,7 @@
 #include "xe_gt_printk.h"
 #include "xe_gt_sriov_pf_control.h"
 #include "xe_gt_sriov_pf_monitor.h"
+#include "xe_gt_sriov_pf_service.h"
 #include "xe_guc.h"
 #include "xe_guc_log.h"
 #include "xe_guc_pagefault.h"
@@ -1719,6 +1720,10 @@ static int process_g2h_msg(struct xe_guc_ct *ct, u32 *msg, u32 len)
 		break;
 	case GUC_ACTION_GUC2PF_ADVERSE_EVENT:
 		ret = xe_gt_sriov_pf_monitor_process_guc2pf(gt, hxg, hxg_len);
+		break;
+	/* Legacy i915 MMIO Relay Compatibility Shim */
+	case GUC_ACTION_GUC2PF_MMIO_RELAY_SERVICE:
+		ret = xe_gt_sriov_pf_service_process_mmio_relay(gt, hxg, hxg_len);
 		break;
 	case XE_GUC_ACTION_NOTIFY_CRASH_DUMP_POSTED:
 	case XE_GUC_ACTION_NOTIFY_EXCEPTION:

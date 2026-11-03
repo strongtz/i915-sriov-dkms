@@ -21,11 +21,17 @@ int xe_gt_sriov_pf_service_print_runtime(struct xe_gt *gt, struct drm_printer *p
 int xe_gt_sriov_pf_service_process_request(struct xe_gt *gt, u32 origin,
 					   const u32 *msg, u32 msg_len,
 					   u32 *response, u32 resp_size);
+int xe_gt_sriov_pf_service_process_mmio_relay(struct xe_gt *gt, const u32 *msg, u32 len);
 #else
 static inline int
 xe_gt_sriov_pf_service_process_request(struct xe_gt *gt, u32 origin,
 				       const u32 *msg, u32 msg_len,
 				       u32 *response, u32 resp_size)
+{
+	return -EPROTO;
+}
+static inline int
+xe_gt_sriov_pf_service_process_mmio_relay(struct xe_gt *gt, const u32 *msg, u32 len)
 {
 	return -EPROTO;
 }

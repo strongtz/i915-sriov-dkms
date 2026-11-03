@@ -137,9 +137,16 @@ int xe_gt_sriov_pf_init(struct xe_gt *gt)
 	return 0;
 }
 
+/*
+ * Legacy i915 VFs perform direct GGTT updates across all Gen12 platforms
+ * (e.g. TGL, DG1, ADL, RPL). Upstream Xe originally only checked for 12.00,
+ * but all Gen12 platforms require the PF to explicitly unblock guest GGTT
+ * modifications (via VIRTUAL_CTRL_REG GUEST_GTT_UPDATE_EN) to prevent
+ * hardware from dropping VF PTE writes.
+ */
 static bool pf_needs_enable_ggtt_guest_update(struct xe_device *xe)
 {
-	return GRAPHICS_VERx100(xe) == 1200;
+	return GRAPHICS_VER(xe) == 12;
 }
 
 static void pf_enable_ggtt_guest_update(struct xe_gt *gt)
