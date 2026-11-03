@@ -928,14 +928,55 @@ gen12_ctx_gt_fake_wa_init(struct intel_engine_cs *engine,
 }
 
 static void
+gen12_vf_ctx_workarounds_init(struct intel_engine_cs *engine,
+			      struct i915_wa_list *wal)
+{
+	struct drm_i915_private *i915 = engine->i915;
+
+	/* Mirror the GEN12 rules in xe_wa.c:lrc_was. */
+	wa_masked_en(wal, GEN11_COMMON_SLICE_CHICKEN3,
+		     GEN12_DISABLE_CPS_AWARE_COLOR_PIPE);
+	wa_masked_field_set(wal, GEN8_CS_CHICKEN1,
+			    GEN9_PREEMPT_GPGPU_LEVEL_MASK,
+			    GEN9_PREEMPT_GPGPU_THREAD_GROUP_LEVEL);
+
+	if (engine->class == RENDER_CLASS)
+		wa_add(wal, GEN12_FF_MODE2,
+		       FF_MODE2_TDS_TIMER_MASK | FF_MODE2_GS_TIMER_MASK,
+		       FF_MODE2_TDS_TIMER_128 | FF_MODE2_GS_TIMER_224,
+		       0, false);
+
+	if (GRAPHICS_VER_FULL(i915) == IP_VER(12, 0)) {
+		wa_masked_en(wal, HIZ_CHICKEN, HZ_DEPTH_TEST_LE_GE_OPT_DISABLE);
+		wa_masked_en(wal, COMMON_SLICE_CHICKEN4,
+			     DISABLE_TDC_LOAD_BALANCING_CALC);
+	}
+
+	if (IS_DG1(i915)) {
+		wa_masked_dis(wal, GEN11_COMMON_SLICE_CHICKEN3,
+			      DG1_FLOAT_POINT_BLEND_OPT_STRICT_MODE_EN);
+		wa_masked_en(wal, HIZ_CHICKEN,
+			     DG1_HZ_READ_SUPPRESSION_OPTIMIZATION_DISABLE);
+	}
+}
+
+static void
 __intel_engine_init_ctx_wa(struct intel_engine_cs *engine,
 			   struct i915_wa_list *wal,
 			   const char *name)
 {
 	struct drm_i915_private *i915 = engine->i915;
 
-	if (IS_SRIOV_VF(i915))
+	if (IS_SRIOV_VF(i915)) {
+		if (!HAS_SRIOV(i915) ||
+		    !IS_GFX_GT_IP_RANGE(engine->gt, IP_VER(12, 0), IP_VER(12, 10)))
+			return;
+
+		wa_init_start(wal, engine->gt, name, engine->name);
+		gen12_vf_ctx_workarounds_init(engine, wal);
+		wa_init_finish(wal);
 		return;
+	}
 
 	wa_init_start(wal, engine->gt, name, engine->name);
 
