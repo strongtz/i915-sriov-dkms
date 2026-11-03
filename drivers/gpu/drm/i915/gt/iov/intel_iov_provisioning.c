@@ -2461,7 +2461,7 @@ static void pf_init_reprovisioning_worker(struct intel_iov *iov)
 
 static void pf_start_reprovisioning_worker(struct intel_iov *iov)
 {
-	queue_work(system_unbound_wq, &iov->pf.provisioning.worker);
+	queue_work(system_dfl_wq, &iov->pf.provisioning.worker);
 }
 
 static void pf_fini_reprovisioning_worker(struct intel_iov *iov)

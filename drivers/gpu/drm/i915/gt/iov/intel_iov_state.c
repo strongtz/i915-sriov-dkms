@@ -290,7 +290,7 @@ static bool pf_process_vf(struct intel_iov *iov, u32 vfid)
 
 static void pf_queue_worker(struct intel_iov *iov)
 {
-	queue_work(system_unbound_wq, &iov->pf.state.worker);
+	queue_work(system_dfl_wq, &iov->pf.state.worker);
 }
 
 static void pf_process_all_vfs(struct intel_iov *iov)
