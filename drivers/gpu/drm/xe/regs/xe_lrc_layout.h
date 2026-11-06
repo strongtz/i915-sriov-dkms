@@ -14,6 +14,12 @@
 #define CTX_BB_PER_CTX_PTR		(0x12 + 1)
 #define CTX_CS_INDIRECT_CTX		(0x14 + 1)
 #define CTX_CS_INDIRECT_CTX_OFFSET	(0x16 + 1)
+/*
+ * Cacheline offset within the context restore at which the HW inserts the
+ * INDIRECT_CTX batch (RING_INDIRECT_CTX_OFFSET, in units of 64B). The value
+ * is per graphics IP, see i915's GEN*_CTX_RCS_INDIRECT_CTX_OFFSET_DEFAULT.
+ */
+#define GEN12_CTX_INDIRECT_CTX_OFFSET_DEFAULT	0xD
 #define CTX_TIMESTAMP			(0x22 + 1)
 #define CTX_TIMESTAMP_UDW		(0x24 + 1)
 #define CTX_INDIRECT_RING_STATE		(0x26 + 1)

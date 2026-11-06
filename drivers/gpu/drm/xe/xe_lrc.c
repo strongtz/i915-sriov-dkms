@@ -1471,6 +1471,25 @@ setup_indirect_ctx(struct xe_lrc *lrc, struct xe_hw_engine *hwe)
 			     /* Size in CLs. */
 			     (state.written * sizeof(u32) / 64));
 
+	/*
+	 * On Gen12 (Xe_LP) the "default" INDIRECT_CTX_OFFSET never reaches the
+	 * context image: the default LRC is recorded from a zeroed image whose
+	 * first LRI programs RING_INDIRECT_CTX_OFFSET with 0, so every context
+	 * created from it inherits 0 and the hardware never executes the
+	 * INDIRECT_CTX batch (incl. the AUX table invalidation and the timestamp
+	 * workaround placed there). i915 always programs it explicitly
+	 * (GEN12_CTX_RCS_INDIRECT_CTX_OFFSET_DEFAULT). Do the same.
+	 *
+	 * On an SR-IOV PF this is what made VF->PF function switches leak
+	 * state into PF contexts: DMAR faults on PF context images translated
+	 * through the VF's IOMMU domain, engine CAT errors, GT resets and
+	 * silent guest memory corruption whenever host and guest used the
+	 * render engine concurrently (issue #454).
+	 */
+	if (GRAPHICS_VERx100(gt_to_xe(lrc->gt)) < 1250)
+		xe_lrc_write_ctx_reg(lrc, CTX_CS_INDIRECT_CTX_OFFSET,
+				     GEN12_CTX_INDIRECT_CTX_OFFSET_DEFAULT << 6);
+
 	return 0;
 }
 
