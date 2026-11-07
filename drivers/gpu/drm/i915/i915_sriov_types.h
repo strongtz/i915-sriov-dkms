@@ -29,6 +29,8 @@ struct i915_sriov_pf {
 
 	/** @disable_auto_provisioning: flag to control VFs auto-provisioning */
 	bool disable_auto_provisioning;
+
+	struct page *iova0;
 };
 
 /**

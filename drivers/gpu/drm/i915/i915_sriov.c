@@ -2,6 +2,7 @@
 /*
  * Copyright © 2023 Intel Corporation
  */
+#include <linux/iommu.h>
 #include <drm/i915_sriov.h>
 
 #include "i915_sriov.h"
@@ -487,6 +488,38 @@ static int pf_disable_gsc_engine(struct drm_i915_private *i915)
 	return 0;
 }
 
+static void pf_map_iova0(struct drm_i915_private *i915)
+{
+	struct iommu_domain *domain = iommu_get_domain_for_dev(i915->drm.dev);
+	struct page *page;
+
+	if (!domain || !(domain->type & __IOMMU_DOMAIN_PAGING) || iommu_iova_to_phys(domain, 0))
+		return;
+
+	page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+	if (!page)
+		return;
+
+	if (iommu_map(domain, 0, page_to_phys(page), PAGE_SIZE, IOMMU_READ | IOMMU_WRITE, GFP_KERNEL)) {
+		__free_page(page);
+		return;
+	}
+
+	i915->sriov.pf.iova0 = page;
+}
+
+static void pf_unmap_iova0(struct drm_i915_private *i915)
+{
+	struct page *page = i915->sriov.pf.iova0;
+
+	if (!page)
+		return;
+
+	iommu_unmap(iommu_get_domain_for_dev(i915->drm.dev), 0, PAGE_SIZE);
+	__free_page(page);
+	i915->sriov.pf.iova0 = NULL;
+}
+
 /**
  * i915_sriov_pf_enable_vfs - Enable VFs.
  * @i915: the i915 struct
@@ -551,6 +584,8 @@ int i915_sriov_pf_enable_vfs(struct drm_i915_private *i915, int num_vfs)
 			goto fail_pm;
 	}
 
+	pf_map_iova0(i915);
+
 	err = pci_enable_sriov(pdev, num_vfs);
 	if (err < 0)
 		goto fail_guc;
@@ -561,6 +596,7 @@ int i915_sriov_pf_enable_vfs(struct drm_i915_private *i915, int num_vfs)
 	return num_vfs;
 
 fail_guc:
+	pf_unmap_iova0(i915);
 	for_each_gt(gt, i915, id)
 		pf_update_guc_clients(&gt->iov, 0);
 fail_pm:
@@ -656,6 +692,8 @@ int i915_sriov_pf_disable_vfs(struct drm_i915_private *i915)
 		pf_update_guc_clients(&gt->iov, 0);
 		intel_iov_provisioning_auto(&gt->iov, 0);
 	}
+
+	pf_unmap_iova0(i915);
 
 	/* Wa_14019103365 */
 	if (IS_METEORLAKE(i915)) {
