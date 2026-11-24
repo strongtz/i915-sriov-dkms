@@ -12,16 +12,18 @@ We will need to run the same driver under Linux guests.
    dpkg -i /tmp/i915-sriov-dkms_2026.11.05_amd64.deb
    ```
 3. Update kernel parameters
-   `nano /etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT` to `i915.enable_guc=3 module_blacklist=xe`, or add to it if you have other arguments there already.
-
-4. Once that's done, update `grub` and `initramfs`, then reboot.
+   `nano /etc/default/grub` add one of the following lines to  `GRUB_CMDLINE_LINUX_DEFAULT`
+   * For i915: `i915.enable_guc=3 module_blacklist=xe`
+   * For xe: `xe.force_probe='${device_id}' i915.force_probe='!${device_id}' module_blacklist=i915` <br /> *Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command*
+  
+5. Once that's done, update `grub` and `initramfs`, then reboot.
    ```
    update-grub
    update-initramfs -u
    ```
-5. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel. You should also check if `xe` is blacklisted correctly by running `lspci -nnk` to see which driver is in use by the VF.
-6. Optionally, install `vainfo` by running `apt install vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
-7. If OpenCL is desired:
+6. Once the VM is back up again, do `dmesg | grep i915` to see if your VF is recognized by the kernel. You should also check if `xe` is blacklisted correctly by running `lspci -nnk` to see which driver is in use by the VF.
+7. Optionally, install `vainfo` by running `apt install vainfo`, then do `vainfo` to see if the iGPU has been picked up by the VAAPI.
+8. If OpenCL is desired:
    ```
    apt install intel-opencl-icd
    apt install clinfo

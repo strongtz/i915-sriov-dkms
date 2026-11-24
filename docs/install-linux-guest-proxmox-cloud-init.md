@@ -20,13 +20,10 @@ Use `dpkg -i {package_name}.deb` to install the package.
 
 ### 3. Update kernel parameters in cloud-init GRUB configs
 Cloud-init configurations override `/etc/default/grub` with their own settings in `/etc/default/grub.d/50-cloudimg-settings.cfg`. You need to edit that file instead of the default grub configuration:
-```bash
-sudo nano /etc/default/grub.d/50-cloudimg-settings.cfg
-```
-Change `GRUB_CMDLINE_LINUX_DEFAULT` to:
-```bash
-GRUB_CMDLINE_LINUX_DEFAULT="console=tty1 console=ttyS0 i915.enable_guc=3 module_blacklist=xe"
-```
+ `nano /etc/default/grub.d/50-cloudimg-settings.cfg` and add one of the following lines to  `GRUB_CMDLINE_LINUX_DEFAULT`
+   * For i915: `i915.enable_guc=3 module_blacklist=xe`
+   * For xe: `xe.force_probe='${device_id}' i915.force_probe='!${device_id}' module_blacklist=i915` <br /> *Replace `${device_id}` with the output from `cat /sys/devices/pci0000:00/0000:00:02.0/device` command*
+  
 
 ### 4. Update grub and initramfs, then reboot
 ```bash
