@@ -7,7 +7,11 @@
 
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
+#if __has_include(<drm/drm_timeout.h>)
+#include <drm/drm_timeout.h>
+#else
 #include <drm/drm_utils.h>
+#endif
 #include <uapi/drm/xe_drm.h>
 
 #include "xe_device.h"
