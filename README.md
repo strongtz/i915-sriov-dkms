@@ -15,7 +15,7 @@ You need to install this dkms module in **both host and guest!**
 
 **Required kernel**: 6.18.x ~ 7.3.x
 
-**Latest release**: [2026.11.05](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.11.05)
+**Latest release**: [2026.11.26](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2026.11.26)
 
 For older kernel (v6.12 ~ v6.18), please use the [2025.12.10.2](https://github.com/strongtz/i915-sriov-dkms/releases/tag/2025.12.10.2) release.
 
@@ -52,7 +52,7 @@ intel_iommu=on xe.max_vfs=7 xe.force_probe=${device_id} module_blacklist=i915
 
 #### 🚨 Important Update for Xe_LP Platforms (TGL / ADL / RPL)
 
-Starting from version **2026.09.16/2025.12.10.1**, `CCS0` is **no longer enabled by default** on Xe_LP platforms. 
+Starting from version **2026.09.16/2025.12.10.1**, `CCS` is **no longer enabled by default** on Xe_LP platforms. 
 
 If you encounter issues running **Windows guest VMs**, please append the appropriate parameter to your kernel command line:
 * **For i915 driver:** `i915.xelp_enable_ccs=1`

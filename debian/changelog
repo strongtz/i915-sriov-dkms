@@ -1,5 +1,12 @@
 i915-sriov-dkms (###LATEST_VERSION###) UNRELEASED; urgency=medium
 
+  * Program INDIRECT_CTX_OFFSET on Gen12 (fixes SR-IOV PF/VF switch corruption)
+  * Sync with v7.3.6
+
+ -- bbaa <bbaa@bbaa.me>  Thu, 26 Nov 2026 18:48:21 +0800
+
+i915-sriov-dkms (2026.11.05) UNRELEASED; urgency=medium
+
   * Mitigate GPU engine hangs on Xe_LP (Gen12) guest VMs under certain workloads
   * Support running legacy i915 guest VMs with the Xe driver on the host
 
